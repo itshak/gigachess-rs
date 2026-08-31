@@ -16,12 +16,7 @@
 - [ ] 3.2 Implement `src/fen.rs` (branchless FEN parser/formatter) and verify round-trip on `samplefen1000.epd`
 - [ ] 3.3 Implement `src/san.rs` (zero-alloc SAN parser and disambiguator) and verify against real-game PGN streams
 
-## 4. Shakmaty Drop-in Compatibility Layer
+## 4. Benchmarking, Licensing & Verification
 
-- [ ] 4.1 Implement `src/compat/shakmaty.rs` mirroring `shakmaty` 0.30 API (`Chess`, `Position`, `Move`, `Role`, `Square`, `Fen`, `Zobrist64`)
-- [ ] 4.2 Test `turbochess_rs::compat::shakmaty` against `blind-base/src-tauri` position search tests
-
-## 5. Benchmarking, Licensing & Verification
-
-- [ ] 5.1 Add Criterion benchmarks (`benches/perft_bench.rs`, `benches/replay_bench.rs`) verifying ≥75M nodes/s perft and ≥500k games/s replay
-- [ ] 5.2 Verify `cargo check`, `cargo test`, `cargo clippy`, and MIT license attribution
+- [ ] 4.1 Add Criterion benchmarks (`benches/perft_bench.rs`, `benches/replay_bench.rs`) verifying ≥75M nodes/s perft and ≥500k games/s replay
+- [ ] 4.2 Verify `cargo check`, `cargo test`, `cargo clippy`, and MIT license attribution
