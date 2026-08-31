@@ -1,0 +1,21 @@
+schema: spec-driven
+
+context: |
+  TurboChess-RS is an ultra-high-performance, 100% MIT-licensed chess engine,
+  PEXT move generator, 16-bit moves2 replay engine, and Shakmaty compatibility
+  crate in Rust.
+
+  It serves as the backend engine for blind-base and high-throughput chess databases.
+  License: MIT (strictly permissive).
+
+rules:
+  proposal:
+    - Keep proposals focused on high-performance engine architecture and zero-alloc contracts
+    - Ensure 100% MIT compliance
+  specs:
+    - Use Given/When/Then scenarios for testable behavior
+    - Verify perft parity against reference test suites
+  design:
+    - Detail bitboard layouts, PEXT tables, and 16-bit moves2 packing
+  tasks:
+    - Each task must state explicit verification steps (cargo test / cargo bench)

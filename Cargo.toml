@@ -1,0 +1,35 @@
+[package]
+name = "turbochess-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["PureChess & TurboChess Contributors"]
+license = "MIT"
+description = "Ultra-high-performance, 100% MIT-licensed chess move generator, 16-bit moves2 replay engine, and Shakmaty compat layer in Rust"
+repository = "https://github.com/itshak/turbochess-rs"
+keywords = ["chess", "movegen", "bitboard", "pext", "zobrist"]
+categories = ["games", "algorithms", "data-structures"]
+readme = "README.md"
+
+[features]
+default = ["std"]
+std = []
+pext = [] # Enables hardware PEXT (BMI2) 1-cycle bitboards
+simd = [] # Enables AVX2/NEON vectorization where supported
+shakmaty-compat = [] # Enables drop-in shakmaty API compatibility layer
+
+[dependencies]
+arrayvec = { version = "0.7", default-features = false }
+bitflags = { version = "2.4", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+rayon = "1.10"
+shakmaty = "0.30" # Baseline verification only (in dev-dependencies, not in production runtime)
+
+[[bench]]
+name = "perft_bench"
+harness = false
+
+[[bench]]
+name = "replay_bench"
+harness = false
