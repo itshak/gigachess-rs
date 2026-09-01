@@ -26,7 +26,8 @@ allocations in the move-generation hot path.
   in `make_move` (<3 ns per ply), verified against the canonical startpos
   vector `0x463b96181691fc9c`.
 - **Batch replay** — `replay_moves2_batch` replays millions of stored games in
-  parallel across all CPU cores (~950k games/s on an Apple M1 Max).
+  parallel on Rayon's work-stealing pool (~1.5M games/s on an Apple M1 Max;
+  see [ADR-002](openspec/adr/002-parallel-replay-with-rayon.md)).
 - **Codecs** — branchless FEN parser/formatter and a zero-allocation SAN
   parser/disambiguator.
 
@@ -34,14 +35,18 @@ allocations in the move-generation hot path.
 
 Measured with Criterion on an Apple M1 Max (10 cores, Fancy Magic path):
 
-| Benchmark                  | Result                        |
-|----------------------------|-------------------------------|
-| perft (startpos, depth 5)  | ~100M nodes/s (target ≥75M)   |
-| batch replay               | ~950k games/s (target ≥500k)  |
+| Benchmark                  | Result                          |
+|----------------------------|---------------------------------|
+| perft (startpos, depth 5)  | ~100M nodes/s (target ≥75M)     |
+| batch replay               | ~1.48M games/s (target ≥500k)   |
 
 ```bash
 cargo bench
 ```
+
+Rayon is the batch-replay backend (non-optional): its work-stealing pool
+gains ~60% over static chunking on asymmetric CPUs and adds only ~133 KB to
+a linked binary ([ADR-002](openspec/adr/002-parallel-replay-with-rayon.md)).
 
 ## Usage
 

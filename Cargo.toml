@@ -20,6 +20,7 @@ shakmaty-compat = [] # Enables drop-in shakmaty API compatibility layer
 [dependencies]
 arrayvec = { version = "0.7", default-features = false }
 bitflags = { version = "2.4", optional = true }
+rayon = "1.10" # Batch-replay work-stealing thread pool (ADR-002)
 
 [dev-dependencies]
 criterion = "0.5"

@@ -3,8 +3,9 @@
 // Games are stored as slices of 16-bit packed moves (see `crate::moves`).
 // `replay_moves2_stream` replays one game, reporting either the final
 // Polyglot zobrist hash or the ply at which the first illegal move occurred.
-// `replay_moves2_batch` replays many games in parallel across all CPU cores
-// using scoped threads (chunked, order-preserving).
+// `replay_moves2_batch` replays many games in parallel on Rayon's global
+// work-stealing thread pool (see `openspec/adr/002-parallel-replay-with-rayon.md`
+// for the backend decision and benchmark data).
 //
 // SPDX-License-Identifier: MIT
 
@@ -46,34 +47,19 @@ pub fn replay_moves2_stream(moves: &[u16]) -> ReplayOutcome {
     }
 }
 
-/// Replays a batch of games in parallel across all CPU cores.
+/// Replays a batch of games in parallel on Rayon's global work-stealing
+/// thread pool, using every CPU core.
 ///
 /// Results are returned in the same order as the input games. Games are
-/// chunked across scoped worker threads; each game itself is replayed on a
-/// single thread (per-game replay is allocation-light and embarrassingly
-/// parallel at the batch level).
+/// distributed individually by Rayon's scheduler, so asymmetric cores
+/// (e.g. Apple Silicon P/E cores) cannot strand statically-assigned work
+/// (ADR-002: ~1.48M games/s vs ~1.21M for the best static-chunking effort).
 pub fn replay_moves2_batch(games: &[&[u16]]) -> Vec<ReplayOutcome> {
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-
-    // Small batches or single-core machines: sequential path, no thread spawn.
-    if threads <= 1 || games.len() < 64 {
-        return games.iter().map(|g| replay_moves2_stream(g)).collect();
-    }
-
-    let chunk_len = games.len().div_ceil(threads);
-    std::thread::scope(|scope| {
-        let handles: Vec<_> = games
-            .chunks(chunk_len)
-            .map(|chunk| scope.spawn(move || chunk.iter().map(|g| replay_moves2_stream(g)).collect::<Vec<_>>()))
-            .collect();
-        let mut out = Vec::with_capacity(games.len());
-        for h in handles {
-            out.extend(h.join().expect("replay worker panicked"));
-        }
-        out
-    })
+    use rayon::prelude::*;
+    games
+        .par_iter()
+        .map(|game| replay_moves2_stream(game))
+        .collect()
 }
 
 #[cfg(test)]

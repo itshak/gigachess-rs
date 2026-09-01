@@ -25,6 +25,22 @@ fn kiwipete_hash_matches_full_recompute() {
     assert_eq!(board.zobrist(), board.zobrist_full());
 }
 
+/// Cross-library parity: after 1.e4 the Polyglot key must equal the value
+/// published in the JS TurboChess README (`zobristHex()` = "823c9b50fd114196"),
+/// proving Rust/JS interop for opening books and repetition detection.
+#[test]
+fn js_turbochess_parity_after_e4() {
+    let mut board = Board::startpos();
+    let mv = Move::new(
+        turbochess_rs::Square::from_alg("e2").unwrap(),
+        turbochess_rs::Square::from_alg("e4").unwrap(),
+        None,
+    );
+    board.play(mv).unwrap();
+    assert_eq!(board.zobrist(), 0x823c_9b50_fd11_4196);
+    assert_eq!(board.zobrist_full(), 0x823c_9b50_fd11_4196);
+}
+
 fn xorshift(state: &mut u64) -> u64 {
     *state ^= *state << 13;
     *state ^= *state >> 7;

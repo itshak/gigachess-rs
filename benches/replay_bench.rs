@@ -38,6 +38,17 @@ fn bench_replay(c: &mut Criterion) {
     let total_plies: u64 = games.iter().map(|g| g.len() as u64).sum();
     let refs: Vec<&[u16]> = games.iter().map(|g| g.as_slice()).collect();
 
+    // Many small batches: stresses per-call parallel dispatch overhead
+    // (scoped-thread spawns vs Rayon's persistent pool).
+    let small_batches: Vec<Vec<&[u16]>> = (0..128)
+        .map(|i| {
+            games[i * 8..(i + 1) * 8]
+                .iter()
+                .map(|g| g.as_slice())
+                .collect()
+        })
+        .collect();
+
     let mut group = c.benchmark_group("replay");
     group.throughput(Throughput::Elements(games.len() as u64));
     group.bench_function("batch_8000_games", |b| {
@@ -46,6 +57,14 @@ fn bench_replay(c: &mut Criterion) {
     group.throughput(Throughput::Elements(total_plies));
     group.bench_function("batch_8000_games_plies", |b| {
         b.iter(|| replay_moves2_batch(black_box(&refs)))
+    });
+    group.throughput(Throughput::Elements(128 * 8));
+    group.bench_function("small_batches_128x8", |b| {
+        b.iter(|| {
+            for batch in black_box(&small_batches) {
+                replay_moves2_batch(batch);
+            }
+        })
     });
     group.finish();
 }
