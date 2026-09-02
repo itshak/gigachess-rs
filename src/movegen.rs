@@ -153,6 +153,182 @@ impl MoveSink for MoveCounter {
     }
 }
 
+/// Visitor sink: processes generated moves **without materialising `Move`
+/// values** (Gigantua's visitor pattern — "make/unmake and a movelist is not
+/// needed and 2× slower"; D1, studied clean-room, MIT-clean per D5).
+///
+/// Whole bitboards reach the visitor so a counting visitor pays only
+/// `popcount` — no `pop_lsb`, no `Move::new`, no stack buffer writes.
+/// Shares the exact generator body with [`MoveSink`] via
+/// [`VisitorAdapter`] (the monomorphiser duplicates the code per sink,
+/// same effect as macro-sharing, `LTO=fat` mitigates bloat).
+pub trait MoveVisitor {
+    /// Visit all `targets` from `from` (one square → bitboard of destinations).
+    fn visit_targets(&mut self, from: u8, targets: u64);
+    /// Bulk-pawn push: `targets` are destination squares, `offset = to - from`
+    /// (white +8/−8 black, captures ±7/±9, double push ±16). One move per target.
+    fn visit_pawn_offset(&mut self, targets: u64, offset: i8);
+    /// Bulk-pawn promotion: each target yields 4 moves (N,B,R,Q) with same offset.
+    fn visit_promotion_offset(&mut self, targets: u64, offset: i8);
+    /// Visit a single fully-formed move (king, castling, en-passant, pinned pawn).
+    fn visit_one(&mut self, mv: Move);
+}
+
+/// Forwards [`MoveSink`] calls into any [`MoveVisitor`] — this is how
+/// `Board::generate_visitor` shares the `generate_moves_into` body
+/// (including `compute_pinned_split` and bulk pawn shifts) verbatim.
+pub struct VisitorAdapter<V: MoveVisitor>(pub V);
+
+impl<V: MoveVisitor> VisitorAdapter<V> {
+    #[inline]
+    pub fn new(visitor: V) -> Self {
+        Self(visitor)
+    }
+}
+
+impl<V: MoveVisitor> MoveSink for VisitorAdapter<V> {
+    #[inline]
+    fn push_targets(&mut self, from: u8, targets: u64) {
+        self.0.visit_targets(from, targets);
+    }
+    #[inline]
+    fn push_pawn_targets_offset(&mut self, targets: u64, offset: i8) {
+        self.0.visit_pawn_offset(targets, offset);
+    }
+    #[inline]
+    fn push_pawn_promotions_offset(&mut self, targets: u64, offset: i8) {
+        self.0.visit_promotion_offset(targets, offset);
+    }
+    #[inline]
+    fn push_one(&mut self, mv: Move) {
+        self.0.visit_one(mv);
+    }
+}
+
+/// Forwarding impl so `&mut S` (the generator's sink parameter shape) is
+/// itself a `MoveSink` — lets callers pass `&mut adapter` without an extra
+/// deref layer (also handy for `&mut MoveList` style plumbing).
+impl<T: MoveSink + ?Sized> MoveSink for &mut T {
+    #[inline]
+    fn push_targets(&mut self, from: u8, targets: u64) {
+        (**self).push_targets(from, targets);
+    }
+    #[inline]
+    fn push_pawn_targets_offset(&mut self, targets: u64, offset: i8) {
+        (**self).push_pawn_targets_offset(targets, offset);
+    }
+    #[inline]
+    fn push_pawn_promotions_offset(&mut self, targets: u64, offset: i8) {
+        (**self).push_pawn_promotions_offset(targets, offset);
+    }
+    #[inline]
+    fn push_one(&mut self, mv: Move) {
+        (**self).push_one(mv);
+    }
+}
+
+/// Leaf-counting visitor for `perft depth==1` / `count_legal_moves` —
+/// `count += popcount` **without `Move` materialisation or `pop_lsb`**
+/// (goes one step further than [`MoveCounter`], which is already
+/// `popcount`-only but pays the `MoveSink` indirection; D1).
+#[derive(Default, Debug, Clone, Copy)]
+pub struct CountingVisitor {
+    pub count: u32,
+}
+
+impl CountingVisitor {
+    #[inline]
+    pub fn new() -> Self {
+        Self { count: 0 }
+    }
+}
+
+impl MoveVisitor for CountingVisitor {
+    #[inline]
+    fn visit_targets(&mut self, _from: u8, targets: u64) {
+        self.count += popcount(targets);
+    }
+
+    #[inline]
+    fn visit_pawn_offset(&mut self, targets: u64, _offset: i8) {
+        self.count += popcount(targets);
+    }
+
+    #[inline]
+    fn visit_promotion_offset(&mut self, targets: u64, _offset: i8) {
+        self.count += popcount(targets) * 4;
+    }
+
+    #[inline]
+    fn visit_one(&mut self, _mv: Move) {
+        self.count += 1;
+    }
+}
+
+/// Forwarding impl so `&mut V` is itself a `MoveVisitor` — mirrors the
+/// `&mut T: MoveSink` impl above and lets `generate_visitor(&self, visitor:
+/// &mut V)` wrap the borrowed visitor in an adapter.
+impl<V: MoveVisitor + ?Sized> MoveVisitor for &mut V {
+    #[inline]
+    fn visit_targets(&mut self, from: u8, targets: u64) {
+        (**self).visit_targets(from, targets);
+    }
+    #[inline]
+    fn visit_pawn_offset(&mut self, targets: u64, offset: i8) {
+        (**self).visit_pawn_offset(targets, offset);
+    }
+    #[inline]
+    fn visit_promotion_offset(&mut self, targets: u64, offset: i8) {
+        (**self).visit_promotion_offset(targets, offset);
+    }
+    #[inline]
+    fn visit_one(&mut self, mv: Move) {
+        (**self).visit_one(mv);
+    }
+}
+
+/// `MoveVisitor` for `MoveList`: materialises every move (delegates to the
+/// [`MoveSink`] impl) — lets visitor-generic callers collect when needed.
+impl MoveVisitor for MoveList {
+    #[inline]
+    fn visit_targets(&mut self, from: u8, targets: u64) {
+        MoveSink::push_targets(self, from, targets);
+    }
+    #[inline]
+    fn visit_pawn_offset(&mut self, targets: u64, offset: i8) {
+        MoveSink::push_pawn_targets_offset(self, targets, offset);
+    }
+    #[inline]
+    fn visit_promotion_offset(&mut self, targets: u64, offset: i8) {
+        MoveSink::push_pawn_promotions_offset(self, targets, offset);
+    }
+    #[inline]
+    fn visit_one(&mut self, mv: Move) {
+        MoveSink::push_one(self, mv);
+    }
+}
+
+/// `MoveVisitor` for `MoveCounter`: `count += popcount` (parity with its
+/// [`MoveSink`] impl — baseline for the visitor leaf benchmark).
+impl MoveVisitor for MoveCounter {
+    #[inline]
+    fn visit_targets(&mut self, _from: u8, targets: u64) {
+        self.count += popcount(targets);
+    }
+    #[inline]
+    fn visit_pawn_offset(&mut self, targets: u64, _offset: i8) {
+        self.count += popcount(targets);
+    }
+    #[inline]
+    fn visit_promotion_offset(&mut self, targets: u64, _offset: i8) {
+        self.count += popcount(targets) * 4;
+    }
+    #[inline]
+    fn visit_one(&mut self, _mv: Move) {
+        self.count += 1;
+    }
+}
+
 /// Result of the split-pinned computation.
 #[derive(Copy, Clone, Debug)]
 pub struct PinnedSplit {

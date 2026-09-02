@@ -125,6 +125,47 @@ fn mirrored_pos4_d1_to_d4() {
     );
 }
 
+/// Visitor parity: `perft_visitor` (CountingVisitor leaf, no `Move`
+/// materialisation) must equal `perft` (MoveCounter bulk) on all 6 CPW
+/// positions at depth 3 (close-gap task 2.2).
+#[test]
+fn perft_visitor_matches_perft_d3() {
+    let cases = [
+        (STARTPOS, 8_902),
+        (KIWIPETE, 97_862),
+        (POS3, 2_812),
+        (POS4, 9_467),
+        (POS5, 62_379),
+        (POS6, 89_890),
+    ];
+    for (fen, expected_d3) in cases {
+        let board = parse_fen(fen).unwrap();
+        assert_eq!(
+            board.perft_visitor(3),
+            expected_d3,
+            "perft_visitor mismatch for {fen}"
+        );
+        assert_eq!(board.perft_visitor(1), board.perft(1));
+    }
+}
+
+/// Leaf-count parity on tricky states: visitor must agree with the
+/// MoveCounter bulk path at depth 1 along a played line from Kiwipete.
+#[test]
+fn perft_visitor_leaf_parity_along_line() {
+    let mut board = parse_fen(KIWIPETE).unwrap();
+    for depth in 1..=4u32 {
+        assert_eq!(board.perft(depth), board.perft_visitor(depth));
+        let moves = board.legal_moves();
+        match moves.first() {
+            Some(&m) => {
+                let _ = board.play(m).unwrap();
+            }
+            None => break,
+        }
+    }
+}
+
 /// Legality cross-check: every move produced by `legal_moves` must be
 /// accepted by `play`, and playing/unmaking must restore the position.
 #[test]

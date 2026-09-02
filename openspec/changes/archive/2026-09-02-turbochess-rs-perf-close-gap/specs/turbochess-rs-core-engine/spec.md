@@ -1,8 +1,4 @@
-## Purpose
-
-Defines the core `turbochess-rs` engine architecture: native `u64` bitboards, hardware PEXT / Fancy Magic sliding attacks, 16-bit packed moves (`moves2`), batch game replay, and 64-bit incremental Zobrist hashing.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Sliding Attacks SHALL Execute via PEXT with Fancy Magic Fallback
 

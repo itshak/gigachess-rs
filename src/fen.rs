@@ -249,15 +249,39 @@ impl Board {
             }
         }
 
+        // Stamp pieces from the 12 bitboards once (close-gap D3, task 4.1:
+        // `Board` no longer stores a mailbox, so rebuild a local one in 12
+        // scans instead of 64 `piece_at` scans — restores the 77ns target).
+        let mut mailbox = [u8::MAX; 64]; // u8::MAX = EMPTY sentinel
+        let mut code = 0usize;
+        for color in [Color::Black, Color::White] {
+            for role in [
+                Role::Pawn,
+                Role::Knight,
+                Role::Bishop,
+                Role::Rook,
+                Role::Queen,
+                Role::King,
+            ] {
+                let mut bb = self.piece_bb(color, role);
+                while bb != 0 {
+                    let sq = bb.trailing_zeros() as usize;
+                    bb &= bb - 1;
+                    mailbox[sq] = code as u8;
+                }
+                code += 1;
+            }
+        }
         for rank in (0..8).rev() {
             let mut empty = 0u8;
             for file in 0..8 {
-                if let Some(p) = self.piece_at(Square::from_coords(file, rank)) {
+                let code = mailbox[rank * 8 + file];
+                if code != u8::MAX {
                     if empty > 0 {
                         out.push(b'0' + empty);
                         empty = 0;
                     }
-                    out.push(PIECE_CHAR[p.code() as usize]);
+                    out.push(PIECE_CHAR[code as usize]);
                 } else {
                     empty += 1;
                 }

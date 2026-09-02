@@ -62,3 +62,26 @@ check:
 # bench-wasm stub (ultrachess parity stub; no WASM bulk — Non-Goals D5)
 bench-wasm:
     @echo "bench-wasm: stub — WASM bulk not in scope (see BENCH.md Deliberate). Use wasm-pack if needed."
+
+# bench-stockfish — compile real Stockfish (GPL-3) as an EXTERNAL binary in
+# /tmp/stockfish_src (never vendored or linked; docs-only parity proof) and
+# time `go perft 5/6` on this machine. Mirrors the close-gap spec:
+# `make -C /tmp/stockfish_src/src build ARCH=apple-silicon` → ~95MB binary,
+# `echo "position startpos\ngo perft 6\nquit" | stockfish` timed via /usr/bin/time.
+bench-stockfish:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -d /tmp/stockfish_src ]; then
+        echo "bench-stockfish: cloning official Stockfish (GPL-3, external only) ..."
+        git clone --depth 1 https://github.com/official-stockfish/Stockfish.git /tmp/stockfish_src
+    fi
+    if [ ! -x /tmp/stockfish_src/src/stockfish ]; then
+        echo "bench-stockfish: compiling (make -j build ARCH=apple-silicon) ..."
+        make -C /tmp/stockfish_src/src -j build ARCH=apple-silicon
+    fi
+    SF=/tmp/stockfish_src/src/stockfish
+    echo "bench-stockfish: d5 (4.86M nodes expected) ..."
+    /usr/bin/time -p sh -c "printf 'position startpos\ngo perft 5\nquit\n' | $SF" 2>&1 | grep -E 'Nodes searched|real'
+    echo "bench-stockfish: d6 (119M nodes expected) ..."
+    /usr/bin/time -p sh -c "printf 'position startpos\ngo perft 6\nquit\n' | $SF" 2>&1 | grep -E 'Nodes searched|real'
+    @echo "bench-stockfish: Stockfish is GPL-3 (study only, external binary — no code linked or copied)"

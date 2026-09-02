@@ -148,8 +148,10 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
     let mut tmp = *board;
     let undo = tmp.make_move_unchecked(mv);
     if tmp.in_check() {
-        // `has_no_legal_moves` is `legal_moves().is_empty()` — gated.
-        let is_mate = tmp.legal_moves().is_empty();
+        // `has_no_legal_moves` via the MoveCounter bulk path (`count +=
+        // popcount`, no `Move` materialisation, close-gap D4 task 5.1) —
+        // gated behind the O(1) `in_check()` cache.
+        let is_mate = tmp.count_legal_moves() == 0;
         out.push(if is_mate { '#' } else { '+' });
     }
     tmp.unmake_move(mv, undo);

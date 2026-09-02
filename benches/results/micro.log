@@ -1,0 +1,417 @@
+warning: method `gen_castling` is never used
+   --> src/board.rs:923:8
+    |
+389 | impl Board {
+    | ---------- method in this implementation
+...
+923 |     fn gen_castling(&self, moves: &mut...
+    |        ^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `byte_from_piece` is never used
+  --> src/fen.rs:45:4
+   |
+45 | fn byte_from_piece(p: Piece) -> u8 {
+   |    ^^^^^^^^^^^^^^^
+
+warning: `turbochess-rs` (lib) generated 2 warnings
+    Finished `bench` profile [optimized] target(s) in 0.13s
+     Running benches/micro.rs (target/release/deps/micro-6a4eed5fa40a9a58)
+Gnuplot not found, using plotters backend
+Benchmarking micro/startpos/fen_write
+Benchmarking micro/startpos/fen_write: Warming up for 1.0000 s
+Benchmarking micro/startpos/fen_write: Collecting 10 samples in estimated 1.0000 s (10M iterations)
+Benchmarking micro/startpos/fen_write: Analyzing
+micro/startpos/fen_write
+                        time:   [97.448 ns 98.758 ns 100.34 ns]
+                        thrpt:  [9.9658 Melem/s 10.126 Melem/s 10.262 Melem/s]
+                 change:
+                        time:   [-15.452% -1.4230% +11.059%] (p = 0.88 > 0.05)
+                        thrpt:  [-9.9576% +1.4436% +18.275%]
+                        No change in performance detected.
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+Benchmarking micro/startpos/fen_parse
+Benchmarking micro/startpos/fen_parse: Warming up for 1.0000 s
+Benchmarking micro/startpos/fen_parse: Collecting 10 samples in estimated 1.0000 s (2.5M iterations)
+Benchmarking micro/startpos/fen_parse: Analyzing
+micro/startpos/fen_parse
+                        time:   [385.54 ns 392.89 ns 401.19 ns]
+                        thrpt:  [2.4926 Melem/s 2.5453 Melem/s 2.5938 Melem/s]
+                 change:
+                        time:   [-4.8058% -2.8111% -1.0491%] (p = 0.01 < 0.05)
+                        thrpt:  [+1.0603% +2.8924% +5.0484%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/startpos/movegen_one_shot
+Benchmarking micro/startpos/movegen_one_shot: Warming up for 1.0000 s
+Benchmarking micro/startpos/movegen_one_shot: Collecting 10 samples in estimated 1.0000 s (13M iterations)
+Benchmarking micro/startpos/movegen_one_shot: Analyzing
+micro/startpos/movegen_one_shot
+                        time:   [78.182 ns 78.709 ns 79.024 ns]
+                        thrpt:  [12.654 Melem/s 12.705 Melem/s 12.791 Melem/s]
+                 change:
+                        time:   [-32.581% -17.719% -6.6667%] (p = 0.07 > 0.05)
+                        thrpt:  [+7.1429% +21.535% +48.327%]
+                        No change in performance detected.
+Benchmarking micro/startpos/make_unmake_48
+Benchmarking micro/startpos/make_unmake_48: Warming up for 1.0000 s
+Benchmarking micro/startpos/make_unmake_48: Collecting 10 samples in estimated 1.0000 s (941k iterations)
+Benchmarking micro/startpos/make_unmake_48: Analyzing
+micro/startpos/make_unmake_48
+                        time:   [1.0553 µs 1.0743 µs 1.0961 µs]
+                        thrpt:  [43.793 Melem/s 44.680 Melem/s 45.485 Melem/s]
+                 change:
+                        time:   [-2.9520% -1.9955% -0.8843%] (p = 0.01 < 0.05)
+                        thrpt:  [+0.8922% +2.0361% +3.0418%]
+                        Change within noise threshold.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/startpos/is_check/in
+Benchmarking micro/startpos/is_check/in: Warming up for 1.0000 s
+Benchmarking micro/startpos/is_check/in: Collecting 10 samples in estimated 1.0000 s (2.1B iterations)
+Benchmarking micro/startpos/is_check/in: Analyzing
+micro/startpos/is_check/in
+                        time:   [482.24 ps 490.56 ps 500.43 ps]
+                        thrpt:  [1.9983 Gelem/s 2.0385 Gelem/s 2.0737 Gelem/s]
+                 change:
+                        time:   [-2.2155% -1.0477% +0.5190%] (p = 0.18 > 0.05)
+                        thrpt:  [-0.5163% +1.0588% +2.2657%]
+                        No change in performance detected.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/startpos/is_check/out
+Benchmarking micro/startpos/is_check/out: Warming up for 1.0000 s
+Benchmarking micro/startpos/is_check/out: Collecting 10 samples in estimated 1.0000 s (2.0B iterations)
+Benchmarking micro/startpos/is_check/out: Analyzing
+micro/startpos/is_check/out
+                        time:   [481.28 ps 488.18 ps 499.19 ps]
+                        thrpt:  [2.0032 Gelem/s 2.0484 Gelem/s 2.0778 Gelem/s]
+                 change:
+                        time:   [-1.7963% +1.2271% +6.1867%] (p = 0.69 > 0.05)
+                        thrpt:  [-5.8263% -1.2122% +1.8292%]
+                        No change in performance detected.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking micro/startpos/hash
+Benchmarking micro/startpos/hash: Warming up for 1.0000 s
+Benchmarking micro/startpos/hash: Collecting 10 samples in estimated 1.0000 s (2.1B iterations)
+Benchmarking micro/startpos/hash: Analyzing
+micro/startpos/hash     time:   [478.92 ps 483.00 ps 492.20 ps]
+                        thrpt:  [2.0317 Gelem/s 2.0704 Gelem/s 2.0880 Gelem/s]
+                 change:
+                        time:   [-1.2732% +0.2348% +2.4937%] (p = 0.86 > 0.05)
+                        thrpt:  [-2.4331% -0.2343% +1.2896%]
+                        No change in performance detected.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/startpos/san_48
+Benchmarking micro/startpos/san_48: Warming up for 1.0000 s
+Benchmarking micro/startpos/san_48: Collecting 10 samples in estimated 1.0002 s (253k iterations)
+Benchmarking micro/startpos/san_48: Analyzing
+micro/startpos/san_48   time:   [3.9095 µs 3.9180 µs 3.9272 µs]
+                        thrpt:  [12.222 Melem/s 12.251 Melem/s 12.278 Melem/s]
+                 change:
+                        time:   [-0.3129% +0.4032% +1.0587%] (p = 0.29 > 0.05)
+                        thrpt:  [-1.0476% -0.4016% +0.3138%]
+                        No change in performance detected.
+Benchmarking micro/startpos/clone
+Benchmarking micro/startpos/clone: Warming up for 1.0000 s
+Benchmarking micro/startpos/clone: Collecting 10 samples in estimated 1.0000 s (309M iterations)
+Benchmarking micro/startpos/clone: Analyzing
+micro/startpos/clone    time:   [3.1979 ns 3.2858 ns 3.3663 ns]
+                        thrpt:  [297.07 Melem/s 304.34 Melem/s 312.70 Melem/s]
+                 change:
+                        time:   [-2.9000% -1.5300% +0.2189%] (p = 0.08 > 0.05)
+                        thrpt:  [-0.2184% +1.5538% +2.9866%]
+                        No change in performance detected.
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+Benchmarking micro/startpos/perft_visitor
+Benchmarking micro/startpos/perft_visitor: Warming up for 1.0000 s
+Benchmarking micro/startpos/perft_visitor: Collecting 10 samples in estimated 1.0014 s (38k iterations)
+Benchmarking micro/startpos/perft_visitor: Analyzing
+micro/startpos/perft_visitor
+                        time:   [26.174 µs 26.375 µs 26.867 µs]
+                        thrpt:  [331.34 Melem/s 337.52 Melem/s 340.11 Melem/s]
+                 change:
+                        time:   [-0.1222% +1.2994% +3.0497%] (p = 0.16 > 0.05)
+                        thrpt:  [-2.9594% -1.2828% +0.1223%]
+                        No change in performance detected.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking micro/startpos/san_visitor
+Benchmarking micro/startpos/san_visitor: Warming up for 1.0000 s
+Benchmarking micro/startpos/san_visitor: Collecting 10 samples in estimated 1.0001 s (252k iterations)
+Benchmarking micro/startpos/san_visitor: Analyzing
+micro/startpos/san_visitor
+                        time:   [3.8789 µs 3.9073 µs 3.9781 µs]
+                        thrpt:  [12.066 Melem/s 12.285 Melem/s 12.375 Melem/s]
+                 change:
+                        time:   [-1.2326% +0.5420% +3.5299%] (p = 0.78 > 0.05)
+                        thrpt:  [-3.4096% -0.5391% +1.2480%]
+                        No change in performance detected.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+
+Benchmarking micro/kiwipete/fen_write
+Benchmarking micro/kiwipete/fen_write: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/fen_write: Collecting 10 samples in estimated 1.0000 s (8.6M iterations)
+Benchmarking micro/kiwipete/fen_write: Analyzing
+micro/kiwipete/fen_write
+                        time:   [114.38 ns 114.84 ns 115.20 ns]
+                        thrpt:  [8.6804 Melem/s 8.7076 Melem/s 8.7424 Melem/s]
+                 change:
+                        time:   [-33.104% -23.922% -13.925%] (p = 0.00 < 0.05)
+                        thrpt:  [+16.177% +31.444% +49.487%]
+                        Performance has improved.
+Benchmarking micro/kiwipete/fen_parse
+Benchmarking micro/kiwipete/fen_parse: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/fen_parse: Collecting 10 samples in estimated 1.0000 s (2.3M iterations)
+Benchmarking micro/kiwipete/fen_parse: Analyzing
+micro/kiwipete/fen_parse
+                        time:   [442.78 ns 498.11 ns 591.21 ns]
+                        thrpt:  [1.6915 Melem/s 2.0076 Melem/s 2.2585 Melem/s]
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking micro/kiwipete/movegen_one_shot
+Benchmarking micro/kiwipete/movegen_one_shot: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/movegen_one_shot: Collecting 10 samples in estimated 1.0000 s (9.1M iterations)
+Benchmarking micro/kiwipete/movegen_one_shot: Analyzing
+micro/kiwipete/movegen_one_shot
+                        time:   [103.14 ns 103.43 ns 104.07 ns]
+                        thrpt:  [9.6091 Melem/s 9.6684 Melem/s 9.6956 Melem/s]
+                 change:
+                        time:   [-7.3405% -6.4795% -5.6115%] (p = 0.00 < 0.05)
+                        thrpt:  [+5.9451% +6.9284% +7.9220%]
+                        Performance has improved.
+Benchmarking micro/kiwipete/make_unmake_48
+Benchmarking micro/kiwipete/make_unmake_48: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/make_unmake_48: Collecting 10 samples in estimated 1.0000 s (931k iterations)
+Benchmarking micro/kiwipete/make_unmake_48: Analyzing
+micro/kiwipete/make_unmake_48
+                        time:   [1.0679 µs 1.0942 µs 1.1164 µs]
+                        thrpt:  [42.995 Melem/s 43.869 Melem/s 44.947 Melem/s]
+                 change:
+                        time:   [-3.6664% -2.5670% -1.1791%] (p = 0.00 < 0.05)
+                        thrpt:  [+1.1932% +2.6346% +3.8059%]
+                        Performance has improved.
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+Benchmarking micro/kiwipete/is_check/in
+Benchmarking micro/kiwipete/is_check/in: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/is_check/in: Collecting 10 samples in estimated 1.0000 s (2.0B iterations)
+Benchmarking micro/kiwipete/is_check/in: Analyzing
+micro/kiwipete/is_check/in
+                        time:   [487.49 ps 493.53 ps 503.57 ps]
+                        thrpt:  [1.9858 Gelem/s 2.0262 Gelem/s 2.0513 Gelem/s]
+                 change:
+                        time:   [+2.5917% +3.8274% +5.1430%] (p = 0.00 < 0.05)
+                        thrpt:  [-4.8914% -3.6863% -2.5262%]
+                        Performance has regressed.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high mild
+Benchmarking micro/kiwipete/is_check/out
+Benchmarking micro/kiwipete/is_check/out: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/is_check/out: Collecting 10 samples in estimated 1.0000 s (2.0B iterations)
+Benchmarking micro/kiwipete/is_check/out: Analyzing
+micro/kiwipete/is_check/out
+                        time:   [495.42 ps 503.13 ps 519.57 ps]
+                        thrpt:  [1.9247 Gelem/s 1.9876 Gelem/s 2.0185 Gelem/s]
+                 change:
+                        time:   [+3.3484% +4.9065% +7.1792%] (p = 0.00 < 0.05)
+                        thrpt:  [-6.6983% -4.6770% -3.2399%]
+                        Performance has regressed.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/kiwipete/hash
+Benchmarking micro/kiwipete/hash: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/hash: Collecting 10 samples in estimated 1.0000 s (2.1B iterations)
+Benchmarking micro/kiwipete/hash: Analyzing
+micro/kiwipete/hash     time:   [483.75 ps 490.69 ps 502.70 ps]
+                        thrpt:  [1.9893 Gelem/s 2.0379 Gelem/s 2.0672 Gelem/s]
+                 change:
+                        time:   [-0.0930% +1.8232% +4.8257%] (p = 0.20 > 0.05)
+                        thrpt:  [-4.6035% -1.7905% +0.0931%]
+                        No change in performance detected.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/kiwipete/san_48
+Benchmarking micro/kiwipete/san_48: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/san_48: Collecting 10 samples in estimated 1.0002 s (238k iterations)
+Benchmarking micro/kiwipete/san_48: Analyzing
+micro/kiwipete/san_48   time:   [4.0959 µs 4.1085 µs 4.1246 µs]
+                        thrpt:  [11.637 Melem/s 11.683 Melem/s 11.719 Melem/s]
+                 change:
+                        time:   [-1.3058% +0.2426% +1.3117%] (p = 0.79 > 0.05)
+                        thrpt:  [-1.2947% -0.2420% +1.3230%]
+                        No change in performance detected.
+Found 3 outliers among 10 measurements (30.00%)
+  1 (10.00%) low mild
+  2 (20.00%) high severe
+Benchmarking micro/kiwipete/clone
+Benchmarking micro/kiwipete/clone: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/clone: Collecting 10 samples in estimated 1.0000 s (305M iterations)
+Benchmarking micro/kiwipete/clone: Analyzing
+micro/kiwipete/clone    time:   [3.2141 ns 3.2370 ns 3.2601 ns]
+                        thrpt:  [306.74 Melem/s 308.93 Melem/s 311.13 Melem/s]
+                 change:
+                        time:   [-5.4927% -2.6275% -0.8349%] (p = 0.04 < 0.05)
+                        thrpt:  [+0.8420% +2.6984% +5.8119%]
+                        Change within noise threshold.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking micro/kiwipete/perft_visitor
+Benchmarking micro/kiwipete/perft_visitor: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/perft_visitor: Collecting 10 samples in estimated 1.0006 s (7315 iterations)
+Benchmarking micro/kiwipete/perft_visitor: Analyzing
+micro/kiwipete/perft_visitor
+                        time:   [134.90 µs 136.82 µs 139.40 µs]
+                        thrpt:  [702.01 Melem/s 715.24 Melem/s 725.44 Melem/s]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/kiwipete/san_visitor
+Benchmarking micro/kiwipete/san_visitor: Warming up for 1.0000 s
+Benchmarking micro/kiwipete/san_visitor: Collecting 10 samples in estimated 1.0001 s (244k iterations)
+Benchmarking micro/kiwipete/san_visitor: Analyzing
+micro/kiwipete/san_visitor
+                        time:   [4.0434 µs 4.1146 µs 4.1913 µs]
+                        thrpt:  [11.452 Melem/s 11.666 Melem/s 11.871 Melem/s]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+
+Benchmarking micro/960-284/fen_write
+Benchmarking micro/960-284/fen_write: Warming up for 1.0000 s
+Benchmarking micro/960-284/fen_write: Collecting 10 samples in estimated 1.0000 s (10M iterations)
+Benchmarking micro/960-284/fen_write: Analyzing
+micro/960-284/fen_write time:   [99.388 ns 102.89 ns 107.96 ns]
+                        thrpt:  [9.2627 Melem/s 9.7194 Melem/s 10.062 Melem/s]
+                 change:
+                        time:   [-0.5963% +2.9889% +6.6439%] (p = 0.16 > 0.05)
+                        thrpt:  [-6.2300% -2.9021% +0.5999%]
+                        No change in performance detected.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high mild
+Benchmarking micro/960-284/fen_parse
+Benchmarking micro/960-284/fen_parse: Warming up for 1.0000 s
+Benchmarking micro/960-284/fen_parse: Collecting 10 samples in estimated 1.0000 s (2.5M iterations)
+Benchmarking micro/960-284/fen_parse: Analyzing
+micro/960-284/fen_parse time:   [386.19 ns 389.43 ns 393.92 ns]
+                        thrpt:  [2.5386 Melem/s 2.5678 Melem/s 2.5894 Melem/s]
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+Benchmarking micro/960-284/movegen_one_shot
+Benchmarking micro/960-284/movegen_one_shot: Warming up for 1.0000 s
+Benchmarking micro/960-284/movegen_one_shot: Collecting 10 samples in estimated 1.0000 s (11M iterations)
+Benchmarking micro/960-284/movegen_one_shot: Analyzing
+micro/960-284/movegen_one_shot
+                        time:   [92.686 ns 93.458 ns 94.997 ns]
+                        thrpt:  [10.527 Melem/s 10.700 Melem/s 10.789 Melem/s]
+                 change:
+                        time:   [-23.025% -13.227% -4.4146%] (p = 0.02 < 0.05)
+                        thrpt:  [+4.6185% +15.244% +29.913%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/960-284/make_unmake_48
+Benchmarking micro/960-284/make_unmake_48: Warming up for 1.0000 s
+Benchmarking micro/960-284/make_unmake_48: Collecting 10 samples in estimated 1.0000 s (937k iterations)
+Benchmarking micro/960-284/make_unmake_48: Analyzing
+micro/960-284/make_unmake_48
+                        time:   [1.0582 µs 1.0741 µs 1.0980 µs]
+                        thrpt:  [43.716 Melem/s 44.688 Melem/s 45.361 Melem/s]
+                 change:
+                        time:   [-3.6686% -2.1514% -0.0862%] (p = 0.03 < 0.05)
+                        thrpt:  [+0.0863% +2.1987% +3.8083%]
+                        Change within noise threshold.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking micro/960-284/is_check/in
+Benchmarking micro/960-284/is_check/in: Warming up for 1.0000 s
+Benchmarking micro/960-284/is_check/in: Collecting 10 samples in estimated 1.0000 s (2.1B iterations)
+Benchmarking micro/960-284/is_check/in: Analyzing
+micro/960-284/is_check/in
+                        time:   [479.75 ps 484.86 ps 498.31 ps]
+                        thrpt:  [2.0068 Gelem/s 2.0625 Gelem/s 2.0844 Gelem/s]
+                 change:
+                        time:   [-0.6429% +2.6477% +7.1745%] (p = 0.24 > 0.05)
+                        thrpt:  [-6.6942% -2.5794% +0.6470%]
+                        No change in performance detected.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking micro/960-284/is_check/out
+Benchmarking micro/960-284/is_check/out: Warming up for 1.0000 s
+Benchmarking micro/960-284/is_check/out: Collecting 10 samples in estimated 1.0000 s (2.1B iterations)
+Benchmarking micro/960-284/is_check/out: Analyzing
+micro/960-284/is_check/out
+                        time:   [480.82 ps 485.29 ps 488.74 ps]
+                        thrpt:  [2.0461 Gelem/s 2.0606 Gelem/s 2.0798 Gelem/s]
+                 change:
+                        time:   [+0.3050% +0.7929% +1.3929%] (p = 0.00 < 0.05)
+                        thrpt:  [-1.3738% -0.7866% -0.3041%]
+                        Change within noise threshold.
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) high mild
+  1 (10.00%) high severe
+Benchmarking micro/960-284/hash
+Benchmarking micro/960-284/hash: Warming up for 1.0000 s
+Benchmarking micro/960-284/hash: Collecting 10 samples in estimated 1.0000 s (2.1B iterations)
+Benchmarking micro/960-284/hash: Analyzing
+micro/960-284/hash      time:   [477.60 ps 478.24 ps 479.29 ps]
+                        thrpt:  [2.0864 Gelem/s 2.0910 Gelem/s 2.0938 Gelem/s]
+                 change:
+                        time:   [-0.1919% +0.2953% +0.7811%] (p = 0.27 > 0.05)
+                        thrpt:  [-0.7750% -0.2944% +0.1923%]
+                        No change in performance detected.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking micro/960-284/san_48
+Benchmarking micro/960-284/san_48: Warming up for 1.0000 s
+Benchmarking micro/960-284/san_48: Collecting 10 samples in estimated 1.0001 s (246k iterations)
+Benchmarking micro/960-284/san_48: Analyzing
+micro/960-284/san_48    time:   [4.0092 µs 4.0704 µs 4.1134 µs]
+                        thrpt:  [11.669 Melem/s 11.793 Melem/s 11.972 Melem/s]
+                 change:
+                        time:   [-2.4028% -1.0090% +0.2618%] (p = 0.19 > 0.05)
+                        thrpt:  [-0.2611% +1.0192% +2.4620%]
+                        No change in performance detected.
+Found 3 outliers among 10 measurements (30.00%)
+  1 (10.00%) low mild
+  2 (20.00%) high severe
+Benchmarking micro/960-284/clone
+Benchmarking micro/960-284/clone: Warming up for 1.0000 s
+Benchmarking micro/960-284/clone: Collecting 10 samples in estimated 1.0000 s (299M iterations)
+Benchmarking micro/960-284/clone: Analyzing
+micro/960-284/clone     time:   [3.2158 ns 3.2913 ns 3.3622 ns]
+                        thrpt:  [297.42 Melem/s 303.83 Melem/s 310.96 Melem/s]
+                 change:
+                        time:   [-21.544% -12.262% -4.0294%] (p = 0.02 < 0.05)
+                        thrpt:  [+4.1986% +13.976% +27.460%]
+                        Performance has improved.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking micro/960-284/perft_visitor
+Benchmarking micro/960-284/perft_visitor: Warming up for 1.0000 s
+Benchmarking micro/960-284/perft_visitor: Collecting 10 samples in estimated 1.0011 s (30k iterations)
+Benchmarking micro/960-284/perft_visitor: Analyzing
+micro/960-284/perft_visitor
+                        time:   [33.390 µs 35.236 µs 39.434 µs]
+                        thrpt:  [226.96 Melem/s 254.00 Melem/s 268.04 Melem/s]
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high severe
+Benchmarking micro/960-284/san_visitor
+Benchmarking micro/960-284/san_visitor: Warming up for 1.0000 s
+Benchmarking micro/960-284/san_visitor: Collecting 10 samples in estimated 1.0001 s (244k iterations)
+Benchmarking micro/960-284/san_visitor: Analyzing
+micro/960-284/san_visitor
+                        time:   [4.0630 µs 4.1030 µs 4.1603 µs]
+                        thrpt:  [11.538 Melem/s 11.699 Melem/s 11.814 Melem/s]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+

@@ -11,7 +11,7 @@ use crate::attacks;
 use crate::bitboard::{bit, lsb, pop_lsb, popcount, BETWEEN, KING_ATT, KNIGHT_ATT, PAWN_ATT};
 use crate::moves::Move;
 use crate::movegen::{compute_pinned_split, MoveCounter, MoveList, MoveSink};
-use crate::types::{Color, Piece, Role, Square, NO_EP, CASTLE_BK, CASTLE_BQ, CASTLE_WK, CASTLE_WQ};
+use crate::types::{Color, Piece, Role, Square, NO_EP};
 use crate::zobrist;
 use arrayvec::ArrayVec;
 
@@ -69,15 +69,11 @@ impl std::error::Error for IllegalMove {}
 pub struct Board {
     bbs: [[u64; 6]; 2],  // [color_index][role_index]
     occ: [u64; 2],       // occupancy per color
-    occupied: u64,       // total occupancy
-    mailbox: [u8; 64],   // piece code or EMPTY
     turn: Color,
     castling: u8,
     /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
     /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
     castle_rook_sq: [u8; 4],
-    /// Per-square rights-clear mask: `castling &= castle_mask[from] & castle_mask[to]`.
-    castle_mask: [u8; 64],
     ep: u8,
     halfmove: u16,
     fullmove: u16,
@@ -86,7 +82,16 @@ pub struct Board {
     /// `checkers != 0` without scan (ultrachess D3, 0.32ns both states).
     checkers: u64,
     king_sq: [u8; 2],
+    // Close-gap D3 (task 4.1): `mailbox: [u8;64]` removed — `piece_at` scans
+    // the 12 bitboards (`piece_code_at`); `castle_mask: [u8;64]` removed —
+    // rights-clearing is derived from `castle_rook_sq[4]` + the mover's role
+    // (`castle_rights_after`); `occupied` removed — `occ[0] | occ[1]` (1 OR).
+    // Layout shrinks toward the 128B `Copy` target while keeping Chess960
+    // `rook_sq[4]` and `hash`/`checkers` for SAN/search.
 }
+
+/// Board size in bytes (compact `Copy` layout, close-gap D3).
+pub const BOARD_SIZE: usize = core::mem::size_of::<Board>();
 
 impl Board {
     /// Empty board with White to move.
@@ -94,12 +99,9 @@ impl Board {
         Board {
             bbs: [[0; 6]; 2],
             occ: [0; 2],
-            occupied: 0,
-            mailbox: [EMPTY; 64],
             turn: Color::White,
             castling: 0,
             castle_rook_sq: [0; 4],
-            castle_mask: [0x0F; 64],
             ep: NO_EP,
             halfmove: 0,
             fullmove: 1,
@@ -129,10 +131,11 @@ impl Board {
         self.occ[color.index()]
     }
 
-    /// Bitboard of every occupied square.
+    /// Bitboard of every occupied square (`occ[0] | occ[1]` — derived, 1 OR,
+    /// close-gap D3 task 4.1).
     #[inline]
     pub fn occupied(&self) -> u64 {
-        self.occupied
+        self.occ[0] | self.occ[1]
     }
 
     /// Bitboard of all pieces of `role` belonging to `color`.
@@ -144,7 +147,48 @@ impl Board {
     /// Piece standing on `sq`, if any.
     #[inline]
     pub fn piece_at(&self, sq: Square) -> Option<Piece> {
-        Piece::from_code(self.mailbox[sq.index()])
+        Piece::from_code(self.piece_code_at(sq.index() as u8))
+    }
+
+    /// Piece code on `sq` (0..11) or [`EMPTY`] — scans the 12 bitboards
+    /// (close-gap D3 task 4.1: replaces the 64B `mailbox`). Early-outs on
+    /// per-color occupancy; a hit is ≤12 bit tests, an empty square is 2.
+    #[inline]
+    pub(crate) fn piece_code_at(&self, sq: u8) -> u8 {
+        let b = bit(sq);
+        if self.occ[0] & b == 0 && self.occ[1] & b == 0 {
+            return EMPTY;
+        }
+        for (c, col) in self.bbs.iter().enumerate() {
+            for (r, bb) in col.iter().enumerate() {
+                if bb & b != 0 {
+                    return (c * 6 + r) as u8;
+                }
+            }
+        }
+        EMPTY
+    }
+
+    /// Rights that survive a move of `role`/`us` from `from` to `to`,
+    /// derived from [`Board::castle_rook_sq`] and the mover's role
+    /// (close-gap D3 task 4.1: replaces the 64B `castle_mask` table).
+    /// A king move forfeits both of the mover's rights; touching a right's
+    /// rook square (moving from or capturing on it) forfeits that right.
+    #[inline]
+    fn castle_rights_after(&self, role: u8, us: Color, from: u8, to: u8) -> u8 {
+        let mut keep: u8 = 0x0F;
+        if role == Role::King as u8 {
+            // castle_right_bit returns the bit POSITION (0..3) — shift to mask.
+            let both = (1u8 << crate::types::castle_right_bit(us, true))
+                | (1u8 << crate::types::castle_right_bit(us, false));
+            keep &= !both;
+        }
+        for rb in 0..4usize {
+            if self.castle_rook_sq[rb] == from || self.castle_rook_sq[rb] == to {
+                keep &= !(1u8 << rb);
+            }
+        }
+        keep
     }
 
     /// King square of `color`.
@@ -231,8 +275,6 @@ impl Board {
         let b = bit(sq);
         self.bbs[color][role] |= b;
         self.occ[color] |= b;
-        self.occupied |= b;
-        self.mailbox[sq as usize] = code;
         self.hash ^= zobrist::piece_key(
             Self::color_from_index(color),
             Self::role_from_index(role),
@@ -250,8 +292,6 @@ impl Board {
         let b = bit(sq);
         self.bbs[color][role] &= !b;
         self.occ[color] &= !b;
-        self.occupied &= !b;
-        self.mailbox[sq as usize] = EMPTY;
         self.hash ^= zobrist::piece_key(
             Self::color_from_index(color),
             Self::role_from_index(role),
@@ -298,7 +338,7 @@ impl Board {
     /// legality after `make_move_unchecked` for the mover).
     #[inline]
     pub fn king_attacked(&self, color: Color) -> bool {
-        self.attackers_to(self.king_sq[color.index()], color.other(), self.occupied) != 0
+        self.attackers_to(self.king_sq[color.index()], color.other(), self.occupied()) != 0
     }
 
     /// True when the side to move is in check — branch-free `checkers != 0`
@@ -355,7 +395,16 @@ impl Board {
         list.into_arrayvec()
     }
 
-    /// Alloc-free count of strictly legal moves via `MoveCounter` bulk path
+    /// Generic move generation into any [`MoveVisitor`](crate::movegen::MoveVisitor)
+    /// (D1: visitor pattern, no `Move` materialisation). Shares the
+    /// `generate_moves_into` body verbatim — `compute_pinned_split` + bulk
+    /// pawn shifts — through `VisitorAdapter` (monomorphised, `LTO=fat`).
+    pub fn generate_visitor<V: crate::movegen::MoveVisitor>(&self, visitor: &mut V) {
+        let mut adapter = crate::movegen::VisitorAdapter::new(visitor);
+        self.generate_moves_into(&mut adapter);
+    }
+
+    /// Alloc-free count of strictly legal moves via [`MoveCounter`] bulk path
     /// (`count+=popcount` without `pop_lsb`) — the `geomean 1.23× vs cozy` win.
     #[inline]
     pub fn count_legal_moves(&self) -> u32 {
@@ -366,17 +415,29 @@ impl Board {
 
     /// Generic move generation into any `MoveSink` (D2: `generate_moves_into<S:MoveSink>`).
     ///
-    /// Extracted from `board.rs:319`, adds `compute_pinned_split→(pinned_hv,pinned_diag)`
-    /// (ultrachess `movegen.rs:214`) to avoid per-slider `LINE` dependent load and
-    /// bulk pawn shifts `north(pawns)&!occ&check_mask` split promo/non-promo
-    /// copying `ultrachess/movegen.rs:31`.
+    /// Dispatch wrapper (close-gap D2, task 3.1): keeps the public API and
+    /// forwards to [`Board::generate_moves_templated`] with `WHITE`
+    /// const-folded so every `if white` pawn branch/shift specialises at
+    /// compile time (Gigantua's colour template expansion, clean-room).
     pub fn generate_moves_into<S: MoveSink>(&self, sink: &mut S) {
+        if self.turn == Color::White {
+            self.generate_moves_templated::<true, S>(sink);
+        } else {
+            self.generate_moves_templated::<false, S>(sink);
+        }
+    }
+
+    /// Colour-templated generation core: `WHITE` is a compile-time constant,
+    /// so pawn push/capture shifts (`<<8/>>8/<<7/<<9/>>7/>>9`), offsets,
+    /// promo/start ranks and the `PAWN_ATT` colour index all const-fold
+    /// (monomorphised ×2 per sink, `LTO=fat`).
+    fn generate_moves_templated<const WHITE: bool, S: MoveSink>(&self, sink: &mut S) {
         let us = self.turn;
         let them = us.other();
         let ui = us.index();
         let ti = them.index();
         let ksq = self.king_sq[ui];
-        let occ = self.occupied;
+        let occ = self.occupied();
         let their_bq = self.bbs[ti][Role::Bishop.index()] | self.bbs[ti][Role::Queen.index()];
         let their_rq = self.bbs[ti][Role::Rook.index()] | self.bbs[ti][Role::Queen.index()];
 
@@ -480,7 +541,7 @@ impl Board {
             }
         }
 
-        self.gen_pawn_moves_sink(sink, allowed, pinned_hv, pinned_diag, pin_line);
+        self.gen_pawn_moves_templated::<WHITE, S>(sink, allowed, pinned_hv, pinned_diag, pin_line);
 
         // Castling is only possible when not in check.
         if checkers == 0 {
@@ -488,8 +549,11 @@ impl Board {
         }
     }
 
-    /// Pawn move generation via `MoveSink` bulk shifts (promo split) + per-pinned handling.
-    fn gen_pawn_moves_sink<S: MoveSink>(
+    /// Pawn move generation via `MoveSink` bulk shifts (promo split) + per-pinned
+    /// handling — `WHITE` const-folded (close-gap D2, task 3.1): shift direction,
+    /// ±7/±8/±9/±16 offsets, promo/start ranks and the `PAWN_ATT` colour index
+    /// are compile-time constants per monomorphisation.
+    fn gen_pawn_moves_templated<const WHITE: bool, S: MoveSink>(
         &self,
         sink: &mut S,
         allowed: u64,
@@ -499,8 +563,7 @@ impl Board {
     ) {
         let us = self.turn;
         let ui = us.index();
-        let white = us == Color::White;
-        let occ = self.occupied;
+        let occ = self.occupied();
         let them_occ = self.occ[us.other().index()];
         let empty = !occ;
         let pawns = self.bbs[ui][Role::Pawn.index()];
@@ -509,34 +572,34 @@ impl Board {
         // Bulk for unpinned pawns — `north(pawns)&!occ&check_mask` split promo/non-promo.
         let unpinned = pawns & !pinned_any;
         if unpinned != 0 {
-            let promo_rank = if white { crate::types::RANK_BB[7] } else { crate::types::RANK_BB[0] };
-            let start_rank_bb = if white { crate::types::RANK_BB[1] } else { crate::types::RANK_BB[6] };
+            let promo_rank = if WHITE { crate::types::RANK_BB[7] } else { crate::types::RANK_BB[0] };
+            let start_rank_bb = if WHITE { crate::types::RANK_BB[1] } else { crate::types::RANK_BB[6] };
 
             // Single pushes: north(pawns) & empty
-            let single = if white { unpinned << 8 } else { unpinned >> 8 } & empty;
+            let single = if WHITE { unpinned << 8 } else { unpinned >> 8 } & empty;
             let single_allowed = single & allowed;
             let single_promo = single_allowed & promo_rank;
             let single_nonpromo = single_allowed & !promo_rank;
             if single_nonpromo != 0 {
-                let offset: i8 = if white { 8 } else { -8 };
+                let offset: i8 = if WHITE { 8 } else { -8 };
                 sink.push_pawn_targets_offset(single_nonpromo, offset);
             }
             if single_promo != 0 {
-                let offset: i8 = if white { 8 } else { -8 };
+                let offset: i8 = if WHITE { 8 } else { -8 };
                 sink.push_pawn_promotions_offset(single_promo, offset);
             }
 
             // Double pushes: pawns on start rank with both squares empty.
             let pawns_start = unpinned & start_rank_bb;
-            let intermediate = if white { pawns_start << 8 } else { pawns_start >> 8 } & empty;
-            let double = if white { intermediate << 8 } else { intermediate >> 8 } & empty & allowed;
+            let intermediate = if WHITE { pawns_start << 8 } else { pawns_start >> 8 } & empty;
+            let double = if WHITE { intermediate << 8 } else { intermediate >> 8 } & empty & allowed;
             if double != 0 {
-                let offset: i8 = if white { 16 } else { -16 };
+                let offset: i8 = if WHITE { 16 } else { -16 };
                 sink.push_pawn_targets_offset(double, offset);
             }
 
             // Captures — bulk shifts with file masks.
-            let (left_caps, right_caps, left_off, right_off): (u64, u64, i8, i8) = if white {
+            let (left_caps, right_caps, left_off, right_off): (u64, u64, i8, i8) = if WHITE {
                 let l = (unpinned & !crate::types::FILE_BB[0]) << 7 & them_occ & allowed;
                 let r = (unpinned & !crate::types::FILE_BB[7]) << 9 & them_occ & allowed;
                 (l, r, 7, 9)
@@ -572,15 +635,14 @@ impl Board {
             // hv pins allow only file moves, diag pins allow only captures along pin.
             // Masking with pin_line achieves this: pushes/captures off pin_line are stripped.
             // Reuse the original per-pawn logic but via sink.push_one.
-            let white = us == Color::White;
-            let promo_rank: u8 = if white { 7 } else { 0 };
-            let start_rank: u8 = if white { 1 } else { 6 };
+            let promo_rank: u8 = if WHITE { 7 } else { 0 };
+            let start_rank: u8 = if WHITE { 1 } else { 6 };
 
             // Pushes (single/double) — intersect with pin_line.
-            let one_empty = (if white { bit(from) << 8 } else { bit(from) >> 8 }) & empty;
+            let one_empty = (if WHITE { bit(from) << 8 } else { bit(from) >> 8 }) & empty;
             if one_empty != 0 {
                 if from / 8 == start_rank {
-                    let two = (if white { one_empty << 8 } else { one_empty >> 8 }) & empty & allowed_here;
+                    let two = (if WHITE { one_empty << 8 } else { one_empty >> 8 }) & empty & allowed_here;
                     if two != 0 {
                         let to = lsb(two);
                         sink.push_one(Move::new(Square(from), Square(to), None));
@@ -621,7 +683,7 @@ impl Board {
         // disappearing pawns and check-evasion-by-EP). Works for pinned & unpinned.
         if self.ep != crate::types::NO_EP {
             let ep = self.ep;
-            let cap_sq = if white { ep - 8 } else { ep + 8 };
+            let cap_sq = if WHITE { ep - 8 } else { ep + 8 };
             // Iterate candidate pawns that geometrically can capture EP.
             let mut p = pawns;
             while p != 0 {
@@ -696,7 +758,7 @@ impl Board {
                 } else {
                     bit(kf) | bit(kf + 1)
                 };
-                if self.occupied & between == 0 && danger & safe == 0 {
+                if self.occupied() & between == 0 && danger & safe == 0 {
                     sink.push_one(Move::new(Square(ksq), Square(rook), None));
                 }
             } else if self.castle_path(rb).is_some() {
@@ -717,7 +779,7 @@ impl Board {
         let them = us.other();
         let ui = us.index();
         let white = us == Color::White;
-        let occ = self.occupied;
+        let occ = self.occupied();
         let them_occ = self.occ[them.index()];
         let start_rank: u8 = if white { 1 } else { 6 };
         let promo_rank: u8 = if white { 7 } else { 0 };
@@ -821,14 +883,14 @@ impl Board {
             | bit(rf))
             & !bit(ksq)
             & !bit(rook);
-        if self.occupied & need_empty != 0 {
+        if self.occupied() & need_empty != 0 {
             return None;
         }
 
         // King-path safety in the resulting occupancy: the king vacates its
         // square (x-rays through it count) and the rook leaves its square and
         // lands on `rf`.
-        let occ_after = (self.occupied & !(bit(ksq) | bit(rook))) | bit(kf) | bit(rf);
+        let occ_after = (self.occupied() & !(bit(ksq) | bit(rook))) | bit(kf) | bit(rf);
         let mut path = BETWEEN[ksq as usize][kf as usize] | bit(ksq) | bit(kf);
         while path != 0 {
             let s = pop_lsb(&mut path);
@@ -889,7 +951,7 @@ impl Board {
                 } else {
                     bit(kf) | bit(kf + 1) // c, d
                 };
-                if self.occupied & between == 0 && danger & safe == 0 {
+                if self.occupied() & between == 0 && danger & safe == 0 {
                     moves.push(Move::new(Square(ksq), Square(rook), None));
                 }
             } else if self.castle_path(rb).is_some() {
@@ -912,7 +974,7 @@ impl Board {
     pub fn pseudo_legal_moves(&self) -> ArrayVec<Move, MAX_MOVES> {
         let us = self.turn;
         let ui = us.index();
-        let occ = self.occupied;
+        let occ = self.occupied();
         let mut moves = ArrayVec::new();
 
         // Knights.
@@ -1000,7 +1062,7 @@ impl Board {
         let from = mv.from().0;
         let to = mv.to().0;
         let us = self.turn;
-        let moved = self.mailbox[from as usize];
+        let moved = self.piece_code_at(from);
         debug_assert_ne!(moved, EMPTY, "make_move on empty square");
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
@@ -1015,20 +1077,23 @@ impl Board {
         // Castling is encoded king-from → rook-square (ADR-003, decision D3):
         // a king move landing on the mover's own rook. Unambiguous — a normal
         // king move can never land on an own rook.
+        let dest = self.piece_code_at(to);
         let is_castle = role == Role::King as u8
-            && self.mailbox[to as usize] != EMPTY
-            && self.mailbox[to as usize] % 6 == Role::Rook as u8
-            && (self.mailbox[to as usize] / 6) == us as u8;
+            && dest != EMPTY
+            && dest % 6 == Role::Rook as u8
+            && (dest / 6) == us as u8;
 
         // Captures (including en passant onto an empty square).
         let mut captured_sq = to;
-        if is_pawn && diag && self.mailbox[to as usize] == EMPTY {
+        if is_pawn && diag && dest == EMPTY {
             captured_sq = if us == Color::White { to - 8 } else { to + 8 };
         }
-        if !is_castle && captured_sq != from && self.mailbox[captured_sq as usize] != EMPTY {
-            let cap = self.mailbox[captured_sq as usize];
-            undo.captured = cap;
-            self.remove_piece(captured_sq, cap);
+        if !is_castle && captured_sq != from {
+            let cap = self.piece_code_at(captured_sq);
+            if cap != EMPTY {
+                undo.captured = cap;
+                self.remove_piece(captured_sq, cap);
+            }
         }
 
         // Move the piece (handling promotion and castling rook relocation).
@@ -1047,7 +1112,7 @@ impl Board {
                     // Chess960: the king's destination can be the rook's
                     // square and vice versa (adjacent K+R castling swaps
                     // them), so remove both pieces first, then place both.
-                    let rook_code = self.mailbox[to as usize];
+                    let rook_code = dest;
                     self.remove_piece(from, moved);
                     self.remove_piece(to, rook_code);
                     self.put_piece(kf, moved);
@@ -1058,9 +1123,9 @@ impl Board {
             }
         }
 
-        // Castling rights (touching king/rook squares or rook captured).
-        let new_castling =
-            self.castling & self.castle_mask[from as usize] & self.castle_mask[to as usize];
+        // Castling rights (touching king/rook squares or rook captured) —
+        // derived from `castle_rook_sq` + mover role (close-gap D3, task 4.1).
+        let new_castling = self.castling & self.castle_rights_after(role, us, from, to);
         if new_castling != self.castling {
             self.hash ^= self.castle_rights_hash(self.castling ^ new_castling);
             self.castling = new_castling;
@@ -1092,7 +1157,7 @@ impl Board {
         self.checkers = self.attackers_to(
             self.king_sq[self.turn.index()],
             self.turn.other(),
-            self.occupied,
+            self.occupied(),
         );
         undo
     }
@@ -1120,34 +1185,35 @@ impl Board {
         let from = mv.from().0;
         let to = mv.to().0;
         let us = self.turn;
-        let moved = self.mailbox[from as usize];
+        let moved = self.piece_code_at(from);
         debug_assert_ne!(moved, EMPTY, "make_move_perft on empty square");
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
         let diag = from & 7 != to & 7;
 
         // Castling encoded king-from → rook-square.
+        let dest = self.piece_code_at(to);
         let is_castle = role == Role::King as u8
-            && self.mailbox[to as usize] != EMPTY
-            && self.mailbox[to as usize] % 6 == Role::Rook as u8
-            && (self.mailbox[to as usize] / 6) == us as u8;
+            && dest != EMPTY
+            && dest % 6 == Role::Rook as u8
+            && (dest / 6) == us as u8;
 
         // Captures (including en passant onto an empty square) — without hash.
         let mut captured_sq = to;
-        if is_pawn && diag && self.mailbox[to as usize] == EMPTY {
+        if is_pawn && diag && dest == EMPTY {
             captured_sq = if us == Color::White { to - 8 } else { to + 8 };
         }
-        if !is_castle && captured_sq != from && self.mailbox[captured_sq as usize] != EMPTY {
-            let cap = self.mailbox[captured_sq as usize];
-            undo.captured = cap;
-            // Remove without hash (slim).
-            let color = (cap / 6) as usize;
-            let role_idx = (cap % 6) as usize;
-            let b = bit(captured_sq);
-            self.bbs[color][role_idx] &= !b;
-            self.occ[color] &= !b;
-            self.occupied &= !b;
-            self.mailbox[captured_sq as usize] = EMPTY;
+        if !is_castle && captured_sq != from {
+            let cap = self.piece_code_at(captured_sq);
+            if cap != EMPTY {
+                undo.captured = cap;
+                // Remove without hash (slim).
+                let color = (cap / 6) as usize;
+                let role_idx = (cap % 6) as usize;
+                let b = bit(captured_sq);
+                self.bbs[color][role_idx] &= !b;
+                self.occ[color] &= !b;
+            }
         }
 
         // Move the piece (promotion and castling rook relocation) — without hash.
@@ -1160,8 +1226,6 @@ impl Board {
                     let b = bit(from);
                     self.bbs[color][role_idx] &= !b;
                     self.occ[color] &= !b;
-                    self.occupied &= !b;
-                    self.mailbox[from as usize] = EMPTY;
                     if role_idx == Role::King.index() {
                         // king_sq updated via put below
                     }
@@ -1172,8 +1236,6 @@ impl Board {
                 let b = bit(to);
                 self.bbs[color][role_idx] |= b;
                 self.occ[color] |= b;
-                self.occupied |= b;
-                self.mailbox[to as usize] = code;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = to;
                 }
@@ -1185,7 +1247,7 @@ impl Board {
                     let kf = (rank << 3) | if kingside { 6 } else { 2 };
                     let rf = (rank << 3) | if kingside { 5 } else { 3 };
                     undo.castled = true;
-                    let rook_code = self.mailbox[to as usize];
+                    let rook_code = dest;
                     // Remove both without hash.
                     for sq_code in [(from, moved), (to, rook_code)] {
                         let (sq, code) = sq_code;
@@ -1194,8 +1256,6 @@ impl Board {
                         let b = bit(sq);
                         self.bbs[color][role_idx] &= !b;
                         self.occ[color] &= !b;
-                        self.occupied &= !b;
-                        self.mailbox[sq as usize] = EMPTY;
                     }
                     // Place both without hash.
                     for sq_code in [(kf, moved), (rf, rook_code)] {
@@ -1205,8 +1265,6 @@ impl Board {
                         let b = bit(sq);
                         self.bbs[color][role_idx] |= b;
                         self.occ[color] |= b;
-                        self.occupied |= b;
-                        self.mailbox[sq as usize] = code;
                         if role_idx == Role::King.index() {
                             self.king_sq[color] = sq;
                         }
@@ -1221,10 +1279,6 @@ impl Board {
                     self.bbs[color][role_idx] |= b_to;
                     self.occ[color] &= !b_from;
                     self.occ[color] |= b_to;
-                    self.occupied &= !b_from;
-                    self.occupied |= b_to;
-                    self.mailbox[from as usize] = EMPTY;
-                    self.mailbox[to as usize] = moved;
                     if role_idx == Role::King.index() {
                         self.king_sq[color] = to;
                     }
@@ -1232,8 +1286,8 @@ impl Board {
             }
         }
 
-        // Castling rights (without hash).
-        self.castling &= self.castle_mask[from as usize] & self.castle_mask[to as usize];
+        // Castling rights (without hash) — derived mask (close-gap D3, 4.1).
+        self.castling &= self.castle_rights_after(role, us, from, to);
 
         // En-passant square after a double pawn push (without hash relevance calc).
         self.ep = if is_pawn && to.abs_diff(from) == 16 {
@@ -1262,8 +1316,8 @@ impl Board {
             let kingside = (to & 7) > (from & 7);
             let kf = (rank << 3) | if kingside { 6 } else { 2 };
             let rf = (rank << 3) | if kingside { 5 } else { 3 };
-            let king_code = self.mailbox[kf as usize];
-            let rook_code = self.mailbox[rf as usize];
+            let king_code = self.piece_code_at(kf);
+            let rook_code = self.piece_code_at(rf);
             debug_assert_eq!(king_code % 6, Role::King as u8);
             debug_assert_eq!(rook_code % 6, Role::Rook as u8);
             for sq_code in [(kf, king_code), (rf, rook_code)] {
@@ -1273,8 +1327,6 @@ impl Board {
                 let b = bit(sq);
                 self.bbs[color][role_idx] &= !b;
                 self.occ[color] &= !b;
-                self.occupied &= !b;
-                self.mailbox[sq as usize] = EMPTY;
             }
             for sq_code in [(from, king_code), (to, rook_code)] {
                 let (sq, code) = sq_code;
@@ -1283,8 +1335,6 @@ impl Board {
                 let b = bit(sq);
                 self.bbs[color][role_idx] |= b;
                 self.occ[color] |= b;
-                self.occupied |= b;
-                self.mailbox[sq as usize] = code;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = sq;
                 }
@@ -1294,7 +1344,7 @@ impl Board {
             return;
         }
 
-        let moved = self.mailbox[to as usize];
+        let moved = self.piece_code_at(to);
         debug_assert_ne!(moved, EMPTY, "unmake_move_perft on empty destination");
         // Remove to without hash.
         {
@@ -1303,8 +1353,6 @@ impl Board {
             let b = bit(to);
             self.bbs[color][role_idx] &= !b;
             self.occ[color] &= !b;
-            self.occupied &= !b;
-            self.mailbox[to as usize] = EMPTY;
         }
         match mv.promotion() {
             Some(_) => {
@@ -1314,8 +1362,6 @@ impl Board {
                 let b = bit(from);
                 self.bbs[color][role_idx] |= b;
                 self.occ[color] |= b;
-                self.occupied |= b;
-                self.mailbox[from as usize] = code;
             }
             None => {
                 let color = (moved / 6) as usize;
@@ -1323,8 +1369,6 @@ impl Board {
                 let b = bit(from);
                 self.bbs[color][role_idx] |= b;
                 self.occ[color] |= b;
-                self.occupied |= b;
-                self.mailbox[from as usize] = moved;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = from;
                 }
@@ -1339,7 +1383,7 @@ impl Board {
                         62 => (61, 63),
                         _ => (59, 56),
                     };
-                    let rook = self.mailbox[rfrom as usize];
+                    let rook = self.piece_code_at(rfrom);
                     if rook != EMPTY {
                         let color = (rook / 6) as usize;
                         let role_idx = (rook % 6) as usize;
@@ -1349,10 +1393,6 @@ impl Board {
                         self.bbs[color][role_idx] |= b_to;
                         self.occ[color] &= !b_from;
                         self.occ[color] |= b_to;
-                        self.occupied &= !b_from;
-                        self.occupied |= b_to;
-                        self.mailbox[rfrom as usize] = EMPTY;
-                        self.mailbox[rto as usize] = rook;
                     }
                 }
             }
@@ -1371,8 +1411,6 @@ impl Board {
             let b = bit(cap_sq);
             self.bbs[color][role_idx] |= b;
             self.occ[color] |= b;
-            self.occupied |= b;
-            self.mailbox[cap_sq as usize] = code;
         }
         self.castling = undo.castling;
         self.ep = undo.ep;
@@ -1397,8 +1435,8 @@ impl Board {
             let kingside = (to & 7) > (from & 7);
             let kf = (rank << 3) | if kingside { 6 } else { 2 };
             let rf = (rank << 3) | if kingside { 5 } else { 3 };
-            let king_code = self.mailbox[kf as usize];
-            let rook_code = self.mailbox[rf as usize];
+            let king_code = self.piece_code_at(kf);
+            let rook_code = self.piece_code_at(rf);
             debug_assert_eq!(king_code % 6, Role::King as u8);
             debug_assert_eq!(rook_code % 6, Role::Rook as u8);
             // Remove both, then place both (swap-safe, mirrors make_move).
@@ -1414,7 +1452,7 @@ impl Board {
             return;
         }
 
-        let moved = self.mailbox[to as usize];
+        let moved = self.piece_code_at(to);
         debug_assert_ne!(moved, EMPTY, "unmake_move on empty destination");
 
         self.remove_piece(to, moved);
@@ -1429,7 +1467,7 @@ impl Board {
                         62 => (61, 63),
                         _ => (59, 56),
                     };
-                    let rook = self.mailbox[rfrom as usize];
+                    let rook = self.piece_code_at(rfrom);
                     self.move_piece(rfrom, rto, rook);
                 }
             }
@@ -1468,7 +1506,7 @@ impl Board {
         }
         let undo = self.make_move_unchecked(mv);
         let mover = self.turn.other();
-        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied) != 0 {
+        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
             self.unmake_move(mv, undo);
             return Err(IllegalMove);
         }
@@ -1482,7 +1520,7 @@ impl Board {
 
     /// True when `sq` is attacked by any piece of `by`.
     pub fn square_attacked(&self, sq: u8, by: Color) -> bool {
-        self.attackers_to(sq, by, self.occupied) != 0
+        self.attackers_to(sq, by, self.occupied()) != 0
     }
 
     /// Structural (pseudo-legal) validation of `mv`: piece geometry,
@@ -1494,7 +1532,7 @@ impl Board {
         if from == to || from > 63 || to > 63 {
             return false;
         }
-        let code = self.mailbox[from as usize];
+        let code = self.piece_code_at(from);
         if code == EMPTY || (code / 6) != self.turn as u8 {
             return false;
         }
@@ -1524,7 +1562,7 @@ impl Board {
                     return false;
                 }
                 if df == 0 {
-                    if self.mailbox[to as usize] != EMPTY {
+                    if self.piece_code_at(to) != EMPTY {
                         return false;
                     }
                     let sq_diff = to as i32 - from as i32;
@@ -1535,7 +1573,7 @@ impl Board {
                             return false;
                         }
                         let mid = ((from as i32 + to as i32) / 2) as u8;
-                        if self.mailbox[mid as usize] != EMPTY {
+                        if self.piece_code_at(mid) != EMPTY {
                             return false;
                         }
                         true
@@ -1543,7 +1581,7 @@ impl Board {
                         false
                     }
                 } else if df == 1 && dr == push.signum() {
-                    let target = self.mailbox[to as usize];
+                    let target = self.piece_code_at(to);
                     if target != EMPTY {
                         (target / 6) == them as u8
                     } else {
@@ -1555,11 +1593,11 @@ impl Board {
             }
             r if r == Role::Knight as u8 => KNIGHT_ATT[from as usize] & bit(to) != 0,
             r if r == Role::Bishop as u8 => {
-                attacks::bishop_attacks(from, self.occupied) & bit(to) != 0
+                attacks::bishop_attacks(from, self.occupied()) & bit(to) != 0
             }
-            r if r == Role::Rook as u8 => attacks::rook_attacks(from, self.occupied) & bit(to) != 0,
+            r if r == Role::Rook as u8 => attacks::rook_attacks(from, self.occupied()) & bit(to) != 0,
             r if r == Role::Queen as u8 => {
-                attacks::queen_attacks(from, self.occupied) & bit(to) != 0
+                attacks::queen_attacks(from, self.occupied()) & bit(to) != 0
             }
             _ => {
                 // King: one-step moves. Castling (king→own-rook words) was
@@ -1598,10 +1636,38 @@ impl Board {
         nodes
     }
 
+    /// Visitor-pattern perft (D1): leaf `depth==1` counts via
+    /// [`CountingVisitor`](crate::movegen::CountingVisitor) — `count +=
+    /// popcount` **without materialising `Move` values and without
+    /// `pop_lsb`** (Gigantua's visitor 2× vs movelist; MIT-clean per D5).
+    /// Interior nodes still materialise moves for `make_move_perft`
+    /// (unavoidable — the visitor contract deliberately carries no board
+    /// mutation), so the win is concentrated at the leaves.
+    pub fn perft_visitor(&self, depth: u32) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        if depth == 1 {
+            let mut v = crate::movegen::CountingVisitor::new();
+            self.generate_visitor(&mut v);
+            return v.count as u64;
+        }
+        let moves = self.legal_moves();
+        let mut nodes = 0u64;
+        let mut child = self.clone();
+        for mv in moves {
+            let undo = child.make_move_perft(mv);
+            nodes += child.perft_visitor(depth - 1);
+            child.unmake_move_perft(mv, undo);
+        }
+        nodes
+    }
+
     /// Sets the non-piece state (used by the FEN parser) and recomputes the
     /// full zobrist hash from scratch. `castle_rook_sq` gives the rook square
-    /// backing each right (bit 0..3 = WK, WQ, BK, BQ); the per-square
-    /// rights-clear mask is derived from the king and rook placements.
+    /// backing each right (bit 0..3 = WK, WQ, BK, BQ); rights-clearing is
+    /// derived on the fly in `castle_rights_after` (close-gap D3, task 4.1 —
+    /// no 64B `castle_mask` table is stored).
     pub(crate) fn set_state(
         &mut self,
         turn: Color,
@@ -1617,23 +1683,12 @@ impl Board {
         self.ep = ep;
         self.halfmove = halfmove;
         self.fullmove = fullmove;
-        let mut mask = [0x0Fu8; 64];
-        for (rb, color) in [(0usize, Color::White), (1, Color::White), (2, Color::Black), (3, Color::Black)] {
-            if castling & (1 << rb) != 0 {
-                let both = if color == Color::White { CASTLE_WK | CASTLE_WQ } else { CASTLE_BK | CASTLE_BQ };
-                // The king leaving its square forfeits both rights; the rook
-                // leaving (or being captured on) its square forfeits its own.
-                mask[self.king_sq[color.index()] as usize] &= !both;
-                mask[castle_rook_sq[rb] as usize] &= !(1 << rb);
-            }
-        }
-        self.castle_mask = mask;
         self.hash = self.zobrist_full();
         // Refresh cached checkers for the new side to move (branch-free in_check).
         self.checkers = self.attackers_to(
             self.king_sq[self.turn.index()],
             self.turn.other(),
-            self.occupied,
+            self.occupied(),
         );
     }
 }

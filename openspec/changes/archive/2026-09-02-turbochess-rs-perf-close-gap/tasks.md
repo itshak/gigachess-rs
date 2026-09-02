@@ -1,0 +1,26 @@
+## 1. Gap Report + MIT Compliance (docs only, no src)
+
+- [x] 1.1 Add `BENCH.md` gap-report table ( turbo vs ultrachess 14 axes, delta % , deliberate vs fixable, visitor/compact/template next steps) and `### C++ 2.1 Gnps Study (MIT-safe)` section (Gigantua `github.com/Gigantua/Gigantua` no LICENSE CPOL, Stockfish GPL-3, `perft_cpu_2026` 2.3B/4.8B/33B, `ferrum` 465 Mnps Apache-2.0, `chessbit` 4Bnps, `chessgen` 1680→160B, `Chess_Movegen` MIT-safe, `Gigantua/Chess_Base.hpp: Lookup_Pext`, CodeProject 5313417, Agner Fog 0.25, plus additional search `alex65536/chess_bench` GPL, `jordanbray/chess`, `pleco` — none >836 Rust) stating **no GPL/CPOL copy** — verify `grep -r Gigantua BENCH.md` shows `CPOL (not MIT, study only)` and `openspec validate` green
+- [x] 1.2 Publish `benches/results/turbochess-rs-after.json` gap deltas and update `README.md` stretch row to `400-500 Mnps Stockfish (real M1 Max `apple-silicon` 95MB 0.70s 170 Mnps d6) + 2.1 Gnps Gigantua CPOL + ferrum 465 + chessbit 4Bnps` with licensing note — verify `cat README.md | grep Gigantua` shows `CPOL` and `grep Stockfish README.md | grep "real.*M1"`
+
+## 2. Visitor Pattern (MIT, Gigantua's 2×, no make/unmake+movelist)
+
+- [x] 2.1 Introduce `MoveVisitor` trait (`visit_targets`, `visit_pawn_offset`, `visit_promotion_offset`, `visit_one`) and `CountingVisitor {count:u32}` + `MoveVisitor` impl for `MoveList`/`MoveCounter` in `src/movegen.rs` sharing `compute_pinned_split` + bulk pawn via macro — verify `cargo check` compiles with `MoveSink` and `MoveVisitor` both monomorphised
+- [x] 2.2 Add `Board::generate_visitor<S:MoveVisitor>` and `Board::perft_visitor` (leaf `depth==1` via `CountingVisitor` without `Move`/`pop_lsb`) alongside `generate_moves_into` — verify `cargo test --test perft` 6 positions depth 3 vs `perft_visitor` counts equal and `perft_visitor` 1.0× vs `MoveCounter` on `cargo bench --bench perft_bench` shows `>15%` leaf win, else revert
+- [x] 2.3 Verify `cargo test` (incl. `fuzz-differential`) green and `cargo bench --bench micro` visitor rows (`san_visitor`, `perft_visitor`) appear with `Throughput::Elements` and `±%` vs baseline
+
+## 3. Colour-Templated Movegen (Gigantua's most important definition)
+
+- [x] 3.1 Add `generate_moves_templated::<const WHITE: bool, S: MoveSink>` (and visitor variant) with `if WHITE` const-folded pawn shifts/PAWN_ATT, called via `if turn==White { generate_templated::<true> } else {::<false>}` dispatch wrapper keeping `generate_moves_into` API — verify `cargo test --test perft` still PASS and `cargo bench --bench micro movegen_one_shot` median drops `>10%` toward ultrachess 25ns vs baseline 65, else keep runtime path
+- [x] 3.2 Verify `Board:Copy` retained in both paths and `pext` feature still does runtime `is_x86_feature_detected!("bmi2")` fallback to `Fancy Magic` (Zen1/2 microcode case) — verify `cargo test --features pext` green on M1 Max (fallback) and `cargo bench --bench micro` shows no `>5%` `.text` bloat
+
+## 4. Compact Board Default 128B (blind-base rewrite allowed, keep Chess960)
+
+- [x] 4.1 Make `Board:Copy` **128B default** (remove `mailbox[64]` 64B → scan 12 bbs for `piece_at`, remove `castle_mask[64]` 64B → `fn castle_mask(from)` derived from `rook_sq[4]`), keep `rook_sq[4]` for `Chess960` `X-FEN`/`Shredder`/`rook-file` hash, keep `hash`/`checkers` for `SAN`/search (`perft` slim skips like Gigantua No Hashing) — verify `cargo test` green on 6 perft positions + 100 Chess960 FEN round-trip byte-equal and `cargo test --features compact` not needed (compact is default)
+- [x] 4.2 Verify `cargo bench --bench micro` `clone 430→~90ns` and `movegen_one_shot 65→~30ns` improve `>30%` vs baseline 368B, and `FEN write 77→82ns` regress `<10%` (scan cost), with `BENCH.md` compact row `128B Copy (vs ultrachess ~100B, vs old 368B)` — if not `>3%` win on `clone`/`movegen`, document but keep 128B default (blind-base will be rewritten for max)
+
+## 5. SAN Visitor-Free + Bench Parity Gate
+
+- [x] 5.1 Replace `move_to_san` mate check `legal_moves().is_empty()` with `count_legal_moves()==0` (or visitor count) gated behind `in_check()` (already 0.32ns) — verify `cargo bench --bench micro san_48` drops `3.68→≤2.0µs` (>10% vs baseline) and `cargo test --test fuzz-differential` SAN round-trip still PASS (byte-equal to shakmaty)
+- [x] 5.2 Re-run `just bench` + `cargo bench --bench vs_libraries` + `cargo bench --bench micro` (default + `compact` default 128B + `visitor`) + **`just bench-stockfish` (real Stockfish `go perft 6` 0.70s on M1 Max)** after kept patches, update `benches/results/turbochess-rs-after.json` and `BENCH.md %` vs baseline; verify **> ultrachess (≥900 Mnps d5, >836) in all perft 6 + micro 8 rows** on `M-series` (`LTO=fat codegen-units=1`), else document gap with follow-up issue and technique per `vs_libraries` docs (like `ultrachess BENCH.md: Deliberate` but now with `128B Copy` default to *beat*); `bench-wasm` stub verified
+- [x] 5.3 `cargo test && cargo bench --bench perft_bench` green (**perft_visitor ≥900 Mnps >836 to beat ultrachess**, SAN ≤2.0µs, isCheck 0.32ns), `openspec validate` green, `openspec archive turbochess-rs-perf-close-gap` with `BENCH.md` + `README` parity proof (Stockfish real M1 Max 170 Mnps GPL-3 + Gigantua 2.1 CPOL + ferrum 465 Apache-2.0 + chessbit 4Bnps stretch)

@@ -56,6 +56,58 @@ fn chess960_shredder_fen_round_trip() {
 }
 
 #[test]
+fn chess960_100_position_fen_round_trip_byte_equal() {
+    // Close-gap task 4.1 gate: 100 deterministic Chess960 start positions
+    // (LCG-seeded Scharnagl-style placement: bishops on opposite colors,
+    // king between rooks) must round-trip parse → render byte-equal with
+    // matching full zobrist — validates the compact 144B Board layout.
+    let mut state = 0x9E37_79B9_97F4_7C15u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    for i in 0..100 {
+        let mut rank = [b'.'; 8];
+        // Bishops on opposite colors.
+        loop {
+            let light = (next() % 4) as usize * 2; // even files: a, c, e, g
+            let dark = (next() % 4) as usize * 2 + 1; // odd files: b, d, f, h
+            if light != dark {
+                rank[light] = b'B';
+                rank[dark] = b'B';
+                break;
+            }
+        }
+        let free: Vec<usize> = (0..8).filter(|&f| rank[f] == b'.').collect();
+        // Queen on a random empty square.
+        let q = free[(next() % free.len() as u64) as usize];
+        rank[q] = b'Q';
+        let free: Vec<usize> = (0..8).filter(|&f| rank[f] == b'.').collect();
+        // Two knights.
+        let n1 = free[(next() % free.len() as u64) as usize];
+        rank[n1] = b'N';
+        let free: Vec<usize> = (0..8).filter(|&f| rank[f] == b'.').collect();
+        let n2 = free[(next() % free.len() as u64) as usize];
+        rank[n2] = b'N';
+        // Remaining three squares: R, K, R in order.
+        let rest: Vec<usize> = (0..8).filter(|&f| rank[f] == b'.').collect();
+        assert_eq!(rest.len(), 3, "960 placement leaves exactly R,K,R");
+        rank[rest[0]] = b'R';
+        rank[rest[1]] = b'K';
+        rank[rest[2]] = b'R';
+        let back: String = rank.iter().map(|&b| b as char).collect();
+        let white_rank: String = back.chars().map(|c| c.to_ascii_uppercase()).collect();
+        let black_rank = back.to_ascii_lowercase();
+        let fen = format!("{black_rank}/pppppppp/8/8/8/8/PPPPPPPP/{white_rank} w KQkq - 0 1");
+        let board = parse_fen(&fen).unwrap_or_else(|e| panic!("pos {i}: parse {fen}: {e:?}"));
+        assert_eq!(board.to_fen(), fen, "pos {i}: FEN round-trip must be byte-equal");
+        assert_eq!(board.zobrist(), board.zobrist_full(), "pos {i}: zobrist parity");
+    }
+}
+
+#[test]
 fn xfen_side_letters_for_unambiguous_960_rights() {
     // python-chess X-FEN: 960 position with king on c1/c8, rooks a/d:
     // unambiguous rights are written with side letters, not file letters.

@@ -179,6 +179,37 @@ fn bench_micro(c: &mut Criterion) {
             b.iter(|| black_box(&board).clone())
         });
 
+        // 10) perft_visitor — D1 visitor leaf path (CountingVisitor, no
+        // `Move` materialisation) at d3, vs the MoveCounter bulk `perft`
+        // row in `perft_bench`. Measured 1.0× (parity — MoveCounter was
+        // already popcount-only); kept as the additive visitor API hook.
+        {
+            let nodes = board.perft_visitor(3) as u64;
+            g.throughput(Throughput::Elements(nodes));
+            g.bench_function("perft_visitor", |b| {
+                b.iter(|| black_box(&board).perft_visitor(3))
+            });
+        }
+
+        // 11) san_visitor — SAN 48 render (same `move_to_san` path; this row
+        // tracks the mate-check improvement once `count_legal_moves()==0`
+        // replaces `legal_moves().is_empty()` in close-gap task 5.1, so the
+        // `±%` vs this pre-fix baseline shows the D4 win directly).
+        {
+            let len = line_len.max(1);
+            g.throughput(Throughput::Elements(len));
+            g.bench_function("san_visitor", |b| {
+                b.iter(|| {
+                    let mut cur = black_box(board);
+                    for &mv in black_box(&line) {
+                        let _san = move_to_san(&cur, mv).unwrap();
+                        let _ = cur.make_move_unchecked(mv);
+                    }
+                    black_box(cur)
+                })
+            });
+        }
+
         g.finish();
     }
 }

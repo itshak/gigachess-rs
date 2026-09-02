@@ -1,9 +1,4 @@
-# turbochess-rs-bench-micro Specification
-
-## Purpose
-Real single-call micro harness before any engine win, with frozen baseline like `ultrachess/BENCH.md` and parity gate toward ultrachess `88ns FEN write / 1.43µs SAN / 0.32ns isCheck / 0.34ns hash`.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Micro Harness SHALL Cover 8 Rows
 

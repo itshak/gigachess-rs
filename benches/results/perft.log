@@ -1,0 +1,70 @@
+warning: method `gen_castling` is never used
+   --> src/board.rs:923:8
+    |
+389 | impl Board {
+    | ---------- method in this implementation
+...
+923 |     fn gen_castling(&self, moves: &mut...
+    |        ^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `byte_from_piece` is never used
+  --> src/fen.rs:45:4
+   |
+45 | fn byte_from_piece(p: Piece) -> u8 {
+   |    ^^^^^^^^^^^^^^^
+
+warning: `turbochess-rs` (lib) generated 2 warnings
+   Compiling turbochess-rs v0.1.0 (/Users/ais/Projects/turbochess-rs)
+    Finished `bench` profile [optimized] target(s) in 1.82s
+     Running benches/perft_bench.rs (target/release/deps/perft_bench-58ef58fb1d75ba03)
+Gnuplot not found, using plotters backend
+Benchmarking perft/startpos_d5
+Benchmarking perft/startpos_d5: Warming up for 1.0000 s
+Benchmarking perft/startpos_d5: Collecting 10 samples in estimated 2.3581 s (165 iterations)
+Benchmarking perft/startpos_d5: Analyzing
+perft/startpos_d5       time:   [14.139 ms 15.040 ms 16.319 ms]
+                        thrpt:  [298.16 Melem/s 323.52 Melem/s 344.14 Melem/s]
+                 change:
+                        time:   [+6.4776% +11.694% +18.816%] (p = 0.00 < 0.05)
+                        thrpt:  [-15.837% -10.470% -6.0835%]
+                        Performance has regressed.
+Found 2 outliers among 10 measurements (20.00%)
+  2 (20.00%) high mild
+Benchmarking perft/startpos_d1_bulk_counter
+Benchmarking perft/startpos_d1_bulk_counter: Warming up for 1.0000 s
+Benchmarking perft/startpos_d1_bulk_counter: Collecting 10 samples in estimated 2.0000 s (40M iterations)
+Benchmarking perft/startpos_d1_bulk_counter: Analyzing
+perft/startpos_d1_bulk_counter
+                        time:   [50.286 ns 50.787 ns 51.364 ns]
+                        thrpt:  [389.38 Melem/s 393.80 Melem/s 397.73 Melem/s]
+                 change:
+                        time:   [+6.3870% +7.1526% +8.0125%] (p = 0.00 < 0.05)
+                        thrpt:  [-7.4181% -6.6752% -6.0036%]
+                        Performance has regressed.
+Benchmarking perft/startpos_d1_visitor
+Benchmarking perft/startpos_d1_visitor: Warming up for 1.0000 s
+Benchmarking perft/startpos_d1_visitor: Collecting 10 samples in estimated 2.0000 s (39M iterations)
+Benchmarking perft/startpos_d1_visitor: Analyzing
+perft/startpos_d1_visitor
+                        time:   [50.557 ns 51.835 ns 53.987 ns]
+                        thrpt:  [370.46 Melem/s 385.84 Melem/s 395.59 Melem/s]
+                 change:
+                        time:   [+5.0383% +9.6114% +18.596%] (p = 0.00 < 0.05)
+                        thrpt:  [-15.680% -8.7686% -4.7967%]
+                        Performance has regressed.
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking perft/startpos_d5_visitor
+Benchmarking perft/startpos_d5_visitor: Warming up for 1.0000 s
+Benchmarking perft/startpos_d5_visitor: Collecting 10 samples in estimated 2.2138 s (165 iterations)
+Benchmarking perft/startpos_d5_visitor: Analyzing
+perft/startpos_d5_visitor
+                        time:   [13.321 ms 13.397 ms 13.461 ms]
+                        thrpt:  [361.45 Melem/s 363.20 Melem/s 365.25 Melem/s]
+                 change:
+                        time:   [+6.1718% +6.6361% +7.0987%] (p = 0.00 < 0.05)
+                        thrpt:  [-6.6281% -6.2231% -5.8130%]
+                        Performance has regressed.
+
