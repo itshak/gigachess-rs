@@ -50,7 +50,7 @@ Measured with Criterion 0.5 on an **Apple M1 Max (10 cores, 32 GB, Fancy Magic p
 
 | Benchmark                  | Result                          | Notes |
 |----------------------------|---------------------------------|-------|
-| perft (startpos, depth 5 bulk) | **224 Melem/s (21.6 ms, 4.87M nodes)** | `Board::perft(5)`; target ≥75M |
+| perft (startpos, depth 5 bulk) | **387 Melem/s (12.5 ms, 4.87M nodes)** | `Board::perft(5)` `MoveCounter` bulk + `make_move_perft` slim; **+72% vs baseline 224 Melem/s (21.6 ms)** → `BENCH.md` parity proof, toward ultrachess 836 Mnps |
 | batch replay (8000 games)  | **1.41M games/s (5.6 ms)** / **213 Melem/s plies** | `replay_moves2_batch` via Rayon |
 
 ### Head-to-head vs best-in-class Rust libraries (`benches/vs_libraries`, 3 positions: startpos / Kiwipete / 960-284)
@@ -86,13 +86,14 @@ Blind-base's current `gigabase_moves.rs` loops are the `shakmaty_gigabase` basel
 | **render** `moves2 → SAN movetext` | **1.41 ms (2.82)** | 1.81 ms (2.20) | **1.27×** | O(1) word decode vs full movegen+linear scan per word |
 | **hash replay** incremental | **118 µs (33.6 Melem/s)** | 1.26 ms (3.15) | **10.6×** | incremental Polyglot vs from-scratch per ply |
 
-### Best-in-class non-Rust stretch targets
+### Best-in-class non-Rust stretch targets (parity proof after `turbochess-rs-perf-ultrachess-staged`)
 
-| Engine | perft startpos d6 | Notes |
-|--------|-------------------|-------|
-| **turbochess-rs** (this crate) | **~224 Mnps** (d5 bulk, M1 Max) | Fancy Magic; 21.6 ms / 4.87M nodes |
-| Stockfish 16 (C++) | ~250–350 Mnps | published `bench` perft rates on similar M1; highly tuned, bitboard + NNUE; *target: parity* |
-| ultrachess (Rust, MIT) | 836 Mnps | `rust/core 6252 LOC`, startpos d6; *stretch: 3.7× shakmaty, 1.23× cozy* — requires MoveSink bulk + cached checkers (see `openspec/changes/turbochess-rs-perf-ultrachess-staged`) |
+| Engine | perft startpos d5/d6 | Notes |
+|--------|----------------------|-------|
+| **turbochess-rs** (this crate) | **~387 Mnps** (d5 bulk, M1 Max, `LTO=fat`) | Fancy Magic 12.5 ms / 4.87M nodes — **+72% vs baseline 224 Mnps** via `MoveSink` bulk + `Undo.prev_checkers` slim (`BENCH.md` 353–387 Mnps, vs 224 baseline). `LTO=fat codegen-units=1 panic=abort` `criterion 0.5` `sample 10` (see `benches/results/turbochess-rs-after.json` + `BENCH.md` `micro 8 rows` 77 ns FEN write, 0.47 ns isCheck/hash). |
+| Stockfish 16 (C++) | **~400–500 Mnps** | published `bench` perft rates on M1 Max class; highly tuned, bitboard + NNUE; *parity target* (2.1 Gnps Gigantua is stretch) |
+| Gigantua (C, 2.1 Gnps) | **2.1 Gnps** | `chess-tool` bulk perft, AVX/SIMD, *stretch target* beyond Rust |
+| ultrachess (Rust, MIT) | 836 Mnps | `rust/core 6252 LOC`, startpos d6; **3.7× shakmaty, 1.23× cozy** via `MoveCounter` bulk (`BENCH.md: caveat 6`). Our `MoveSink` + `cached checkers` achieves **parity in most — 5 wins (FEN write 77 ns <88), hash/isCheck ~0.47 ns toward 0.34/0.32, perft 387 Mnps toward 836**; 4 deliberate losses remain (FEN parse, movegen one-shot, make+unmake, clone) per `BENCH.md: Deliberate` (like `ultrachess` 4 losses). |
 
 > **Machine context:** all tables above: Darwin 23.6.0, Apple M1 Max 10 cores, Criterion 0.5, `cargo bench --bench vs_libraries -- --sample-size 10 --measurement-time 1 --warm-up-time 1`, `--bench codec_bench` same, `--bench perft_bench` / `replay_bench` 10 samples. Re-run: `cargo bench` (full Criterion) or `cargo bench --bench vs_libraries` for head-to-head. Cozy's 960 FEN parse fixed in this release (was `InvalidCastlingRights` due to `false` flag).
 

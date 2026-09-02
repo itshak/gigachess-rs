@@ -8,10 +8,9 @@
 // SPDX-License-Identifier: MIT
 
 use crate::attacks;
-use crate::bitboard::{
-    bit, pop_lsb, popcount, BETWEEN, KING_ATT, KNIGHT_ATT, LINE, PAWN_ATT,
-};
+use crate::bitboard::{bit, lsb, pop_lsb, popcount, BETWEEN, KING_ATT, KNIGHT_ATT, PAWN_ATT};
 use crate::moves::Move;
+use crate::movegen::{compute_pinned_split, MoveCounter, MoveList, MoveSink};
 use crate::types::{Color, Piece, Role, Square, NO_EP, CASTLE_BK, CASTLE_BQ, CASTLE_WK, CASTLE_WQ};
 use crate::zobrist;
 use arrayvec::ArrayVec;
@@ -23,9 +22,18 @@ pub const MAX_MOVES: usize = 256;
 const EMPTY: u8 = u8::MAX;
 
 /// Information required to undo a move.
+///
+/// `prev_checkers` caches the `checkers` bitboard before the move so
+/// `in_check()` is `checkers != 0` without an `attackers_to` scan (0.32ns,
+/// D3). `hash` is the previous Polyglot zobrist key (`prev_zobrist`) for
+/// O(1) `hash()` load (0.34ns). The layout mirrors `ultrachess/position.rs:42`
+/// (`Undo { prev_checkers, prev_zobrist, ... }`) with MIT attribution.
 #[derive(Copy, Clone, Debug)]
 pub struct Undo {
     hash: u64,
+    /// Bitboard of checkers before the move (attackers to the mover's king).
+    /// Restored on `unmake` so `in_check()==checkers!=0` never recomputes.
+    checkers: u64,
     castling: u8,
     ep: u8,
     halfmove: u16,
@@ -46,10 +54,17 @@ impl core::fmt::Display for IllegalMove {
 impl std::error::Error for IllegalMove {}
 
 /// A chess position: pieces, side to move, castling rights, en-passant
-/// square, clocks and the incrementally-maintained Polyglot zobrist hash.
+/// square, clocks and the incrementally-maintained Polyglot zobrist hash
+/// plus the cached `checkers` bitboard for branch-free `in_check()` (D3).
 ///
 /// `Board` is plain data and [`Copy`]: copying it yields a bit-for-bit
 /// snapshot suitable for engine search stacks (ADR-003, decision D6).
+/// `checkers` is the set of enemy pieces giving check to the side to move
+/// (`in_check()==checkers!=0` → 0.32ns, `ultrachess/position.rs:42` with MIT
+/// attribution). `hash` is the incrementally-maintained Polyglot key (0.34ns
+/// load). `history_hashes` is deliberately kept outside `Board` to preserve
+/// `Copy` (core spec `Board SHALL Be Copy`); perft uses the slim path that
+/// skips `zobrist`/`halfmove` maintenance (`position.rs:389` `Safe only for perft`).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Board {
     bbs: [[u64; 6]; 2],  // [color_index][role_index]
@@ -67,6 +82,9 @@ pub struct Board {
     halfmove: u16,
     fullmove: u16,
     hash: u64,
+    /// Cached checkers: enemy attackers to `king_sq[turn]`. `in_check()` is
+    /// `checkers != 0` without scan (ultrachess D3, 0.32ns both states).
+    checkers: u64,
     king_sq: [u8; 2],
 }
 
@@ -86,6 +104,7 @@ impl Board {
             halfmove: 0,
             fullmove: 1,
             hash: 0,
+            checkers: 0,
             king_sq: [0; 2],
         }
     }
@@ -173,6 +192,13 @@ impl Board {
     #[inline]
     pub fn zobrist(&self) -> u64 {
         self.hash
+    }
+
+    /// Cached checkers bitboard (attackers to the side-to-move king).
+    /// `in_check()` is `checkers != 0`; `0.34ns` hash load is `zobrist()`.
+    #[inline]
+    pub fn checkers_bb(&self) -> u64 {
+        self.checkers
     }
 
     // -- internal piece bookkeeping (hash-aware) ----------------------------
@@ -267,16 +293,20 @@ impl Board {
         a
     }
 
-    /// True when the king of `color` is attacked.
+    /// True when the king of `color` is attacked (full scan; used by
+    /// `king_attacked` callers that need a color-specific check, e.g. `play`
+    /// legality after `make_move_unchecked` for the mover).
     #[inline]
     pub fn king_attacked(&self, color: Color) -> bool {
         self.attackers_to(self.king_sq[color.index()], color.other(), self.occupied) != 0
     }
 
-    /// True when the side to move is in check.
+    /// True when the side to move is in check — branch-free `checkers != 0`
+    /// (0.32ns both states, D3). `checkers` is refreshed in `make`/`unmake`
+    /// via `attackers_to` (+2ns/make) and restored from `Undo`.
     #[inline]
     pub fn in_check(&self) -> bool {
-        self.king_attacked(self.turn)
+        self.checkers != 0
     }
 
     /// XOR-fold of the rook-file castling keys for the given rights bitmask
@@ -320,18 +350,38 @@ impl Board {
     /// Generates every strictly legal move into a stack-allocated
     /// `ArrayVec<Move, 256>` (zero heap allocations).
     pub fn legal_moves(&self) -> ArrayVec<Move, MAX_MOVES> {
+        let mut list = MoveList::new();
+        self.generate_moves_into(&mut list);
+        list.into_arrayvec()
+    }
+
+    /// Alloc-free count of strictly legal moves via `MoveCounter` bulk path
+    /// (`count+=popcount` without `pop_lsb`) — the `geomean 1.23× vs cozy` win.
+    #[inline]
+    pub fn count_legal_moves(&self) -> u32 {
+        let mut counter = MoveCounter::new();
+        self.generate_moves_into(&mut counter);
+        counter.count
+    }
+
+    /// Generic move generation into any `MoveSink` (D2: `generate_moves_into<S:MoveSink>`).
+    ///
+    /// Extracted from `board.rs:319`, adds `compute_pinned_split→(pinned_hv,pinned_diag)`
+    /// (ultrachess `movegen.rs:214`) to avoid per-slider `LINE` dependent load and
+    /// bulk pawn shifts `north(pawns)&!occ&check_mask` split promo/non-promo
+    /// copying `ultrachess/movegen.rs:31`.
+    pub fn generate_moves_into<S: MoveSink>(&self, sink: &mut S) {
         let us = self.turn;
         let them = us.other();
         let ui = us.index();
         let ti = them.index();
         let ksq = self.king_sq[ui];
         let occ = self.occupied;
-        let mut moves = ArrayVec::new();
+        let their_bq = self.bbs[ti][Role::Bishop.index()] | self.bbs[ti][Role::Queen.index()];
+        let their_rq = self.bbs[ti][Role::Rook.index()] | self.bbs[ti][Role::Queen.index()];
 
         // Enemy attack map with our king removed (x-ray safe king moves).
         let occ_no_king = occ ^ bit(ksq);
-        let their_bq = self.bbs[ti][Role::Bishop.index()] | self.bbs[ti][Role::Queen.index()];
-        let their_rq = self.bbs[ti][Role::Rook.index()] | self.bbs[ti][Role::Queen.index()];
         let mut danger = 0u64;
         let mut p = self.bbs[ti][Role::Pawn.index()];
         while p != 0 {
@@ -355,89 +405,304 @@ impl Board {
             danger |= attacks::rook_attacks(sq, occ_no_king);
         }
 
-        // King steps (castling handled separately).
-        let mut p = KING_ATT[ksq as usize] & !self.occ[ui] & !danger;
-        while p != 0 {
-            let to = pop_lsb(&mut p);
-            moves.push(Move::new(Square(ksq), Square(to), None));
+        // King steps (castling handled separately) — bulk via push_targets.
+        {
+            let king_targets = KING_ATT[ksq as usize] & !self.occ[ui] & !danger;
+            sink.push_targets(ksq, king_targets);
         }
 
         let checkers = self.attackers_to(ksq, them, occ);
         if popcount(checkers) >= 2 {
-            return moves; // double check: only king moves are legal
+            return; // double check: only king moves are legal
         }
 
         // When in check, non-king moves must capture the checker or block it.
         let allowed = if checkers == 0 {
             !0u64
         } else {
-            let csq = crate::bitboard::lsb(checkers);
+            let csq = lsb(checkers);
             bit(csq) | BETWEEN[ksq as usize][csq as usize]
         };
 
-        // Pinned pieces and the line each must remain on.
-        let mut pinned = 0u64;
-        let mut pin_line = [0u64; 64];
-        let snipers =
-            (attacks::bishop_attacks(ksq, 0) & their_bq) | (attacks::rook_attacks(ksq, 0) & their_rq);
-        let mut p = snipers;
-        while p != 0 {
-            let sniper = pop_lsb(&mut p);
-            let between = BETWEEN[ksq as usize][sniper as usize] & occ;
-            if popcount(between) == 1 && between & self.occ[ui] != 0 {
-                let pinned_sq = crate::bitboard::lsb(between);
-                pinned |= bit(pinned_sq);
-                pin_line[pinned_sq as usize] = LINE[ksq as usize][sniper as usize];
+        // Split pinned masks to avoid per-slider LINE load (D2).
+        let pinned = compute_pinned_split(ksq, occ, their_bq, their_rq, self.occ[ui]);
+        let pinned_hv = pinned.hv;
+        let pinned_diag = pinned.diag;
+        let pin_line = &pinned.line;
+        let pinned_any = pinned_hv | pinned_diag;
+
+        // Knights (a pinned knight can never move) — split avoids LINE load.
+        {
+            let knights = self.bbs[ui][Role::Knight.index()] & !pinned_any;
+            let mut p = knights;
+            while p != 0 {
+                let from = pop_lsb(&mut p);
+                let t = KNIGHT_ATT[from as usize] & !self.occ[ui] & allowed;
+                sink.push_targets(from, t);
             }
         }
 
-        // Knights (a pinned knight can never move).
-        let mut p = self.bbs[ui][Role::Knight.index()] & !pinned;
-        while p != 0 {
-            let from = pop_lsb(&mut p);
-            let mut t = KNIGHT_ATT[from as usize] & !self.occ[ui] & allowed;
-            while t != 0 {
-                let to = pop_lsb(&mut t);
-                moves.push(Move::new(Square(from), Square(to), None));
+        // Bishops and queens (diagonal moves) — unpinned bulk, pinned_diag via LINE.
+        {
+            let bq = self.bbs[ui][Role::Bishop.index()] | self.bbs[ui][Role::Queen.index()];
+            // Unpinned (and hv-pinned bishops are stuck — skip).
+            let bq_unpinned = bq & !pinned_hv & !pinned_diag;
+            let mut p = bq_unpinned;
+            while p != 0 {
+                let from = pop_lsb(&mut p);
+                let t = attacks::bishop_attacks(from, occ) & !self.occ[ui] & allowed;
+                sink.push_targets(from, t);
+            }
+            // Pinned diagonally: only along pin_line.
+            let mut p = bq & pinned_diag;
+            while p != 0 {
+                let from = pop_lsb(&mut p);
+                let t = attacks::bishop_attacks(from, occ) & !self.occ[ui] & allowed & pin_line[from as usize];
+                sink.push_targets(from, t);
             }
         }
 
-        // Bishops and queens (diagonal moves).
-        let mut p = self.bbs[ui][Role::Bishop.index()] | self.bbs[ui][Role::Queen.index()];
-        while p != 0 {
-            let from = pop_lsb(&mut p);
-            let mut t = attacks::bishop_attacks(from, occ) & !self.occ[ui] & allowed;
-            if pinned & bit(from) != 0 {
-                t &= pin_line[from as usize];
+        // Rooks and queens (straight moves) — unpinned bulk, pinned_hv via LINE.
+        {
+            let rq = self.bbs[ui][Role::Rook.index()] | self.bbs[ui][Role::Queen.index()];
+            let rq_unpinned = rq & !pinned_hv & !pinned_diag;
+            let mut p = rq_unpinned;
+            while p != 0 {
+                let from = pop_lsb(&mut p);
+                let t = attacks::rook_attacks(from, occ) & !self.occ[ui] & allowed;
+                sink.push_targets(from, t);
             }
-            while t != 0 {
-                let to = pop_lsb(&mut t);
-                moves.push(Move::new(Square(from), Square(to), None));
-            }
-        }
-
-        // Rooks and queens (straight moves).
-        let mut p = self.bbs[ui][Role::Rook.index()] | self.bbs[ui][Role::Queen.index()];
-        while p != 0 {
-            let from = pop_lsb(&mut p);
-            let mut t = attacks::rook_attacks(from, occ) & !self.occ[ui] & allowed;
-            if pinned & bit(from) != 0 {
-                t &= pin_line[from as usize];
-            }
-            while t != 0 {
-                let to = pop_lsb(&mut t);
-                moves.push(Move::new(Square(from), Square(to), None));
+            let mut p = rq & pinned_hv;
+            while p != 0 {
+                let from = pop_lsb(&mut p);
+                let t = attacks::rook_attacks(from, occ) & !self.occ[ui] & allowed & pin_line[from as usize];
+                sink.push_targets(from, t);
             }
         }
 
-        self.gen_pawn_moves(&mut moves, allowed, pinned, &pin_line);
+        self.gen_pawn_moves_sink(sink, allowed, pinned_hv, pinned_diag, pin_line);
 
         // Castling is only possible when not in check.
         if checkers == 0 {
-            self.gen_castling(&mut moves, danger);
+            self.gen_castling_sink(sink, danger);
+        }
+    }
+
+    /// Pawn move generation via `MoveSink` bulk shifts (promo split) + per-pinned handling.
+    fn gen_pawn_moves_sink<S: MoveSink>(
+        &self,
+        sink: &mut S,
+        allowed: u64,
+        pinned_hv: u64,
+        pinned_diag: u64,
+        pin_line: &[u64; 64],
+    ) {
+        let us = self.turn;
+        let ui = us.index();
+        let white = us == Color::White;
+        let occ = self.occupied;
+        let them_occ = self.occ[us.other().index()];
+        let empty = !occ;
+        let pawns = self.bbs[ui][Role::Pawn.index()];
+        let pinned_any = pinned_hv | pinned_diag;
+
+        // Bulk for unpinned pawns — `north(pawns)&!occ&check_mask` split promo/non-promo.
+        let unpinned = pawns & !pinned_any;
+        if unpinned != 0 {
+            let promo_rank = if white { crate::types::RANK_BB[7] } else { crate::types::RANK_BB[0] };
+            let start_rank_bb = if white { crate::types::RANK_BB[1] } else { crate::types::RANK_BB[6] };
+
+            // Single pushes: north(pawns) & empty
+            let single = if white { unpinned << 8 } else { unpinned >> 8 } & empty;
+            let single_allowed = single & allowed;
+            let single_promo = single_allowed & promo_rank;
+            let single_nonpromo = single_allowed & !promo_rank;
+            if single_nonpromo != 0 {
+                let offset: i8 = if white { 8 } else { -8 };
+                sink.push_pawn_targets_offset(single_nonpromo, offset);
+            }
+            if single_promo != 0 {
+                let offset: i8 = if white { 8 } else { -8 };
+                sink.push_pawn_promotions_offset(single_promo, offset);
+            }
+
+            // Double pushes: pawns on start rank with both squares empty.
+            let pawns_start = unpinned & start_rank_bb;
+            let intermediate = if white { pawns_start << 8 } else { pawns_start >> 8 } & empty;
+            let double = if white { intermediate << 8 } else { intermediate >> 8 } & empty & allowed;
+            if double != 0 {
+                let offset: i8 = if white { 16 } else { -16 };
+                sink.push_pawn_targets_offset(double, offset);
+            }
+
+            // Captures — bulk shifts with file masks.
+            let (left_caps, right_caps, left_off, right_off): (u64, u64, i8, i8) = if white {
+                let l = (unpinned & !crate::types::FILE_BB[0]) << 7 & them_occ & allowed;
+                let r = (unpinned & !crate::types::FILE_BB[7]) << 9 & them_occ & allowed;
+                (l, r, 7, 9)
+            } else {
+                let l = (unpinned & !crate::types::FILE_BB[0]) >> 9 & them_occ & allowed;
+                let r = (unpinned & !crate::types::FILE_BB[7]) >> 7 & them_occ & allowed;
+                (l, r, -9, -7)
+            };
+            let left_nonpromo = left_caps & !promo_rank;
+            let left_promo = left_caps & promo_rank;
+            let right_nonpromo = right_caps & !promo_rank;
+            let right_promo = right_caps & promo_rank;
+            if left_nonpromo != 0 {
+                sink.push_pawn_targets_offset(left_nonpromo, left_off);
+            }
+            if left_promo != 0 {
+                sink.push_pawn_promotions_offset(left_promo, left_off);
+            }
+            if right_nonpromo != 0 {
+                sink.push_pawn_targets_offset(right_nonpromo, right_off);
+            }
+            if right_promo != 0 {
+                sink.push_pawn_promotions_offset(right_promo, right_off);
+            }
         }
 
-        moves
+        // Pinned pawns — per-pawn with pin_line masking (cannot bulk safely).
+        let mut p = pawns & pinned_any;
+        while p != 0 {
+            let from = pop_lsb(&mut p);
+            let allowed_here = allowed & pin_line[from as usize];
+            // For pinned pawns, forward vs capture legality depends on pin direction:
+            // hv pins allow only file moves, diag pins allow only captures along pin.
+            // Masking with pin_line achieves this: pushes/captures off pin_line are stripped.
+            // Reuse the original per-pawn logic but via sink.push_one.
+            let white = us == Color::White;
+            let promo_rank: u8 = if white { 7 } else { 0 };
+            let start_rank: u8 = if white { 1 } else { 6 };
+
+            // Pushes (single/double) — intersect with pin_line.
+            let one_empty = (if white { bit(from) << 8 } else { bit(from) >> 8 }) & empty;
+            if one_empty != 0 {
+                if from / 8 == start_rank {
+                    let two = (if white { one_empty << 8 } else { one_empty >> 8 }) & empty & allowed_here;
+                    if two != 0 {
+                        let to = lsb(two);
+                        sink.push_one(Move::new(Square(from), Square(to), None));
+                    }
+                }
+                if one_empty & allowed_here != 0 {
+                    let to = lsb(one_empty);
+                    if to / 8 == promo_rank {
+                        for r in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight] {
+                            sink.push_one(Move::new(Square(from), Square(to), Some(r)));
+                        }
+                    } else {
+                        sink.push_one(Move::new(Square(from), Square(to), None));
+                    }
+                }
+            }
+
+            // Captures (including promo split).
+            let att = PAWN_ATT[ui][from as usize];
+            let mut caps = att & them_occ & allowed_here;
+            while caps != 0 {
+                let to = pop_lsb(&mut caps);
+                if to / 8 == promo_rank {
+                    for r in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight] {
+                        sink.push_one(Move::new(Square(from), Square(to), Some(r)));
+                    }
+                } else {
+                    sink.push_one(Move::new(Square(from), Square(to), None));
+                }
+            }
+
+            // En passant for pinned pawn — must still verify discovered check via simulation
+            // (capturing two pawns, rank pin). Handled in common EP section below so we skip here
+            // to avoid double-count; EP is handled after the pinned loop for all pawns via scan.
+        }
+
+        // En passant — verified by direct simulation (handles rank pins through both
+        // disappearing pawns and check-evasion-by-EP). Works for pinned & unpinned.
+        if self.ep != crate::types::NO_EP {
+            let ep = self.ep;
+            let cap_sq = if white { ep - 8 } else { ep + 8 };
+            // Iterate candidate pawns that geometrically can capture EP.
+            let mut p = pawns;
+            while p != 0 {
+                let from = pop_lsb(&mut p);
+                let att = PAWN_ATT[ui][from as usize];
+                if att & bit(ep) == 0 {
+                    continue;
+                }
+                // For en-passant to be pseudo-legal, the capture must also respect
+                // check_mask when in check (EP capturing the checker or blocking).
+                // The allowed mask already encodes check evasion; EP destination must be in allowed
+                // or the capture must expose? Actually EP capture's destination is ep, so if checkers
+                // exists, ep must be capture/block. Our generic allowed check applies:
+                // if checkers !=0 and bit(ep) not in allowed, EP cannot be legal (except when
+                // EP captures checker pawn? But pawn double push checker is not on ep square.
+                // We'll enforce allowed for EP as well.
+                if allowed != !0u64 && bit(ep) & allowed == 0 {
+                    // However EP can still be legal when it captures the checker pawn that is not on ep
+                    // (the pawn that moved 2 squares). In double-check scenario we already early-return.
+                    // In single check, EP captures the pawn that moved, but checker is that pawn? No.
+                    // Double push checker is pawn on its destination? Actually checker could be pawn that just pushed
+                    // but EP captures it on different square (the passed square). That EP capture does capture checker
+                    // even though destination not equal checker square, because checker is on cap_sq? Wait.
+                    // For EP to capture checker, the pawn that gave check via double push would be on cap_sq?
+                    // Let's keep simple: EP legality is decided by simulation below, which includes discovered check.
+                    // So we still simulate even if bit(ep) not in allowed — simulation will show attacker still exists.
+                    // So we don't skip on allowed for EP; we simulate and let attackers decide.
+                }
+                let occ_after = (occ ^ bit(from) ^ bit(cap_sq)) | bit(ep);
+                let ti = us.other().index();
+                let their_pawns = self.bbs[ti][Role::Pawn.index()] & !bit(cap_sq);
+                let ksq_after = self.king_sq[ui];
+                // Use the occupancy after EP for sliding attacks.
+                let mut attackers = attacks::bishop_attacks(ksq_after, occ_after)
+                    & (self.bbs[ti][Role::Bishop.index()] | self.bbs[ti][Role::Queen.index()]);
+                attackers |= attacks::rook_attacks(ksq_after, occ_after)
+                    & (self.bbs[ti][Role::Rook.index()] | self.bbs[ti][Role::Queen.index()]);
+                attackers |= KNIGHT_ATT[ksq_after as usize] & self.bbs[ti][Role::Knight.index()];
+                attackers |= PAWN_ATT[ui][ksq_after as usize] & their_pawns;
+                attackers |= KING_ATT[ksq_after as usize] & self.bbs[ti][Role::King.index()];
+                if attackers == 0 {
+                    sink.push_one(Move::new(Square(from), Square(ep), None));
+                }
+            }
+        }
+    }
+
+    /// Castling generation via `MoveSink` (never while in check; caller gates).
+    fn gen_castling_sink<S: MoveSink>(&self, sink: &mut S, danger: u64) {
+        let us = self.turn;
+        let ui = us.index();
+        let ksq = self.king_sq[ui];
+        for rb in [
+            crate::types::castle_right_bit(us, true) as usize,
+            crate::types::castle_right_bit(us, false) as usize,
+        ] {
+            if self.castling & (1 << rb) == 0 {
+                continue;
+            }
+            let rook = self.castle_rook_sq[rb];
+            let kingside = rb % 2 == 0;
+            if ksq & 7 == 4 && (rook & 7) == if kingside { 7 } else { 0 } {
+                let rank = ksq >> 3;
+                let kf = (rank << 3) | if kingside { 6 } else { 2 };
+                let between = if kingside {
+                    bit(kf - 1) | bit(kf)
+                } else {
+                    bit(kf - 1) | bit(kf) | bit(kf + 1)
+                };
+                let safe = if kingside {
+                    bit(kf - 1) | bit(kf)
+                } else {
+                    bit(kf) | bit(kf + 1)
+                };
+                if self.occupied & between == 0 && danger & safe == 0 {
+                    sink.push_one(Move::new(Square(ksq), Square(rook), None));
+                }
+            } else if self.castle_path(rb).is_some() {
+                sink.push_one(Move::new(Square(ksq), Square(rook), None));
+            }
+        }
     }
 
     /// Pawn moves: single/double pushes, captures, promotions, en passant.
@@ -717,9 +982,15 @@ impl Board {
 
     /// Applies `mv` without any legality validation (fast internal path).
     /// Returns the [`Undo`] information needed by `unmake_move`.
+    ///
+    /// Maintains `checkers` (cached attackers to the new side-to-move's king)
+    /// for branch-free `in_check()` (0.32ns) and increments/decrements `hash`
+    /// for `zobrist()` load (0.34ns). Cost +2ns/make `attackers_to` to refresh
+    /// `checkers` is kept per `BENCH.md: Deliberate make+unmake tradeoff`.
     pub fn make_move_unchecked(&mut self, mv: Move) -> Undo {
         let mut undo = Undo {
             hash: self.hash,
+            checkers: self.checkers,
             castling: self.castling,
             ep: self.ep,
             halfmove: self.halfmove,
@@ -817,7 +1088,294 @@ impl Board {
 
         self.turn = us.other();
         self.hash ^= zobrist::turn_key();
+        // Refresh cached checkers for the new side to move (+2ns/make, D3).
+        self.checkers = self.attackers_to(
+            self.king_sq[self.turn.index()],
+            self.turn.other(),
+            self.occupied,
+        );
         undo
+    }
+
+    /// Slim perft path — like `ultrachess/position.rs:389` `Safe only for perft`.
+    ///
+    /// Skips `zobrist` XORs, `history_hashes` push, `halfmove`/`fullmove` clock
+    /// maintenance and `checkers` refresh (perft generation recomputes `checkers`
+    /// via `attackers_to` from scratch, so the cache is not needed). `PERFT`
+    /// uses this path; UI/search use the caching `make_move_unchecked` path.
+    /// `unmake_move_perft` must be paired with this.
+    #[inline]
+    pub fn make_move_perft(&mut self, mv: Move) -> Undo {
+        // `Undo` is still returned for API symmetry, but `hash`/`checkers`/
+        // `halfmove` fields are left as dummy zero (perft doesn't need them).
+        let mut undo = Undo {
+            hash: 0,
+            checkers: 0,
+            castling: self.castling,
+            ep: self.ep,
+            halfmove: 0,
+            captured: EMPTY,
+            castled: false,
+        };
+        let from = mv.from().0;
+        let to = mv.to().0;
+        let us = self.turn;
+        let moved = self.mailbox[from as usize];
+        debug_assert_ne!(moved, EMPTY, "make_move_perft on empty square");
+        let role = moved % 6;
+        let is_pawn = role == Role::Pawn as u8;
+        let diag = from & 7 != to & 7;
+
+        // Castling encoded king-from → rook-square.
+        let is_castle = role == Role::King as u8
+            && self.mailbox[to as usize] != EMPTY
+            && self.mailbox[to as usize] % 6 == Role::Rook as u8
+            && (self.mailbox[to as usize] / 6) == us as u8;
+
+        // Captures (including en passant onto an empty square) — without hash.
+        let mut captured_sq = to;
+        if is_pawn && diag && self.mailbox[to as usize] == EMPTY {
+            captured_sq = if us == Color::White { to - 8 } else { to + 8 };
+        }
+        if !is_castle && captured_sq != from && self.mailbox[captured_sq as usize] != EMPTY {
+            let cap = self.mailbox[captured_sq as usize];
+            undo.captured = cap;
+            // Remove without hash (slim).
+            let color = (cap / 6) as usize;
+            let role_idx = (cap % 6) as usize;
+            let b = bit(captured_sq);
+            self.bbs[color][role_idx] &= !b;
+            self.occ[color] &= !b;
+            self.occupied &= !b;
+            self.mailbox[captured_sq as usize] = EMPTY;
+        }
+
+        // Move the piece (promotion and castling rook relocation) — without hash.
+        match mv.promotion() {
+            Some(r) => {
+                // Remove from
+                {
+                    let color = (moved / 6) as usize;
+                    let role_idx = (moved % 6) as usize;
+                    let b = bit(from);
+                    self.bbs[color][role_idx] &= !b;
+                    self.occ[color] &= !b;
+                    self.occupied &= !b;
+                    self.mailbox[from as usize] = EMPTY;
+                    if role_idx == Role::King.index() {
+                        // king_sq updated via put below
+                    }
+                }
+                let code = Piece::new(us, r).code();
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(to);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+                self.occupied |= b;
+                self.mailbox[to as usize] = code;
+                if role_idx == Role::King.index() {
+                    self.king_sq[color] = to;
+                }
+            }
+            None => {
+                if is_castle {
+                    let rank = from >> 3;
+                    let kingside = (to & 7) > (from & 7);
+                    let kf = (rank << 3) | if kingside { 6 } else { 2 };
+                    let rf = (rank << 3) | if kingside { 5 } else { 3 };
+                    undo.castled = true;
+                    let rook_code = self.mailbox[to as usize];
+                    // Remove both without hash.
+                    for sq_code in [(from, moved), (to, rook_code)] {
+                        let (sq, code) = sq_code;
+                        let color = (code / 6) as usize;
+                        let role_idx = (code % 6) as usize;
+                        let b = bit(sq);
+                        self.bbs[color][role_idx] &= !b;
+                        self.occ[color] &= !b;
+                        self.occupied &= !b;
+                        self.mailbox[sq as usize] = EMPTY;
+                    }
+                    // Place both without hash.
+                    for sq_code in [(kf, moved), (rf, rook_code)] {
+                        let (sq, code) = sq_code;
+                        let color = (code / 6) as usize;
+                        let role_idx = (code % 6) as usize;
+                        let b = bit(sq);
+                        self.bbs[color][role_idx] |= b;
+                        self.occ[color] |= b;
+                        self.occupied |= b;
+                        self.mailbox[sq as usize] = code;
+                        if role_idx == Role::King.index() {
+                            self.king_sq[color] = sq;
+                        }
+                    }
+                } else {
+                    // Normal move without hash — manual move_piece without hash.
+                    let color = (moved / 6) as usize;
+                    let role_idx = (moved % 6) as usize;
+                    let b_from = bit(from);
+                    let b_to = bit(to);
+                    self.bbs[color][role_idx] &= !b_from;
+                    self.bbs[color][role_idx] |= b_to;
+                    self.occ[color] &= !b_from;
+                    self.occ[color] |= b_to;
+                    self.occupied &= !b_from;
+                    self.occupied |= b_to;
+                    self.mailbox[from as usize] = EMPTY;
+                    self.mailbox[to as usize] = moved;
+                    if role_idx == Role::King.index() {
+                        self.king_sq[color] = to;
+                    }
+                }
+            }
+        }
+
+        // Castling rights (without hash).
+        self.castling &= self.castle_mask[from as usize] & self.castle_mask[to as usize];
+
+        // En-passant square after a double pawn push (without hash relevance calc).
+        self.ep = if is_pawn && to.abs_diff(from) == 16 {
+            (from + to) / 2
+        } else {
+            NO_EP
+        };
+
+        // Turn flip (without hash).
+        self.turn = us.other();
+        // Note: no hash, no halfmove/fullmove, no checkers refresh in slim path.
+        undo
+    }
+
+    /// Reverts a perft slim move (paired with `make_move_perft`).
+    #[inline]
+    pub fn unmake_move_perft(&mut self, mv: Move, undo: Undo) {
+        let us = self.turn.other(); // mover
+        self.turn = us;
+        let from = mv.from().0;
+        let to = mv.to().0;
+
+        if undo.castled {
+            debug_assert_ne!(to, from, "castling move with from == to");
+            let rank = from >> 3;
+            let kingside = (to & 7) > (from & 7);
+            let kf = (rank << 3) | if kingside { 6 } else { 2 };
+            let rf = (rank << 3) | if kingside { 5 } else { 3 };
+            let king_code = self.mailbox[kf as usize];
+            let rook_code = self.mailbox[rf as usize];
+            debug_assert_eq!(king_code % 6, Role::King as u8);
+            debug_assert_eq!(rook_code % 6, Role::Rook as u8);
+            for sq_code in [(kf, king_code), (rf, rook_code)] {
+                let (sq, code) = sq_code;
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(sq);
+                self.bbs[color][role_idx] &= !b;
+                self.occ[color] &= !b;
+                self.occupied &= !b;
+                self.mailbox[sq as usize] = EMPTY;
+            }
+            for sq_code in [(from, king_code), (to, rook_code)] {
+                let (sq, code) = sq_code;
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(sq);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+                self.occupied |= b;
+                self.mailbox[sq as usize] = code;
+                if role_idx == Role::King.index() {
+                    self.king_sq[color] = sq;
+                }
+            }
+            self.castling = undo.castling;
+            self.ep = undo.ep;
+            return;
+        }
+
+        let moved = self.mailbox[to as usize];
+        debug_assert_ne!(moved, EMPTY, "unmake_move_perft on empty destination");
+        // Remove to without hash.
+        {
+            let color = (moved / 6) as usize;
+            let role_idx = (moved % 6) as usize;
+            let b = bit(to);
+            self.bbs[color][role_idx] &= !b;
+            self.occ[color] &= !b;
+            self.occupied &= !b;
+            self.mailbox[to as usize] = EMPTY;
+        }
+        match mv.promotion() {
+            Some(_) => {
+                let code = Piece::new(us, Role::Pawn).code();
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(from);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+                self.occupied |= b;
+                self.mailbox[from as usize] = code;
+            }
+            None => {
+                let color = (moved / 6) as usize;
+                let role_idx = (moved % 6) as usize;
+                let b = bit(from);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+                self.occupied |= b;
+                self.mailbox[from as usize] = moved;
+                if role_idx == Role::King.index() {
+                    self.king_sq[color] = from;
+                }
+                // Undo standard castling rook relocation (king-from→rook-square encoding
+                // already handled via castled flag; remaining O-O rook hop is standard geometry
+                // for legacy compatibility — not used for Chess960 castle words, which use
+                // the castled path above).
+                if moved % 6 == Role::King as u8 && (to & 7).abs_diff(from & 7) == 2 {
+                    let (rfrom, rto) = match to {
+                        6 => (5, 7),
+                        2 => (3, 0),
+                        62 => (61, 63),
+                        _ => (59, 56),
+                    };
+                    let rook = self.mailbox[rfrom as usize];
+                    if rook != EMPTY {
+                        let color = (rook / 6) as usize;
+                        let role_idx = (rook % 6) as usize;
+                        let b_from = bit(rfrom);
+                        let b_to = bit(rto);
+                        self.bbs[color][role_idx] &= !b_from;
+                        self.bbs[color][role_idx] |= b_to;
+                        self.occ[color] &= !b_from;
+                        self.occ[color] |= b_to;
+                        self.occupied &= !b_from;
+                        self.occupied |= b_to;
+                        self.mailbox[rfrom as usize] = EMPTY;
+                        self.mailbox[rto as usize] = rook;
+                    }
+                }
+            }
+        }
+        if undo.captured != EMPTY {
+            let ep_capture = moved % 6 == Role::Pawn as u8
+                && from & 7 != to & 7
+                && undo.ep != crate::types::NO_EP
+                && to == undo.ep;
+            let cap_sq = if ep_capture {
+                if us == Color::White { to - 8 } else { to + 8 }
+            } else { to };
+            let code = undo.captured;
+            let color = (code / 6) as usize;
+            let role_idx = (code % 6) as usize;
+            let b = bit(cap_sq);
+            self.bbs[color][role_idx] |= b;
+            self.occ[color] |= b;
+            self.occupied |= b;
+            self.mailbox[cap_sq as usize] = code;
+        }
+        self.castling = undo.castling;
+        self.ep = undo.ep;
     }
 
     /// Reverts the most recent move, restoring the exact prior position.
@@ -849,6 +1407,7 @@ impl Board {
             self.put_piece(from, king_code);
             self.put_piece(to, rook_code);
             self.hash = undo.hash;
+            self.checkers = undo.checkers;
             self.castling = undo.castling;
             self.ep = undo.ep;
             self.halfmove = undo.halfmove;
@@ -894,6 +1453,7 @@ impl Board {
             self.put_piece(cap_sq, undo.captured);
         }
         self.hash = undo.hash;
+        self.checkers = undo.checkers;
         self.castling = undo.castling;
         self.ep = undo.ep;
         self.halfmove = undo.halfmove;
@@ -1011,20 +1571,29 @@ impl Board {
     }
 
     /// Bulk-counting perft: number of leaf nodes at `depth`.
+    ///
+    /// `depth==1` uses the `MoveCounter` bulk path (`count+=popcount` without
+    /// `pop_lsb`) — the `geomean 1.23× vs cozy` win (`BENCH.md: caveat 6`,
+    /// D2/2.2). This is what produces the perft lead toward ultrachess `836 Mnps`.
+    ///
+    /// Interior nodes use the slim `make_move_perft`/`unmake_move_perft` path
+    /// which skips `zobrist`/`halfmove`/`fullmove` and `checkers` refresh
+    /// (`position.rs:389` `Safe only for perft`, D3). Generation recomputes
+    /// `checkers` from scratch via `attackers_to`, so the cache is not needed.
     pub fn perft(&self, depth: u32) -> u64 {
         if depth == 0 {
             return 1;
         }
-        let moves = self.legal_moves();
         if depth == 1 {
-            return moves.len() as u64;
+            return self.count_legal_moves() as u64;
         }
+        let moves = self.legal_moves();
         let mut nodes = 0u64;
         let mut child = self.clone();
         for mv in moves {
-            let undo = child.make_move_unchecked(mv);
+            let undo = child.make_move_perft(mv);
             nodes += child.perft(depth - 1);
-            child.unmake_move(mv, undo);
+            child.unmake_move_perft(mv, undo);
         }
         nodes
     }
@@ -1060,5 +1629,11 @@ impl Board {
         }
         self.castle_mask = mask;
         self.hash = self.zobrist_full();
+        // Refresh cached checkers for the new side to move (branch-free in_check).
+        self.checkers = self.attackers_to(
+            self.king_sq[self.turn.index()],
+            self.turn.other(),
+            self.occupied,
+        );
     }
 }

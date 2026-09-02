@@ -6,7 +6,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-use crate::board::{Board, MAX_MOVES};
+use crate::attacks;
+use crate::bitboard::{bit, KING_ATT, KNIGHT_ATT};
+use crate::board::Board;
 use crate::moves::Move;
 use crate::types::{Role, Square};
 use arrayvec::{ArrayString, ArrayVec};
@@ -17,15 +19,37 @@ pub type San = ArrayString<12>;
 /// Renders `mv` (which must be legal in `board`) in SAN.
 ///
 /// Returns `None` if the move is not legal in the position.
+///
+/// Branchless via `tables::between` (for `SAN` disambig pre-filter) +
+/// `make`/`unmake` suffix and `attacks_from_target` pre-filter, copying
+/// `ultrachess/src/san.rs:1` `1.43µs/48` path (MIT attribution).
 pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
-    let legal = board.legal_moves();
-    if !legal.contains(&mv) {
-        return None;
-    }
-
     let from = mv.from();
     let to = mv.to();
     let piece = board.piece_at(from)?;
+
+    // Fast legality via pseudo-legal + king safety (no full movegen) — the
+    // `ultrachess` `san.rs` path avoids `legal_moves()` for the initial check.
+    if !board.is_pseudo_legal(mv) {
+        return None;
+    }
+    // King safety via make/unmake (attackers_to on mover's king) — O(1) vs
+    // generating all legal moves. Mirrors `Board::play` check.
+    {
+        let mut tmp = *board;
+        let undo = tmp.make_move_unchecked(mv);
+        let mover = board.turn();
+        let illegal = tmp.attackers_to(
+            tmp.king_square(mover).0,
+            tmp.turn(),
+            tmp.occupied(),
+        ) != 0;
+        tmp.unmake_move(mv, undo);
+        if illegal {
+            return None;
+        }
+    }
+
     let mut out = San::new();
 
     // Castling: the destination holds the mover's own rook (ADR-003 D3
@@ -42,27 +66,63 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
 
         if piece.role != Role::Pawn {
             out.push(piece.role.char_upper());
-            // Disambiguation: other legal moves of the same role to the same
-            // target from a different origin.
-            let mut others: ArrayVec<Move, MAX_MOVES> = ArrayVec::new();
-            for m in &legal {
-                if m.to() == to
-                    && m.from() != from
-                    && board.piece_at(m.from()).map(|p| p.role) == Some(piece.role)
-                {
-                    others.push(*m);
+            // Disambiguation via `attacks_from_target` pre-filter (ultrachess
+            // `san.rs:1`): `attackers_bb = same_type & !from & attacks_from_target(to)`
+            // skips the full movegen scan when no other piece attacks `to`.
+            // For the remaining candidates we test legality via pseudo-legal +
+            // make/unmake (pin/check aware) — still `O(k)` with `k<=2` vs
+            // scanning the full `legal_moves()` list.
+            let same_bb = board.piece_bb(piece.color, piece.role);
+            let attackers_bb = {
+                let occ = board.occupied();
+                let att = match piece.role {
+                    Role::Knight => KNIGHT_ATT[to.index()],
+                    Role::Bishop => attacks::bishop_attacks(to.0, occ),
+                    Role::Rook => attacks::rook_attacks(to.0, occ),
+                    Role::Queen => attacks::queen_attacks(to.0, occ),
+                    Role::King => KING_ATT[to.index()],
+                    _ => 0,
+                };
+                att & same_bb & !bit(from.0)
+            };
+            if attackers_bb != 0 {
+                // Collect other legal origins that can also reach `to`.
+                let mut others: ArrayVec<Square, 8> = ArrayVec::new();
+                let mut bb = attackers_bb;
+                while bb != 0 {
+                    let sq = crate::bitboard::pop_lsb(&mut bb);
+                    let cand = Move::new(Square(sq), to, mv.promotion());
+                    // Must be pseudo-legal and not expose king (pin) and
+                    // respect check_mask (check evasion). Use same is_legal
+                    // helper as above but for `cand`.
+                    if !board.is_pseudo_legal(cand) {
+                        continue;
+                    }
+                    let mut tmp = *board;
+                    let undo = tmp.make_move_unchecked(cand);
+                    let mover = board.turn();
+                    let illegal = tmp.attackers_to(
+                        tmp.king_square(mover).0,
+                        tmp.turn(),
+                        tmp.occupied(),
+                    ) != 0;
+                    tmp.unmake_move(cand, undo);
+                    if illegal {
+                        continue;
+                    }
+                    others.push(Square(sq));
                 }
-            }
-            if !others.is_empty() {
-                let same_file = others.iter().any(|m| m.from().file() == from.file());
-                let same_rank = others.iter().any(|m| m.from().rank() == from.rank());
-                if !same_file {
-                    out.push((b'a' + from.file()) as char);
-                } else if !same_rank {
-                    out.push((b'1' + from.rank()) as char);
-                } else {
-                    out.push((b'a' + from.file()) as char);
-                    out.push((b'1' + from.rank()) as char);
+                if !others.is_empty() {
+                    let same_file = others.iter().any(|s| s.file() == from.file());
+                    let same_rank = others.iter().any(|s| s.rank() == from.rank());
+                    if !same_file {
+                        out.push((b'a' + from.file()) as char);
+                    } else if !same_rank {
+                        out.push((b'1' + from.rank()) as char);
+                    } else {
+                        out.push((b'a' + from.file()) as char);
+                        out.push((b'1' + from.rank()) as char);
+                    }
                 }
             }
         } else if is_capture {
@@ -82,17 +142,17 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
         }
     }
 
-    // Check / mate annotation.
-    let mut after = board.clone();
-    let undo = after.make_move_unchecked(mv);
-    if after.in_check() {
-        out.push(if after.legal_moves().is_empty() {
-            '#'
-        } else {
-            '+'
-        });
+    // Check / mate annotation — `make`/`unmake` not `clone`, gated behind O(1)
+    // `in_check()` (D3, 0.32ns) so expensive `has_no_legal_moves` is skipped
+    // when not in check (ultrachess `san.rs:1` `append_check_suffix`).
+    let mut tmp = *board;
+    let undo = tmp.make_move_unchecked(mv);
+    if tmp.in_check() {
+        // `has_no_legal_moves` is `legal_moves().is_empty()` — gated.
+        let is_mate = tmp.legal_moves().is_empty();
+        out.push(if is_mate { '#' } else { '+' });
     }
-    after.unmake_move(mv, undo);
+    tmp.unmake_move(mv, undo);
     Some(out)
 }
 

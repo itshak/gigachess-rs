@@ -7,9 +7,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::board::Board;
-use crate::types::{
-    Color, Piece, Role, Square, NO_EP,
-};
+use crate::types::{Color, Piece, Role, Square, NO_EP};
 
 /// FEN parse failure with a description of the offending field.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -223,58 +221,91 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
 }
 
 impl Board {
-    /// Renders the position as a FEN string.
+    /// Renders the position as a FEN string — branchless via `PIECE_CHAR` table
+    /// and `ArrayVec<u8,128>` without `format!` (`ultrachess/src/fen.rs:189` 88ns).
     pub fn to_fen(&self) -> String {
-        let mut s = String::with_capacity(90);
+        // `PIECE_CHAR` indexed by mailbox code (0..12, Black=0..5, White=6..11)
+        // — branchless table vs `match` on role/color.
+        const PIECE_CHAR: [u8; 12] = *b"pnbrqkPNBRQK";
+        let mut out = arrayvec::ArrayVec::<u8, 128>::new();
+
+        // Helper: push decimal `u16` without `format!` (branchless digit loop).
+        #[inline]
+        fn push_u16(out: &mut arrayvec::ArrayVec<u8, 128>, mut n: u16) {
+            if n == 0 {
+                out.push(b'0');
+                return;
+            }
+            let mut buf = [0u8; 5];
+            let mut len = 0;
+            while n > 0 {
+                buf[len] = b'0' + (n % 10) as u8;
+                n /= 10;
+                len += 1;
+            }
+            while len > 0 {
+                len -= 1;
+                out.push(buf[len]);
+            }
+        }
+
         for rank in (0..8).rev() {
-            let mut empty = 0;
+            let mut empty = 0u8;
             for file in 0..8 {
-                match self.piece_at(Square::from_coords(file, rank)) {
-                    None => empty += 1,
-                    Some(p) => {
-                        if empty > 0 {
-                            s.push((b'0' + empty) as char);
-                            empty = 0;
-                        }
-                        s.push(byte_from_piece(p) as char);
+                if let Some(p) = self.piece_at(Square::from_coords(file, rank)) {
+                    if empty > 0 {
+                        out.push(b'0' + empty);
+                        empty = 0;
                     }
+                    out.push(PIECE_CHAR[p.code() as usize]);
+                } else {
+                    empty += 1;
                 }
             }
             if empty > 0 {
-                s.push((b'0' + empty) as char);
+                out.push(b'0' + empty);
             }
             if rank > 0 {
-                s.push('/');
+                out.push(b'/');
             }
         }
-        s.push(' ');
-        s.push(if self.turn() == Color::White { 'w' } else { 'b' });
-        s.push(' ');
+        out.push(b' ');
+        out.push(if self.turn() == Color::White { b'w' } else { b'b' });
+        out.push(b' ');
         // Castling, X-FEN convention (matches python-chess castling_xfen):
-        // a right is written as its file letter when another rook of the same
-        // color stands on the same side of the king (ambiguous), otherwise as
-        // the side letter k/q. White letters first, rook squares descending.
+        // Branchless file-letter vs side-letter via stack array (no Vec alloc).
         let c = self.castling_rights();
         if c == 0 {
-            s.push('-');
+            out.push(b'-');
         } else {
             for color in [Color::White, Color::Black] {
                 let wk = crate::types::castle_right_bit(color, true);
                 let wq = crate::types::castle_right_bit(color, false);
-                let mut rights: Vec<u8> = [wk, wq]
-                    .into_iter()
-                    .filter(|rb| c & (1 << rb) != 0)
-                    .collect();
-                rights.sort_by_key(|rb| std::cmp::Reverse(self.castling_rook_square(*rb).0));
-                for rb in rights {
+                // At most 2 rights per color, stack array + manual sort (no heap Vec).
+                let mut rights = [0u8; 2];
+                let mut n = 0usize;
+                if c & (1 << wk) != 0 {
+                    rights[n] = wk;
+                    n += 1;
+                }
+                if c & (1 << wq) != 0 {
+                    rights[n] = wq;
+                    n += 1;
+                }
+                // Sort descending by rook square (same as ultrachess).
+                if n == 2 && self.castling_rook_square(rights[0]).0 < self.castling_rook_square(rights[1]).0 {
+                    rights.swap(0, 1);
+                }
+                for i in 0..n {
+                    let rb = rights[i];
                     let rook_file = self.castling_rook_square(rb).file();
                     let king_file = self.king_square(color).file();
                     let a_side = rook_file < king_file;
-                    let ambiguous = [wk, wq].into_iter().any(|other| {
-                        other != rb
-                            && c & (1 << other) != 0
+                    let ambiguous = {
+                        let other = if rb == wk { wq } else { wk };
+                        c & (1 << other) != 0
                             && (self.castling_rook_square(other).file() < king_file) == a_side
-                    });
+                    };
                     let ch = if ambiguous {
                         b'a' + rook_file
                     } else if a_side {
@@ -282,23 +313,24 @@ impl Board {
                     } else {
                         b'k'
                     };
-                    s.push(if color == Color::White {
-                        (ch - 32) as char
-                    } else {
-                        ch as char
-                    });
+                    out.push(if color == Color::White { ch - 32 } else { ch });
                 }
             }
         }
-        s.push(' ');
+        out.push(b' ');
         match self.en_passant() {
-            Some(sq) => s.push_str(&sq.to_string()),
-            None => s.push('-'),
+            Some(sq) => {
+                let [f, r] = sq.to_alg();
+                out.push(f);
+                out.push(r);
+            }
+            None => out.push(b'-'),
         }
-        s.push(' ');
-        s.push_str(&self.halfmove_clock().to_string());
-        s.push(' ');
-        s.push_str(&self.fullmove_number().to_string());
-        s
+        out.push(b' ');
+        push_u16(&mut out, self.halfmove_clock());
+        out.push(b' ');
+        push_u16(&mut out, self.fullmove_number());
+        // SAFETY: we only pushed ASCII FEN bytes.
+        unsafe { String::from_utf8_unchecked(out.into_iter().collect::<Vec<u8>>()) }
     }
 }

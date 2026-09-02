@@ -43,3 +43,7 @@ path = "benches/vs_libraries/main.rs"
 [[bench]]
 name = "codec_bench"
 harness = false
+
+[[bench]]
+name = "micro"
+harness = false
