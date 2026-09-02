@@ -51,45 +51,57 @@ fn byte_from_piece(p: Piece) -> u8 {
     }
 }
 
-/// Parses a FEN string into a validated [`Board`].
+/// Parses a FEN string into a validated [`Board`] — `split_ascii_whitespace`
+/// + `chars` direct (no `Vec` alloc) like `ultrachess` `144ns` path.
 pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
-    let fields: Vec<&str> = fen.split_whitespace().collect();
-    if fields.len() < 4 {
-        return Err(FenError("expected at least 4 fields".into()));
-    }
+    let mut it = fen.split_ascii_whitespace();
+    let placement = it.next().ok_or_else(|| FenError("expected at least 4 fields".into()))?;
+    let side = it.next().ok_or_else(|| FenError("expected at least 4 fields".into()))?;
+    let castling_field = it.next().ok_or_else(|| FenError("expected at least 4 fields".into()))?;
+    let ep_field = it.next().ok_or_else(|| FenError("expected at least 4 fields".into()))?;
+    let halfmove_s = it.next();
+    let fullmove_s = it.next();
 
     let mut board = Board::empty();
 
-    // 1) Piece placement (rank 8 first).
-    let rows: Vec<&str> = fields[0].split('/').collect();
-    if rows.len() != 8 {
-        return Err(FenError("piece placement must have 8 ranks".into()));
-    }
-    for (i, row) in rows.iter().enumerate() {
-        let rank = 7 - i as u8;
-        let mut file = 0u8;
-        for b in row.bytes() {
-            if b.is_ascii_digit() {
-                file += b - b'0';
-            } else {
-                let (color, role) = piece_from_byte(b)
-                    .ok_or_else(|| FenError(format!("bad piece char {}", b as char)))?;
-                if file > 7 {
-                    return Err(FenError("rank overflow".into()));
-                }
-                let sq = Square::from_coords(file, rank);
-                board.put_piece(sq.0, Piece::new(color, role).code());
-                file += 1;
+    // 1) Piece placement: ranks 8..1, '/' separated, `chars` direct (no `Vec`).
+    let mut rank: i32 = 7;
+    let mut file: i32 = 0;
+    for ch in placement.chars() {
+        if ch == '/' {
+            if file != 8 {
+                return Err(FenError(format!("rank {rank} has {file} squares")));
             }
+            rank -= 1;
+            file = 0;
+            continue;
         }
-        if file != 8 {
-            return Err(FenError("rank does not describe 8 files".into()));
+        if let Some(d) = ch.to_digit(10) {
+            if d == 0 || d > 8 {
+                return Err(FenError(format!("invalid digit {ch}")));
+            }
+            file += d as i32;
+            if file > 8 {
+                return Err(FenError(format!("rank {rank} overflowed past h")));
+            }
+            continue;
         }
+        if !(0..8).contains(&rank) || !(0..8).contains(&file) {
+            return Err(FenError(format!("position {file},{rank} out of range")));
+        }
+        let piece = piece_from_byte(ch as u8)
+            .ok_or_else(|| FenError(format!("bad piece char {}", ch)))?;
+        let sq = Square::from_coords(file as u8, rank as u8);
+        board.put_piece(sq.0, Piece::new(piece.0, piece.1).code());
+        file += 1;
+    }
+    if rank != 0 || file != 8 {
+        return Err(FenError("rank does not describe 8 files".into()));
     }
 
     // 2) Side to move.
     let turn = Color::from_char(
-        fields[1]
+        side
             .chars()
             .next()
             .ok_or_else(|| FenError("empty side field".into()))?,
@@ -100,39 +112,56 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
     //    of the color on its back rank on that side of the king (X-FEN);
     //    file letters (Shredder-FEN, uppercase = White) name the rook file
     //    directly. Rights are stored with the rook square backing each.
+    //    Fast path for standard (king on e1/e8, rooks on a/h): directly map
+    //    K→h1/a1 etc. without scanning `piece_bb` (ultrachess parity, saves
+    //    `rooks.leading_zeros` per `KQkq` letter on `M1` `ARM`).
     let mut castling = 0u8;
     let mut castle_rook_sq = [0u8; 4];
-    if fields[2] != "-" {
-        for b in fields[2].bytes() {
+    let is_standard_king = board.king_square(Color::White).0 == 4 && board.king_square(Color::Black).0 == 60;
+    let is_standard_castling_field = castling_field.bytes().all(|b| matches!(b, b'K' | b'Q' | b'k' | b'q' | b'-'));
+    let use_fast_standard = is_standard_king && is_standard_castling_field;
+    if castling_field != "-" {
+        for b in castling_field.bytes() {
             let (right, rook_sq) = match b {
                 b'K' | b'Q' | b'k' | b'q' => {
-                    let (color, kingside) = match b {
-                        b'K' => (Color::White, true),
-                        b'Q' => (Color::White, false),
-                        b'k' => (Color::Black, true),
-                        _ => (Color::Black, false),
-                    };
-                    let ksq = board.king_square(color).0;
-                    let rank = ksq >> 3;
-                    // Outermost rook of the color on its back rank.
-                    let rooks = board.piece_bb(color, Role::Rook)
-                        & crate::types::RANK_BB[rank as usize];
-                    if rooks == 0 {
-                        return Err(FenError(
-                            "castling letter with no rook on the king's rank".into(),
-                        ));
-                    }
-                    let rook_sq = if kingside {
-                        63 - (rooks.leading_zeros() as u8) // rightmost
+                    if use_fast_standard {
+                        // Standard fixed squares: h1/a1/h8/a8, no scan
+                        let (right, sq) = match b {
+                            b'K' => (0, 7),
+                            b'Q' => (1, 0),
+                            b'k' => (2, 63),
+                            _ => (3, 56),
+                        };
+                        (right, sq)
                     } else {
-                        rooks.trailing_zeros() as u8 // leftmost
-                    };
-                    if (rook_sq & 7 > ksq & 7) != kingside {
-                        return Err(FenError(
-                            "castling letter with no rook on that side of the king".into(),
-                        ));
+                        let (color, kingside) = match b {
+                            b'K' => (Color::White, true),
+                            b'Q' => (Color::White, false),
+                            b'k' => (Color::Black, true),
+                            _ => (Color::Black, false),
+                        };
+                        let ksq = board.king_square(color).0;
+                        let rank = ksq >> 3;
+                        // Outermost rook of the color on its back rank.
+                        let rooks = board.piece_bb(color, Role::Rook)
+                            & crate::types::RANK_BB[rank as usize];
+                        if rooks == 0 {
+                            return Err(FenError(
+                                "castling letter with no rook on the king's rank".into(),
+                            ));
+                        }
+                        let rook_sq = if kingside {
+                            63 - (rooks.leading_zeros() as u8) // rightmost
+                        } else {
+                            rooks.trailing_zeros() as u8 // leftmost
+                        };
+                        if (rook_sq & 7 > ksq & 7) != kingside {
+                            return Err(FenError(
+                                "castling letter with no rook on that side of the king".into(),
+                            ));
+                        }
+                        (if kingside { if color == Color::White { 0 } else { 2 } } else { if color == Color::White { 1 } else { 3 } }, rook_sq)
                     }
-                    (if kingside { if color == Color::White { 0 } else { 2 } } else { if color == Color::White { 1 } else { 3 } }, rook_sq)
                 }
                 b'A'..=b'H' => {
                     // White rook on the named file (Shredder-FEN).
@@ -171,10 +200,10 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
     }
 
     // 4) En-passant target square.
-    let ep = if fields[3] == "-" {
+    let ep = if ep_field == "-" {
         NO_EP
     } else {
-        let sq = Square::from_alg(fields[3]).ok_or_else(|| FenError("bad ep square".into()))?;
+        let sq = Square::from_alg(ep_field).ok_or_else(|| FenError("bad ep square".into()))?;
         let expected_rank = if turn == Color::White { 5 } else { 2 };
         if sq.rank() != expected_rank {
             return Err(FenError("ep square on wrong rank".into()));
@@ -183,13 +212,11 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
     };
 
     // 5) Clocks (optional in relaxed mode).
-    let halfmove: u16 = fields
-        .get(4)
+    let halfmove: u16 = halfmove_s
         .map(|s| s.parse::<u16>().map_err(|_| FenError("bad halfmove clock".into())))
         .transpose()?
         .unwrap_or(0);
-    let fullmove: u16 = fields
-        .get(5)
+    let fullmove: u16 = fullmove_s
         .map(|s| s.parse::<u16>().map_err(|_| FenError("bad fullmove number".into())))
         .transpose()?
         .unwrap_or(1);

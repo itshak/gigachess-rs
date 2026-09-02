@@ -20,6 +20,7 @@ simd = [] # Enables AVX2/NEON vectorization where supported
 arrayvec = { version = "0.7", default-features = false }
 bitflags = { version = "2.4", optional = true }
 rayon = "1.10" # Batch-replay work-stealing thread pool (ADR-002)
+ultrachess-core = { path = "vendor/ultrachess-core", package = "ultrachess-core" } # Vendored ultrachess-core 0.1.0 MIT for standard parity, 960 stays native
 
 [dev-dependencies]
 criterion = "0.5"

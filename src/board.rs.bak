@@ -82,9 +82,6 @@ pub struct Board {
     /// `checkers != 0` without scan (ultrachess D3, 0.32ns both states).
     checkers: u64,
     king_sq: [u8; 2],
-    /// `true` if Chess960 (king not e1/e8 or rook not a/h) — early gate
-    /// for `standard` `ultrachess` parity (`25ns` vs `78ns`).
-    is_chess960: bool,
     // Close-gap D3 (task 4.1): `mailbox: [u8;64]` removed — `piece_at` scans
     // the 12 bitboards (`piece_code_at`); `castle_mask: [u8;64]` removed —
     // rights-clearing is derived from `castle_rook_sq[4]` + the mover's role
@@ -111,12 +108,8 @@ impl Board {
             hash: 0,
             checkers: 0,
             king_sq: [0; 2],
-            is_chess960: false,
         }
     }
-
-    #[inline]
-    pub fn is_chess960(&self) -> bool { self.is_chess960 }
 
     /// The standard chess starting position.
     pub fn startpos() -> Board {
@@ -1697,19 +1690,5 @@ impl Board {
             self.turn.other(),
             self.occupied(),
         );
-        let std_rooks: [u8; 4] = [7, 0, 63, 56];
-        let mut is960 = false;
-        if castling != 0 {
-            for i in 0..4 {
-                if castling & (1 << i) != 0 && castle_rook_sq[i] != std_rooks[i] {
-                    is960 = true;
-                    break;
-                }
-            }
-            if self.king_sq[Color::White.index()] != 4 || self.king_sq[Color::Black.index()] != 60 {
-                is960 = true;
-            }
-        }
-        self.is_chess960 = is960;
     }
 }

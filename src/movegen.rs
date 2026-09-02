@@ -354,7 +354,7 @@ impl Default for PinnedSplit {
 /// `ksq` is the king square of the side to move; `occ` is total occupancy;
 /// `their_bq` / `their_rq` are enemy bishop/queen and rook/queen bitboards;
 /// `own_occ` is the mover's occupancy.
-#[inline]
+#[inline(always)]
 pub fn compute_pinned_split(
     ksq: u8,
     occ: u64,
