@@ -22,18 +22,6 @@ pub const MAX_MOVES: usize = 256;
 /// Mailbox sentinel: empty square.
 const EMPTY: u8 = u8::MAX;
 
-/// Castling-rights update masks: `rights &= CASTLE_MASK[from] & CASTLE_MASK[to]`.
-const CASTLE_MASK: [u8; 64] = {
-    let mut m = [0x0F; 64];
-    m[0] = 0x0F & !CASTLE_WQ; // a1
-    m[4] = 0x0F & !(CASTLE_WK | CASTLE_WQ); // e1
-    m[7] = 0x0F & !CASTLE_WK; // h1
-    m[56] = 0x0F & !CASTLE_BQ; // a8
-    m[60] = 0x0F & !(CASTLE_BK | CASTLE_BQ); // e8
-    m[63] = 0x0F & !CASTLE_BK; // h8
-    m
-};
-
 /// Information required to undo a move.
 #[derive(Copy, Clone, Debug)]
 pub struct Undo {
@@ -42,6 +30,8 @@ pub struct Undo {
     ep: u8,
     halfmove: u16,
     captured: u8,
+    /// True when the move was a castling move (king-from → rook-square).
+    castled: bool,
 }
 
 /// Error returned when a move cannot be played.
@@ -57,7 +47,10 @@ impl std::error::Error for IllegalMove {}
 
 /// A chess position: pieces, side to move, castling rights, en-passant
 /// square, clocks and the incrementally-maintained Polyglot zobrist hash.
-#[derive(Clone, PartialEq, Eq, Debug)]
+///
+/// `Board` is plain data and [`Copy`]: copying it yields a bit-for-bit
+/// snapshot suitable for engine search stacks (ADR-003, decision D6).
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Board {
     bbs: [[u64; 6]; 2],  // [color_index][role_index]
     occ: [u64; 2],       // occupancy per color
@@ -65,6 +58,11 @@ pub struct Board {
     mailbox: [u8; 64],   // piece code or EMPTY
     turn: Color,
     castling: u8,
+    /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
+    /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
+    castle_rook_sq: [u8; 4],
+    /// Per-square rights-clear mask: `castling &= castle_mask[from] & castle_mask[to]`.
+    castle_mask: [u8; 64],
     ep: u8,
     halfmove: u16,
     fullmove: u16,
@@ -82,6 +80,8 @@ impl Board {
             mailbox: [EMPTY; 64],
             turn: Color::White,
             castling: 0,
+            castle_rook_sq: [0; 4],
+            castle_mask: [0x0F; 64],
             ep: NO_EP,
             halfmove: 0,
             fullmove: 1,
@@ -138,6 +138,13 @@ impl Board {
     #[inline]
     pub fn castling_rights(&self) -> u8 {
         self.castling
+    }
+
+    /// The rook square backing castling right `right_bit` (0..3 = WK, WQ, BK,
+    /// BQ). Chess960-aware: standard rights map to files a/h.
+    #[inline]
+    pub fn castling_rook_square(&self, right_bit: u8) -> Square {
+        Square(self.castle_rook_sq[right_bit as usize])
     }
 
     /// En-passant target square, if any.
@@ -272,6 +279,13 @@ impl Board {
         self.king_attacked(self.turn)
     }
 
+    /// XOR-fold of the rook-file castling keys for the given rights bitmask
+    /// (ADR-003: keys are per (color, rook file)).
+    #[inline]
+    fn castle_rights_hash(&self, rights: u8) -> u64 {
+        zobrist::castle_file_keys_xor(rights, &self.castle_rook_sq)
+    }
+
     /// Recomputes the Polyglot zobrist hash from scratch (verification aid;
     /// the incremental hash in `self.hash` must always agree with this).
     pub fn zobrist_full(&self) -> u64 {
@@ -289,7 +303,7 @@ impl Board {
                 }
             }
         }
-        h ^= zobrist::castle_keys_xor(self.castling);
+        h ^= self.castle_rights_hash(self.castling);
         h ^= zobrist::ep_contribution(
             self.ep,
             self.bbs[self.turn.index()][Role::Pawn.index()],
@@ -515,39 +529,186 @@ impl Board {
         }
     }
 
-    /// Castling generation (never while in check; transit squares not attacked,
-    /// destination safety re-verified by the caller via the danger map).
-    fn gen_castling(&self, moves: &mut ArrayVec<Move, MAX_MOVES>, danger: u64) {
-        let occ = self.occupied;
-        if self.turn == Color::White {
-            if self.king_sq[Color::White.index()] == 4 {
-                if self.castling & CASTLE_WK != 0
-                    && occ & (bit(5) | bit(6)) == 0
-                    && danger & (bit(5) | bit(6)) == 0
-                {
-                    moves.push(Move::new(Square(4), Square(6), None));
-                }
-                if self.castling & CASTLE_WQ != 0
-                    && occ & (bit(1) | bit(2) | bit(3)) == 0
-                    && danger & (bit(2) | bit(3)) == 0
-                {
-                    moves.push(Move::new(Square(4), Square(2), None));
-                }
-            }
-        } else if self.king_sq[Color::Black.index()] == 60 {
-            if self.castling & CASTLE_BK != 0
-                && occ & (bit(61) | bit(62)) == 0
-                && danger & (bit(61) | bit(62)) == 0
-            {
-                moves.push(Move::new(Square(60), Square(62), None));
-            }
-            if self.castling & CASTLE_BQ != 0
-                && occ & (bit(57) | bit(58) | bit(59)) == 0
-                && danger & (bit(58) | bit(59)) == 0
-            {
-                moves.push(Move::new(Square(60), Square(58), None));
+    /// Validates one castling right (path-based, ADR-003 decision D4):
+    /// all squares strictly between king and rook, the king's transit squares
+    /// and both final squares empty (the king's and rook's own squares
+    /// excluded), and every square on the king's path safe in the
+    /// post-castling occupancy (king removed for x-rays, rook displaced to
+    /// its final square — which also enforces the rook-not-pinned rule in
+    /// Chess960 rank-pin configurations).
+    /// Returns the (king_final, rook_final) squares.
+    fn castle_path(&self, right_bit: usize) -> Option<(u8, u8)> {
+        let ksq = self.king_sq[self.turn.index()];
+        let rook = self.castle_rook_sq[right_bit];
+        let kingside = right_bit % 2 == 0; // bits 0, 2 = kingside; 1, 3 = queenside
+        let rank = ksq >> 3;
+        let kf = (rank << 3) | if kingside { 6 } else { 2 };
+        let rf = (rank << 3) | if kingside { 5 } else { 3 };
+        let them = self.turn.other();
+
+        // Emptiness: strictly between king and rook, king's transit squares,
+        // and both final squares — minus the king's and rook's own squares
+        // (they are allowed to stand on each other's path in Chess960).
+        let need_empty = (BETWEEN[ksq as usize][rook as usize]
+            | BETWEEN[ksq as usize][kf as usize]
+            | BETWEEN[rook as usize][rf as usize]
+            | bit(kf)
+            | bit(rf))
+            & !bit(ksq)
+            & !bit(rook);
+        if self.occupied & need_empty != 0 {
+            return None;
+        }
+
+        // King-path safety in the resulting occupancy: the king vacates its
+        // square (x-rays through it count) and the rook leaves its square and
+        // lands on `rf`.
+        let occ_after = (self.occupied & !(bit(ksq) | bit(rook))) | bit(kf) | bit(rf);
+        let mut path = BETWEEN[ksq as usize][kf as usize] | bit(ksq) | bit(kf);
+        while path != 0 {
+            let s = pop_lsb(&mut path);
+            if self.attackers_to(s, them, occ_after) != 0 {
+                return None;
             }
         }
+        Some((kf, rf))
+    }
+
+    /// Full legality of a castling move encoded **king-from → rook-square**.
+    fn is_castling_move(&self, from: u8, to: u8) -> bool {
+        let us = self.turn;
+        let ui = us.index();
+        if from != self.king_sq[ui] {
+            return false;
+        }
+        let kingside = (to & 7) > (from & 7);
+        let rb = crate::types::castle_right_bit(us, kingside) as usize;
+        if self.castling & (1 << rb) == 0 || self.castle_rook_sq[rb] != to {
+            return false;
+        }
+        self.castle_path(rb).is_some()
+    }
+
+    /// Castling generation (never while in check; the caller gates on
+    /// `checkers == 0`). Emits moves as **king-from → rook-square**
+    /// (ADR-003, decision D3) for both standard chess and Chess960; the
+    /// destination square holds the mover's own rook.
+    fn gen_castling(&self, moves: &mut ArrayVec<Move, MAX_MOVES>, danger: u64) {
+        let us = self.turn;
+        let ui = us.index();
+        let ksq = self.king_sq[ui];
+        for rb in [
+            crate::types::castle_right_bit(us, true) as usize,
+            crate::types::castle_right_bit(us, false) as usize,
+        ] {
+            if self.castling & (1 << rb) == 0 {
+                continue;
+            }
+            let rook = self.castle_rook_sq[rb];
+            let kingside = rb % 2 == 0;
+            // Standard-geometry fast path (king on the e-file, rook on the
+            // a/h-file): provably identical to the path-based check — the
+            // h1/a1/d1/f1 square set means the rook can neither uncover nor
+            // block a relevant attack ray — but reuses the precomputed
+            // king-removed danger map instead of per-square attack probes.
+            if ksq & 7 == 4 && (rook & 7) == if kingside { 7 } else { 0 } {
+                let rank = ksq >> 3;
+                let kf = (rank << 3) | if kingside { 6 } else { 2 };
+                let between = if kingside {
+                    bit(kf - 1) | bit(kf) // f, g
+                } else {
+                    bit(kf - 1) | bit(kf) | bit(kf + 1) // b, c, d
+                };
+                let safe = if kingside {
+                    bit(kf - 1) | bit(kf) // f, g
+                } else {
+                    bit(kf) | bit(kf + 1) // c, d
+                };
+                if self.occupied & between == 0 && danger & safe == 0 {
+                    moves.push(Move::new(Square(ksq), Square(rook), None));
+                }
+            } else if self.castle_path(rb).is_some() {
+                moves.push(Move::new(Square(ksq), Square(rook), None));
+            }
+        }
+    }
+}
+
+impl Board {
+    /// Generates every pseudo-legal move into a stack-allocated
+    /// `ArrayVec<Move, 256>` (zero heap allocations): piece moves without
+    /// king-safety filtering, for engines that apply their own legality
+    /// handling (ADR-003, decision D6).
+    ///
+    /// Castling words carry full path-based legality (the king-path safety
+    /// check cannot be restored by a later filter), so:
+    /// `legal_moves() == pseudo_legal_moves().filter(|m| { let mut b = *self;
+    /// let mover = b.turn(); b.make_move_unchecked(m); !b.king_attacked(mover) })`.
+    pub fn pseudo_legal_moves(&self) -> ArrayVec<Move, MAX_MOVES> {
+        let us = self.turn;
+        let ui = us.index();
+        let occ = self.occupied;
+        let mut moves = ArrayVec::new();
+
+        // Knights.
+        let mut p = self.bbs[ui][Role::Knight.index()];
+        while p != 0 {
+            let from = pop_lsb(&mut p);
+            let mut t = KNIGHT_ATT[from as usize] & !self.occ[ui];
+            while t != 0 {
+                let to = pop_lsb(&mut t);
+                moves.push(Move::new(Square(from), Square(to), None));
+            }
+        }
+
+        // Bishops and queens (diagonals).
+        let mut p = self.bbs[ui][Role::Bishop.index()] | self.bbs[ui][Role::Queen.index()];
+        while p != 0 {
+            let from = pop_lsb(&mut p);
+            let mut t = attacks::bishop_attacks(from, occ) & !self.occ[ui];
+            while t != 0 {
+                let to = pop_lsb(&mut t);
+                moves.push(Move::new(Square(from), Square(to), None));
+            }
+        }
+
+        // Rooks and queens (straights).
+        let mut p = self.bbs[ui][Role::Rook.index()] | self.bbs[ui][Role::Queen.index()];
+        while p != 0 {
+            let from = pop_lsb(&mut p);
+            let mut t = attacks::rook_attacks(from, occ) & !self.occ[ui];
+            while t != 0 {
+                let to = pop_lsb(&mut t);
+                moves.push(Move::new(Square(from), Square(to), None));
+            }
+        }
+
+        // King steps (castling handled below with full path legality).
+        let ksq = self.king_sq[ui];
+        let mut p = KING_ATT[ksq as usize] & !self.occ[ui];
+        while p != 0 {
+            let to = pop_lsb(&mut p);
+            moves.push(Move::new(Square(ksq), Square(to), None));
+        }
+
+        // Pawns: pushes, captures, promotions, en passant (en passant is
+        // verified by direct simulation inside the generator, castling by the
+        // full path check below — both are safe under a king-safety filter).
+        self.gen_pawn_moves(&mut moves, !0u64, 0, &[0u64; 64]);
+
+        let wk = crate::types::castle_right_bit(us, true) as usize;
+        let wq = crate::types::castle_right_bit(us, false) as usize;
+        for rb in [wk, wq] {
+            if self.castling & (1 << rb) != 0 && self.castle_path(rb).is_some() {
+                moves.push(Move::new(
+                    Square(self.king_sq[ui]),
+                    Square(self.castle_rook_sq[rb]),
+                    None,
+                ));
+            }
+        }
+
+        moves
     }
 }
 
@@ -563,6 +724,7 @@ impl Board {
             ep: self.ep,
             halfmove: self.halfmove,
             captured: EMPTY,
+            castled: false,
         };
         let from = mv.from().0;
         let to = mv.to().0;
@@ -579,12 +741,20 @@ impl Board {
             self.hash ^= zobrist::ep_key(Square(self.ep));
         }
 
+        // Castling is encoded king-from → rook-square (ADR-003, decision D3):
+        // a king move landing on the mover's own rook. Unambiguous — a normal
+        // king move can never land on an own rook.
+        let is_castle = role == Role::King as u8
+            && self.mailbox[to as usize] != EMPTY
+            && self.mailbox[to as usize] % 6 == Role::Rook as u8
+            && (self.mailbox[to as usize] / 6) == us as u8;
+
         // Captures (including en passant onto an empty square).
         let mut captured_sq = to;
         if is_pawn && diag && self.mailbox[to as usize] == EMPTY {
             captured_sq = if us == Color::White { to - 8 } else { to + 8 };
         }
-        if captured_sq != from && self.mailbox[captured_sq as usize] != EMPTY {
+        if !is_castle && captured_sq != from && self.mailbox[captured_sq as usize] != EMPTY {
             let cap = self.mailbox[captured_sq as usize];
             undo.captured = cap;
             self.remove_piece(captured_sq, cap);
@@ -597,25 +767,31 @@ impl Board {
                 self.put_piece(to, Piece::new(us, r).code());
             }
             None => {
-                self.move_piece(from, to, moved);
-                if role == Role::King as u8 && (to & 7).abs_diff(from & 7) == 2 {
-                    // Castling: move the rook as well.
-                    let (rfrom, rto) = match to {
-                        6 => (7, 5),    // e1g1: h1 -> f1
-                        2 => (0, 3),    // e1c1: a1 -> d1
-                        62 => (63, 61), // e8g8: h8 -> f8
-                        _ => (56, 59),  // e8c8: a8 -> d8
-                    };
-                    let rook = self.mailbox[rfrom as usize];
-                    self.move_piece(rfrom, rto, rook);
+                if is_castle {
+                    let rank = from >> 3;
+                    let kingside = (to & 7) > (from & 7);
+                    let kf = (rank << 3) | if kingside { 6 } else { 2 };
+                    let rf = (rank << 3) | if kingside { 5 } else { 3 };
+                    undo.castled = true;
+                    // Chess960: the king's destination can be the rook's
+                    // square and vice versa (adjacent K+R castling swaps
+                    // them), so remove both pieces first, then place both.
+                    let rook_code = self.mailbox[to as usize];
+                    self.remove_piece(from, moved);
+                    self.remove_piece(to, rook_code);
+                    self.put_piece(kf, moved);
+                    self.put_piece(rf, rook_code);
+                } else {
+                    self.move_piece(from, to, moved);
                 }
             }
         }
 
         // Castling rights (touching king/rook squares or rook captured).
-        let new_castling = self.castling & CASTLE_MASK[from as usize] & CASTLE_MASK[to as usize];
+        let new_castling =
+            self.castling & self.castle_mask[from as usize] & self.castle_mask[to as usize];
         if new_castling != self.castling {
-            self.hash ^= zobrist::castle_keys_xor(self.castling ^ new_castling);
+            self.hash ^= self.castle_rights_hash(self.castling ^ new_castling);
             self.castling = new_castling;
         }
 
@@ -653,6 +829,32 @@ impl Board {
         }
         let from = mv.from().0;
         let to = mv.to().0;
+
+        if undo.castled {
+            // Reverse castling (king-from → rook-square encoding): the king
+            // now stands on its final square and the rook on `rf`; `to` is
+            // the rook's original square.
+            debug_assert_ne!(to, from, "castling move with from == to");
+            let rank = from >> 3;
+            let kingside = (to & 7) > (from & 7);
+            let kf = (rank << 3) | if kingside { 6 } else { 2 };
+            let rf = (rank << 3) | if kingside { 5 } else { 3 };
+            let king_code = self.mailbox[kf as usize];
+            let rook_code = self.mailbox[rf as usize];
+            debug_assert_eq!(king_code % 6, Role::King as u8);
+            debug_assert_eq!(rook_code % 6, Role::Rook as u8);
+            // Remove both, then place both (swap-safe, mirrors make_move).
+            self.remove_piece(kf, king_code);
+            self.remove_piece(rf, rook_code);
+            self.put_piece(from, king_code);
+            self.put_piece(to, rook_code);
+            self.hash = undo.hash;
+            self.castling = undo.castling;
+            self.ep = undo.ep;
+            self.halfmove = undo.halfmove;
+            return;
+        }
+
         let moved = self.mailbox[to as usize];
         debug_assert_ne!(moved, EMPTY, "unmake_move on empty destination");
 
@@ -739,11 +941,18 @@ impl Board {
         let role = code % 6;
         let us = self.turn;
         let them = us.other();
+        let df = (to & 7).abs_diff(from & 7);
+        let dr = (to / 8) as i32 - (from / 8) as i32;
+
+        // Castling is encoded king-from → rook-square (ADR-003, decision D3):
+        // a king move landing on the mover's own rook. Checked before the
+        // generic own-piece rejection below.
+        if role == Role::King as u8 && self.occ[us.index()] & bit(to) != 0 {
+            return self.is_castling_move(from, to);
+        }
         if self.occ[us.index()] & bit(to) != 0 {
             return false; // cannot capture own piece
         }
-        let df = (to & 7).abs_diff(from & 7);
-        let dr = (to / 8) as i32 - (from / 8) as i32;
 
         match role {
             r if r == Role::Pawn as u8 => {
@@ -793,42 +1002,10 @@ impl Board {
                 attacks::queen_attacks(from, self.occupied) & bit(to) != 0
             }
             _ => {
-                // King: one-step moves plus castling.
-                if KING_ATT[from as usize] & bit(to) != 0 {
-                    return true;
-                }
-                if us == Color::White && from == 4 {
-                    if to == 6 {
-                        return self.castling & CASTLE_WK != 0
-                            && self.occupied & (bit(5) | bit(6)) == 0
-                            && !self.square_attacked(4, them)
-                            && !self.square_attacked(5, them)
-                            && !self.square_attacked(6, them);
-                    }
-                    if to == 2 {
-                        return self.castling & CASTLE_WQ != 0
-                            && self.occupied & (bit(1) | bit(2) | bit(3)) == 0
-                            && !self.square_attacked(4, them)
-                            && !self.square_attacked(3, them)
-                            && !self.square_attacked(2, them);
-                    }
-                } else if us == Color::Black && from == 60 {
-                    if to == 62 {
-                        return self.castling & CASTLE_BK != 0
-                            && self.occupied & (bit(61) | bit(62)) == 0
-                            && !self.square_attacked(60, them)
-                            && !self.square_attacked(61, them)
-                            && !self.square_attacked(62, them);
-                    }
-                    if to == 58 {
-                        return self.castling & CASTLE_BQ != 0
-                            && self.occupied & (bit(57) | bit(58) | bit(59)) == 0
-                            && !self.square_attacked(60, them)
-                            && !self.square_attacked(59, them)
-                            && !self.square_attacked(58, them);
-                    }
-                }
-                false
+                // King: one-step moves. Castling (king→own-rook words) was
+                // validated above; a normal king move can never land on an
+                // own rook.
+                KING_ATT[from as usize] & bit(to) != 0
             }
         }
     }
@@ -853,20 +1030,35 @@ impl Board {
     }
 
     /// Sets the non-piece state (used by the FEN parser) and recomputes the
-    /// full zobrist hash from scratch.
+    /// full zobrist hash from scratch. `castle_rook_sq` gives the rook square
+    /// backing each right (bit 0..3 = WK, WQ, BK, BQ); the per-square
+    /// rights-clear mask is derived from the king and rook placements.
     pub(crate) fn set_state(
         &mut self,
         turn: Color,
         castling: u8,
+        castle_rook_sq: [u8; 4],
         ep: u8,
         halfmove: u16,
         fullmove: u16,
     ) {
         self.turn = turn;
         self.castling = castling;
+        self.castle_rook_sq = castle_rook_sq;
         self.ep = ep;
         self.halfmove = halfmove;
         self.fullmove = fullmove;
+        let mut mask = [0x0Fu8; 64];
+        for (rb, color) in [(0usize, Color::White), (1, Color::White), (2, Color::Black), (3, Color::Black)] {
+            if castling & (1 << rb) != 0 {
+                let both = if color == Color::White { CASTLE_WK | CASTLE_WQ } else { CASTLE_BK | CASTLE_BQ };
+                // The king leaving its square forfeits both rights; the rook
+                // leaving (or being captured on) its square forfeits its own.
+                mask[self.king_sq[color.index()] as usize] &= !both;
+                mask[castle_rook_sq[rb] as usize] &= !(1 << rb);
+            }
+        }
+        self.castle_mask = mask;
         self.hash = self.zobrist_full();
     }
 }

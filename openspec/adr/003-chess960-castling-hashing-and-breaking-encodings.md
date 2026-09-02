@@ -98,6 +98,49 @@ Additionally, a hash-strategy investigation established:
 - `Board: Copy` requires the board to remain plain-data (no heap fields in
   hot state); batch APIs already satisfy this.
 
+## Implementation record (2026-09-02)
+
+The decisions above are implemented as follows:
+
+- **Rights representation.** Four right bits (WK, WQ, BK, BQ), each backed by
+  a rook square (`Board::castling_rook_square`). Standard chess maps to
+  h1/a1/h8/a8. Legal play can never produce two same-side rights for one
+  color (rights require king and rooks still on their original squares, and
+  960 starts place the king between the rooks), so the per-color/side
+  encoding is lossless for reachable positions.
+- **FEN dialects.** Parse accepts standard letters (outermost rook of the
+  color on its back rank on that side of the king) and Shredder file letters;
+  output follows the X-FEN ambiguity rule — byte-identical to python-chess
+  `castling_xfen` (differential-verified). The two spellings of the same
+  rights (`KQkq` vs `DAda` for 960 position 654) parse identically.
+- **Derived castling keys.** The 12 non-Polyglot keys come from splitmix64
+  with the published seed `zobrist::CASTLE_KEY_SEED = 0x00C0FFEEDABAD00D`,
+  generated in slot order (Black files b..g, then White b..g); the a/h keys
+  are pinned to Polyglot 768..771. All 16 keys are pairwise distinct.
+- **Castling legality.** Path-based per ADR decision 4, implemented with a
+  standard-geometry fast path (king-removed danger map; provably equivalent
+  because h1/a1/d1/f1 rook placement cannot uncover or block a relevant ray)
+  and a general Chess960 path that evaluates king-path safety in the
+  post-castling occupancy (king removed for x-rays, rook displaced to its
+  final square — which subsumes the rook-not-pinned rule).
+- **make/unmake.** Castling words are king-from → rook-square; make and
+  unmake remove both pieces then place both (adjacent king+rook castling
+  swaps their squares). `Undo` carries a `castled` flag: a 960 king move and
+  a castling move can share from/to squares, so post-hoc detection is not
+  reliable.
+- **pseudo_legal_moves / Copy.** `Board` is plain data and `Copy`;
+  `pseudo_legal_moves()` carries full castling path legality (a king-safety
+  post-filter cannot restore transit-square safety), so
+  `legal_moves() == king-safety-filter(pseudo_legal_moves())` holds exactly
+  (tested across reference and 960 positions).
+- **Validation.** Differential harness `scripts/diff_python_chess.py`
+  (python-chess oracle, `tc_probe` binary): 23,907 positions from random
+  Chess960 and standard games — legal move sets, perft(2), byte-identical
+  X-FEN round-trips, and Polyglot hash parity for standard chess all match.
+  960 perft(3) reference counts for start positions 0/284/518/959 are
+  hard-coded in `tests/chess960.rs`. SAN rendering is byte-identical to
+  shakmaty `SanPlus` over 3,000+ random positions (`tests/san_parity.rs`).
+
 ## References
 
 - ADR-001: Maximum Performance Primacy and Pure Native API Architecture

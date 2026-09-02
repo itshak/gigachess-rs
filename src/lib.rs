@@ -6,6 +6,7 @@
 pub mod attacks;
 pub mod bitboard;
 pub mod board;
+pub mod database;
 pub mod fen;
 pub mod moves;
 pub mod replay;

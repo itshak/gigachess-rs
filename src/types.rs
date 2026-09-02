@@ -14,6 +14,14 @@ pub const CASTLE_BK: u8 = 1 << 2;
 /// Castling-right bit for Black queenside (O-O-O).
 pub const CASTLE_BQ: u8 = 1 << 3;
 
+/// The castling-right bit for `(color, kingside)`:
+/// White kingside = 0, White queenside = 1, Black kingside = 2,
+/// Black queenside = 3.
+#[inline]
+pub const fn castle_right_bit(color: Color, kingside: bool) -> u8 {
+    (1 - color as u8) * 2 + (kingside as u8 ^ 1)
+}
+
 /// A square on the board, `0..=63`, with `a1 = 0` and `h8 = 63`
 /// (little-endian rank-file mapping).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]

@@ -61,6 +61,13 @@ compatibility modes — switch outright):
 - **Docs**: `MIGRATION.md` for blind-base and similar apps (hash re-keying,
   moves2 castling word re-encode procedure, shakmaty→turbochess API mapping,
   worked before/after example of the masters_pack replay loop).
+- **Comparative benchmark suite**: head-to-head Criterion benches against
+  shakmaty 0.30 and cozy-chess (dev-dependencies) on every hot-path axis —
+  legal movegen, perft (bulk + non-bulk), board copy, make-move, FEN
+  parse/format, SAN parse/render, Zobrist (scratch + incremental), and
+  movetext/moves2 import + hash replay — with results published in README and
+  a stretch target of beating the published best-in-class (non-Rust included,
+  e.g. Stockfish perft rates) wherever a reference figure exists.
 - **ADR-003** recording the decisions above with cross-references to
   cozy-chess, JS turbochess, python-chess, shakmaty, the Polyglot spec, and
   the UCI-960 convention.

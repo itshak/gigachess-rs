@@ -31,6 +31,10 @@ Key research facts (verified against primary sources):
 - Batch codecs for blind-base-shaped workloads with zero intermediate Strings.
 - Engine-facing API: `Board: Copy`, `pseudo_legal_moves()`.
 - Migration documentation for apps with different hashes/encodings.
+- A head-to-head comparative benchmark suite vs shakmaty and cozy-chess
+  (dev-dependencies) on every hot-path axis, with published results and a
+  best-in-class (non-Rust, e.g. Stockfish) stretch target — the library must
+  win its own benchmark suite.
 
 **Non-Goals:**
 - Other chess variants (Atomic, Crazyhouse, …) — ADR-001.

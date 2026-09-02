@@ -28,9 +28,12 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
     let piece = board.piece_at(from)?;
     let mut out = San::new();
 
-    // Castling: king moving two files.
-    if piece.role == Role::King && from.file().abs_diff(to.file()) == 2 {
-        out.push_str(if to.file() == 6 { "O-O" } else { "O-O-O" });
+    // Castling: the destination holds the mover's own rook (ADR-003 D3
+    // encoding, valid for standard chess and Chess960 alike).
+    let is_castle = piece.role == Role::King
+        && board.piece_at(to) == Some(crate::types::Piece::new(piece.color, Role::Rook));
+    if is_castle {
+        out.push_str(if to.file() > from.file() { "O-O" } else { "O-O-O" });
     } else {
         let is_capture = board.piece_at(to).is_some()
             || (piece.role == Role::Pawn
@@ -107,19 +110,23 @@ pub fn san_to_move(board: &Board, san: &str) -> Option<Move> {
     let legal = board.legal_moves();
 
     // Castling (accept O-O, 0-0, O-O-O, 0-0-0 with or without dashes).
-    let normalized: String = s.chars().filter(|c| *c != '-').map(|c| if c == '0' { 'O' } else { c }).collect();
-    if normalized == "OO" {
+    // The move words are king-from → rook-square (ADR-003 D3); the side is
+    // determined by the rook file relative to the king file.
+    let normalized: String = s
+        .chars()
+        .filter(|c| *c != '-')
+        .map(|c| if c == '0' { 'O' } else { c })
+        .collect();
+    if normalized == "OO" || normalized == "OOO" {
+        let kingside = normalized == "OO";
         return legal.into_iter().find(|m| {
             board.piece_at(m.from()).map(|p| p.role) == Some(Role::King)
-                && m.from().file().abs_diff(m.to().file()) == 2
-                && m.to().file() == 6
-        });
-    }
-    if normalized == "OOO" {
-        return legal.into_iter().find(|m| {
-            board.piece_at(m.from()).map(|p| p.role) == Some(Role::King)
-                && m.from().file().abs_diff(m.to().file()) == 2
-                && m.to().file() == 2
+                && board.piece_at(m.to()) == Some(crate::types::Piece::new(board.turn(), Role::Rook))
+                && (if kingside {
+                    m.to().file() > m.from().file()
+                } else {
+                    m.to().file() < m.from().file()
+                })
         });
     }
 
@@ -271,11 +278,17 @@ mod tests {
     fn castling_san() {
         let board = play_all(&["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]);
         let mv = san_to_move(&board, "O-O").unwrap();
+        // Castling words are king-from → rook-square (ADR-003 D3).
         assert_eq!(mv.from(), Square::from_alg("e1").unwrap());
-        assert_eq!(mv.to(), Square::from_alg("g1").unwrap());
+        assert_eq!(mv.to(), Square::from_alg("h1").unwrap());
         assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "O-O");
         // Zero notation accepted.
         assert!(san_to_move(&board, "0-0").is_some());
+        // Queenside: word e1a1, renders O-O-O.
+        let board = play_all(&["d4", "d5", "Nc3", "Nf6", "Bf4", "e6", "Qd2", "Bd6"]);
+        let mv = san_to_move(&board, "O-O-O").unwrap();
+        assert_eq!(mv.to(), Square::from_alg("a1").unwrap());
+        assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "O-O-O");
     }
 
     #[test]

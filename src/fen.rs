@@ -8,7 +8,7 @@
 
 use crate::board::Board;
 use crate::types::{
-    Color, Piece, Role, Square, NO_EP, CASTLE_BK, CASTLE_BQ, CASTLE_WK, CASTLE_WQ,
+    Color, Piece, Role, Square, NO_EP,
 };
 
 /// FEN parse failure with a description of the offending field.
@@ -98,17 +98,77 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
     )
     .ok_or_else(|| FenError("side must be 'w' or 'b'".into()))?;
 
-    // 3) Castling rights.
+    // 3) Castling rights. Standard K/Q/k/q letters select the outermost rook
+    //    of the color on its back rank on that side of the king (X-FEN);
+    //    file letters (Shredder-FEN, uppercase = White) name the rook file
+    //    directly. Rights are stored with the rook square backing each.
     let mut castling = 0u8;
+    let mut castle_rook_sq = [0u8; 4];
     if fields[2] != "-" {
         for b in fields[2].bytes() {
-            castling |= match b {
-                b'K' => CASTLE_WK,
-                b'Q' => CASTLE_WQ,
-                b'k' => CASTLE_BK,
-                b'q' => CASTLE_BQ,
+            let (right, rook_sq) = match b {
+                b'K' | b'Q' | b'k' | b'q' => {
+                    let (color, kingside) = match b {
+                        b'K' => (Color::White, true),
+                        b'Q' => (Color::White, false),
+                        b'k' => (Color::Black, true),
+                        _ => (Color::Black, false),
+                    };
+                    let ksq = board.king_square(color).0;
+                    let rank = ksq >> 3;
+                    // Outermost rook of the color on its back rank.
+                    let rooks = board.piece_bb(color, Role::Rook)
+                        & crate::types::RANK_BB[rank as usize];
+                    if rooks == 0 {
+                        return Err(FenError(
+                            "castling letter with no rook on the king's rank".into(),
+                        ));
+                    }
+                    let rook_sq = if kingside {
+                        63 - (rooks.leading_zeros() as u8) // rightmost
+                    } else {
+                        rooks.trailing_zeros() as u8 // leftmost
+                    };
+                    if (rook_sq & 7 > ksq & 7) != kingside {
+                        return Err(FenError(
+                            "castling letter with no rook on that side of the king".into(),
+                        ));
+                    }
+                    (if kingside { if color == Color::White { 0 } else { 2 } } else { if color == Color::White { 1 } else { 3 } }, rook_sq)
+                }
+                b'A'..=b'H' => {
+                    // White rook on the named file (Shredder-FEN).
+                    let file = b - b'A';
+                    let ksq = board.king_square(Color::White).0;
+                    let sq = Square::from_coords(file, ksq >> 3);
+                    if board.piece_at(sq) != Some(Piece::new(Color::White, Role::Rook)) {
+                        return Err(FenError(format!(
+                            "no white rook on file {} for castling right",
+                            file
+                        )));
+                    }
+                    (if file > (ksq & 7) { 0 } else { 1 }, sq.0)
+                }
+                b'a'..=b'h' => {
+                    // Black rook on the named file (Shredder-FEN).
+                    let file = b - b'a';
+                    let ksq = board.king_square(Color::Black).0;
+                    let sq = Square::from_coords(file, ksq >> 3);
+                    if board.piece_at(sq) != Some(Piece::new(Color::Black, Role::Rook)) {
+                        return Err(FenError(format!(
+                            "no black rook on file {} for castling right",
+                            file
+                        )));
+                    }
+                    (if file > (ksq & 7) { 2 } else { 3 }, sq.0)
+                }
                 _ => return Err(FenError("bad castling field".into())),
             };
+            if castling & (1 << right) != 0 {
+                return Err(FenError("duplicate castling right".into()));
+            }
+            castling |= 1 << right;
+            castle_rook_sq[right as usize] = rook_sq;
         }
     }
 
@@ -158,7 +218,7 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
         return Err(FenError("kings adjacent".into()));
     }
 
-    board.set_state(turn, castling, ep, halfmove, fullmove);
+    board.set_state(turn, castling, castle_rook_sq, ep, halfmove, fullmove);
     Ok(board)
 }
 
@@ -190,21 +250,44 @@ impl Board {
         s.push(' ');
         s.push(if self.turn() == Color::White { 'w' } else { 'b' });
         s.push(' ');
+        // Castling, X-FEN convention (matches python-chess castling_xfen):
+        // a right is written as its file letter when another rook of the same
+        // color stands on the same side of the king (ambiguous), otherwise as
+        // the side letter k/q. White letters first, rook squares descending.
         let c = self.castling_rights();
         if c == 0 {
             s.push('-');
         } else {
-            if c & CASTLE_WK != 0 {
-                s.push('K');
-            }
-            if c & CASTLE_WQ != 0 {
-                s.push('Q');
-            }
-            if c & CASTLE_BK != 0 {
-                s.push('k');
-            }
-            if c & CASTLE_BQ != 0 {
-                s.push('q');
+            for color in [Color::White, Color::Black] {
+                let wk = crate::types::castle_right_bit(color, true);
+                let wq = crate::types::castle_right_bit(color, false);
+                let mut rights: Vec<u8> = [wk, wq]
+                    .into_iter()
+                    .filter(|rb| c & (1 << rb) != 0)
+                    .collect();
+                rights.sort_by_key(|rb| std::cmp::Reverse(self.castling_rook_square(*rb).0));
+                for rb in rights {
+                    let rook_file = self.castling_rook_square(rb).file();
+                    let king_file = self.king_square(color).file();
+                    let a_side = rook_file < king_file;
+                    let ambiguous = [wk, wq].into_iter().any(|other| {
+                        other != rb
+                            && c & (1 << other) != 0
+                            && (self.castling_rook_square(other).file() < king_file) == a_side
+                    });
+                    let ch = if ambiguous {
+                        b'a' + rook_file
+                    } else if a_side {
+                        b'q'
+                    } else {
+                        b'k'
+                    };
+                    s.push(if color == Color::White {
+                        (ch - 32) as char
+                    } else {
+                        ch as char
+                    });
+                }
             }
         }
         s.push(' ');

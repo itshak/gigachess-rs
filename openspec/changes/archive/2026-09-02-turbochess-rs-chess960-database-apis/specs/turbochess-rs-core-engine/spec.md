@@ -25,3 +25,16 @@ The system SHALL make `Board` a `Copy` type (bit-for-bit copy semantics for engi
 #### Scenario: Copy semantics
 - **WHEN** a `Board` is copied before making a move
 - **THEN** the copy is a bit-for-bit snapshot and the original is unchanged after the move is applied to the copy
+
+### Requirement: A Comparative Benchmark Suite SHALL Measure Best-in-Class Libraries
+
+The system SHALL ship a Criterion benchmark suite measuring turbochess-rs head-to-head against shakmaty 0.30 and cozy-chess (both as dev-dependencies) on these axes: legal move generation, perft (with and without bulk counting), board copy, make-move, FEN parsing and formatting, SAN parsing and rendering, Zobrist hashing (from-scratch and incremental), and movetext/moves2 import plus hash replay (the latter against a shakmaty-based baseline mirroring blind-base's current implementation). Results SHALL be published in README.md with machine context, and turbochess-rs SHALL meet or beat both reference libraries on every axis; published best-in-class non-Rust figures (e.g. Stockfish perft rates) SHALL be included as stretch-target context.
+
+#### Scenario: Head-to-head results published
+- **WHEN** the benchmark suite is run on the reference machine
+- **THEN** README.md contains a results table covering every listed axis with turbochess-rs, shakmaty, and cozy-chess numbers, with turbochess-rs at least as fast as both on each axis or the gap explicitly documented with a follow-up issue
+
+#### Scenario: Best-in-class context
+- **WHEN** perft throughput is evaluated
+- **THEN** the results table includes published best-in-class non-Rust reference figures (e.g. Stockfish) as the stretch target
+

@@ -15,7 +15,6 @@ default = ["std"]
 std = []
 pext = [] # Enables hardware PEXT (BMI2) 1-cycle bitboards
 simd = [] # Enables AVX2/NEON vectorization where supported
-shakmaty-compat = [] # Enables drop-in shakmaty API compatibility layer
 
 [dependencies]
 arrayvec = { version = "0.7", default-features = false }
@@ -25,7 +24,8 @@ rayon = "1.10" # Batch-replay work-stealing thread pool (ADR-002)
 [dev-dependencies]
 criterion = "0.5"
 rayon = "1.10"
-shakmaty = "0.30" # Baseline verification only (in dev-dependencies, not in production runtime)
+cozy-chess = "0.3" # Head-to-head benchmark reference (dev-dependency)
+shakmaty = "0.30" # Baseline verification + SAN parity oracle (dev-dependency only)
 
 [[bench]]
 name = "perft_bench"
@@ -33,4 +33,13 @@ harness = false
 
 [[bench]]
 name = "replay_bench"
+harness = false
+
+[[bench]]
+name = "vs_libraries"
+harness = false
+path = "benches/vs_libraries/main.rs"
+
+[[bench]]
+name = "codec_bench"
 harness = false
