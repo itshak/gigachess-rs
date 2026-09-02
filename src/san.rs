@@ -64,12 +64,12 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
 
         if piece.role != Role::Pawn {
             out.push(piece.role.char_upper());
-            // Disambiguation via `attacks_from_target` pre-filter (ultrachess
-            // `san.rs:1`): `attackers_bb = same_type & !from & attacks_from_target(to)`
-            // skips the full movegen scan when no other piece attacks `to`.
-            // For the remaining candidates we test legality via pseudo-legal +
-            // make/unmake (pin/check aware) — still `O(k)` with `k<=2` vs
-            // scanning the full `legal_moves()` list.
+            // Disambiguation via `attacks_from_target` pre-filter + single
+            // `generate_legal_moves` (ultrachess `san.rs:1` 1.43µs/48).
+            // Pre-filter avoids the full movegen in the common case (no other
+            // attacker). When needed, one movegen filters all candidates at once
+            // — cheaper than per-candidate `is_pseudo_legal+make/unmake` which
+            // pays hash+checkers per candidate.
             let same_bb = board.piece_bb(piece.color, piece.role);
             let attackers_bb = {
                 let occ = board.occupied();
@@ -84,31 +84,25 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
                 att & same_bb & !bit(from.0)
             };
             if attackers_bb != 0 {
-                // Collect other legal origins that can also reach `to`.
+                let mut ml = crate::movegen::MoveList::new();
+                board.generate_moves_into(&mut ml);
                 let mut others: ArrayVec<Square, 8> = ArrayVec::new();
-                let mut bb = attackers_bb;
-                while bb != 0 {
-                    let sq = crate::bitboard::pop_lsb(&mut bb);
-                    let cand = Move::new(Square(sq), to, mv.promotion());
-                    // Must be pseudo-legal and not expose king (pin) and
-                    // respect check_mask (check evasion). Use same is_legal
-                    // helper as above but for `cand`.
-                    if !board.is_pseudo_legal(cand) {
+                for &cm in ml.as_slice() {
+                    if cm.to() != to || cm.from() == from {
                         continue;
                     }
-                    let mut tmp = *board;
-                    let undo = tmp.make_move_unchecked(cand);
-                    let mover = board.turn();
-                    let illegal = tmp.attackers_to(
-                        tmp.king_square(mover).0,
-                        tmp.turn(),
-                        tmp.occupied(),
-                    ) != 0;
-                    tmp.unmake_move(cand, undo);
-                    if illegal {
+                    if cm.promotion() != mv.promotion() {
                         continue;
                     }
-                    others.push(Square(sq));
+                    // Must be same piece type (covers promoted pawns etc).
+                    // We already filtered via same_bb & attacks, but use bit test for speed.
+                    if same_bb & bit(cm.from().0) == 0 {
+                        continue;
+                    }
+                    others.push(cm.from());
+                    if others.len() >= 8 {
+                        break;
+                    }
                 }
                 if !others.is_empty() {
                     let same_file = others.iter().any(|s| s.file() == from.file());

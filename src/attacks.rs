@@ -67,42 +67,35 @@ fn pext_available() -> bool {
     }
 }
 
-#[inline]
-fn slider_index(t: &SliderTable, sq: usize, occ: u64, use_pext: bool) -> usize {
-    if use_pext {
-        #[cfg(target_arch = "x86_64")]
-        {
-            // SAFETY: only reached when `is_x86_feature_detected!("bmi2")`.
-            unsafe { pext(occ, t.mask[sq]) as usize }
-        }
-        #[cfg(not(target_arch = "x86_64"))]
-        {
-            let _ = use_pext;
-            unreachable!("pext indexing requires x86-64")
-        }
-    } else {
-        ((occ & t.mask[sq])
-            .wrapping_mul(t.magic[sq])
-            >> t.shift[sq]) as usize
-    }
-}
-
-/// Rook attack set for `occ` occupancy from `sq`.
-#[inline]
+#[inline(always)]
 pub fn rook_attacks(sq: u8, occ: u64) -> u64 {
     let t = tables();
     let s = sq as usize;
-    let idx = slider_index(&t.rook, s, occ, t.use_pext);
-    t.rook.attacks[t.rook.base[s] as usize + idx]
+    #[cfg(all(target_arch = "x86_64", feature = "pext"))]
+    {
+        if t.use_pext {
+            // SAFETY: only reached when `is_x86_feature_detected!("bmi2")`.
+            let idx = unsafe { pext(occ, t.rook.mask[s]) as usize };
+            return unsafe { *t.rook.attacks.get_unchecked(t.rook.base[s] as usize + idx) };
+        }
+    }
+    let idx = ((occ & t.rook.mask[s]).wrapping_mul(t.rook.magic[s]) >> t.rook.shift[s]) as usize;
+    unsafe { *t.rook.attacks.get_unchecked(t.rook.base[s] as usize + idx) }
 }
 
-/// Bishop attack set for `occ` occupancy from `sq`.
-#[inline]
+#[inline(always)]
 pub fn bishop_attacks(sq: u8, occ: u64) -> u64 {
     let t = tables();
     let s = sq as usize;
-    let idx = slider_index(&t.bishop, s, occ, t.use_pext);
-    t.bishop.attacks[t.bishop.base[s] as usize + idx]
+    #[cfg(all(target_arch = "x86_64", feature = "pext"))]
+    {
+        if t.use_pext {
+            let idx = unsafe { pext(occ, t.bishop.mask[s]) as usize };
+            return unsafe { *t.bishop.attacks.get_unchecked(t.bishop.base[s] as usize + idx) };
+        }
+    }
+    let idx = ((occ & t.bishop.mask[s]).wrapping_mul(t.bishop.magic[s]) >> t.bishop.shift[s]) as usize;
+    unsafe { *t.bishop.attacks.get_unchecked(t.bishop.base[s] as usize + idx) }
 }
 
 /// Queen attack set (rook | bishop) for `occ` occupancy from `sq`.

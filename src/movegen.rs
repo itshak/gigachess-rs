@@ -55,9 +55,14 @@ impl MoveList {
     #[inline]
     pub fn into_arrayvec(self) -> arrayvec::ArrayVec<Move, MAX_MOVES> {
         let mut out = arrayvec::ArrayVec::new();
-        for i in 0..self.len {
-            // SAFETY: first `len` entries are initialized.
-            unsafe { out.push_unchecked(*self.buf[i].assume_init_ref()) };
+        // Bulk copy via `copy_nonoverlapping` (40 B for startpos) vs per-element loop.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.buf.as_ptr() as *const Move,
+                out.as_mut_ptr(),
+                self.len,
+            );
+            out.set_len(self.len);
         }
         out
     }
@@ -113,6 +118,41 @@ impl MoveSink for MoveList {
         debug_assert!(self.len < MAX_MOVES);
         self.buf[self.len].write(mv);
         self.len += 1;
+    }
+}
+
+impl MoveSink for arrayvec::ArrayVec<Move, MAX_MOVES> {
+    #[inline]
+    fn push_targets(&mut self, from: u8, mut targets: u64) {
+        while targets != 0 {
+            let to = pop_lsb(&mut targets);
+            unsafe { self.push_unchecked(Move::new(Square(from), Square(to), None)) };
+        }
+    }
+
+    #[inline]
+    fn push_pawn_targets_offset(&mut self, mut targets: u64, offset: i8) {
+        while targets != 0 {
+            let to = pop_lsb(&mut targets);
+            let from = (to as i16 - offset as i16) as u8;
+            unsafe { self.push_unchecked(Move::new(Square(from), Square(to), None)) };
+        }
+    }
+
+    #[inline]
+    fn push_pawn_promotions_offset(&mut self, mut targets: u64, offset: i8) {
+        while targets != 0 {
+            let to = pop_lsb(&mut targets);
+            let from = (to as i16 - offset as i16) as u8;
+            for r in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight] {
+                unsafe { self.push_unchecked(Move::new(Square(from), Square(to), Some(r))) };
+            }
+        }
+    }
+
+    #[inline]
+    fn push_one(&mut self, mv: Move) {
+        unsafe { self.push_unchecked(mv) };
     }
 }
 
@@ -329,31 +369,12 @@ impl MoveVisitor for MoveCounter {
     }
 }
 
-/// Result of the split-pinned computation.
-#[derive(Copy, Clone, Debug)]
-pub struct PinnedSplit {
-    pub hv: u64,
-    pub diag: u64,
-    pub line: [u64; 64],
-}
-
-impl Default for PinnedSplit {
-    fn default() -> Self {
-        Self {
-            hv: 0,
-            diag: 0,
-            line: [0u64; 64],
-        }
-    }
-}
-
-/// Computes `pinned_hv` / `pinned_diag` plus the per-pinned-square `LINE`
-/// to avoid a dependent `LINE` load for unpinned sliders (ultrachess
-/// `compute_pinned_split` / `pinned_split`).
+/// Computes `pinned_hv` / `pinned_diag` (ultrachess `compute_pinned_split`).
 ///
-/// `ksq` is the king square of the side to move; `occ` is total occupancy;
-/// `their_bq` / `their_rq` are enemy bishop/queen and rook/queen bitboards;
-/// `own_occ` is the mover's occupancy.
+/// Returns `(pinned_hv, pinned_diag)`. Uses `their_occ` (enemy occupancy)
+/// for sniper ray to match `ultrachess` `bishop_attacks(king, their_pieces)`
+/// — fewer snipers than `occ=0` (all diagonals) and matches the `their_pieces`
+/// blocking semantics. Callers use `LINE[ksq][from]` for pinned-slider masking.
 #[inline(always)]
 pub fn compute_pinned_split(
     ksq: u8,
@@ -361,37 +382,37 @@ pub fn compute_pinned_split(
     their_bq: u64,
     their_rq: u64,
     own_occ: u64,
-) -> PinnedSplit {
-    use crate::bitboard::{BETWEEN, LINE};
+    their_occ: u64,
+) -> (u64, u64) {
+    use crate::bitboard::BETWEEN;
     use crate::attacks;
 
-    let mut out = PinnedSplit::default();
+    let mut pinned_diag = 0u64;
+    let mut pinned_hv = 0u64;
 
-    // Diagonal snipers (bishop/queen on the king's diagonals).
-    let mut diag_snipers = attacks::bishop_attacks(ksq, 0) & their_bq;
+    // Diagonal snipers — enemy occupancy blocks rays (like ultrachess).
+    let mut diag_snipers = attacks::bishop_attacks(ksq, their_occ) & their_bq;
     while diag_snipers != 0 {
         let sniper = pop_lsb(&mut diag_snipers);
         let between = BETWEEN[ksq as usize][sniper as usize] & occ;
         if popcount(between) == 1 && between & own_occ != 0 {
             let pinned_sq = lsb(between);
-            out.diag |= bit(pinned_sq);
-            out.line[pinned_sq as usize] = LINE[ksq as usize][sniper as usize];
+            pinned_diag |= bit(pinned_sq);
         }
     }
 
-    // Orthogonal snipers (rook/queen on rank/file).
-    let mut orth_snipers = attacks::rook_attacks(ksq, 0) & their_rq;
+    // Orthogonal snipers — enemy occupancy blocks rays.
+    let mut orth_snipers = attacks::rook_attacks(ksq, their_occ) & their_rq;
     while orth_snipers != 0 {
         let sniper = pop_lsb(&mut orth_snipers);
         let between = BETWEEN[ksq as usize][sniper as usize] & occ;
         if popcount(between) == 1 && between & own_occ != 0 {
             let pinned_sq = lsb(between);
-            out.hv |= bit(pinned_sq);
-            out.line[pinned_sq as usize] = LINE[ksq as usize][sniper as usize];
+            pinned_hv |= bit(pinned_sq);
         }
     }
 
-    out
+    (pinned_hv, pinned_diag)
 }
 
 #[cfg(test)]
@@ -424,8 +445,9 @@ mod tests {
         let their_bq = 0x2C00_0000_0000_0000u64;
         let their_rq = 0x8100_0000_0000_0081u64;
         let own = 0x0000_0000_0000_FFFFu64;
-        let p = compute_pinned_split(ksq, occ, their_bq, their_rq, own);
-        assert_eq!(p.hv, 0);
-        assert_eq!(p.diag, 0);
+        let their_occ = 0xFFFF_0000_0000_0000u64;
+        let (hv, diag) = compute_pinned_split(ksq, occ, their_bq, their_rq, own, their_occ);
+        assert_eq!(hv, 0);
+        assert_eq!(diag, 0);
     }
 }

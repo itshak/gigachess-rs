@@ -30,29 +30,31 @@ const EP_BASE: usize = 772;
 const TURN_KEY: usize = 780;
 
 /// Zobrist key for a piece of `color`/`role` standing on `sq`.
-#[inline]
+#[inline(always)]
 pub fn piece_key(color: Color, role: Role, sq: Square) -> u64 {
-    POLYGLOT_RANDOM_ARRAY[PIECE_BASE + 64 * (2 * role.index() + color.index()) + sq.index()]
+    unsafe {
+        *POLYGLOT_RANDOM_ARRAY.get_unchecked(PIECE_BASE + 64 * (2 * role.index() + color.index()) + sq.index())
+    }
 }
 
 /// Raw Polyglot castling key (bit 0..3 = WK, WQ, BK, BQ), i.e. entries
 /// `768..772` of the Polyglot table. Kept for reference/migration tooling;
 /// live hashing uses [`castle_file_key`], keyed by rook file (ADR-003).
-#[inline]
+#[inline(always)]
 pub fn castle_key(right_bit: u8) -> u64 {
-    POLYGLOT_RANDOM_ARRAY[CASTLE_BASE + right_bit as usize]
+    unsafe { *POLYGLOT_RANDOM_ARRAY.get_unchecked(CASTLE_BASE + right_bit as usize) }
 }
 
 /// Zobrist key for the en-passant file of `sq`.
-#[inline]
+#[inline(always)]
 pub fn ep_key(sq: Square) -> u64 {
-    POLYGLOT_RANDOM_ARRAY[EP_BASE + sq.file() as usize]
+    unsafe { *POLYGLOT_RANDOM_ARRAY.get_unchecked(EP_BASE + sq.file() as usize) }
 }
 
 /// Turn key (XORed when White is to move).
-#[inline]
+#[inline(always)]
 pub fn turn_key() -> u64 {
-    POLYGLOT_RANDOM_ARRAY[TURN_KEY]
+    unsafe { *POLYGLOT_RANDOM_ARRAY.get_unchecked(TURN_KEY) }
 }
 
 // -- rook-file castling keys (ADR-003, decision D2) -------------------------
@@ -106,14 +108,14 @@ pub const CASTLE_FILE_KEYS: [u64; 16] = {
 
 /// Zobrist key for one castling right, keyed by the owning color and the
 /// file of the castling rook (ADR-003).
-#[inline]
+#[inline(always)]
 pub fn castle_file_key(color: Color, file: u8) -> u64 {
     CASTLE_FILE_KEYS[color.index() * 8 + file as usize]
 }
 
 /// XOR-fold of the Polyglot castle keys for a standard rights bitmask
 /// (WK, WQ, BK, BQ -> Polyglot 768..771). Reference/migration tooling.
-#[inline]
+#[inline(always)]
 pub fn castle_keys_xor(rights: u8) -> u64 {
     let mut h = 0u64;
     let mut b = 0u8;
@@ -128,7 +130,7 @@ pub fn castle_keys_xor(rights: u8) -> u64 {
 
 /// XOR-fold of the rook-file castling keys for the rights in `rights`
 /// (bit 0..3 = WK, WQ, BK, BQ) whose rooks stand on `rook_sqs`.
-#[inline]
+#[inline(always)]
 pub fn castle_file_keys_xor(rights: u8, rook_sqs: &[u8; 4]) -> u64 {
     let mut h = 0u64;
     let mut b = 0u8;
@@ -149,7 +151,7 @@ pub fn castle_file_keys_xor(rights: u8, rook_sqs: &[u8; 4]) -> u64 {
 /// pawn bitboard of the side that would capture; `pawn_attacks_of_other` is
 /// [`crate::bitboard::PAWN_ATT`] for the *opposite* color (i.e. the set of
 /// squares from which a pawn of `side` attacks `sq`).
-#[inline]
+#[inline(always)]
 pub fn ep_contribution(ep: u8, pawns_of_side: u64, pawn_attacks_of_other: u64) -> u64 {
     if ep == NO_EP {
         return 0;

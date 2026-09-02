@@ -64,11 +64,12 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
 
     let mut board = Board::empty();
 
-    // 1) Piece placement: ranks 8..1, '/' separated, `chars` direct (no `Vec`).
+    // 1) Piece placement: ranks 8..1, '/' separated, bytes direct (no `chars` UTF-8 decode,
+    //    no `to_digit` — branchless byte compare, like `ultrachess` `144ns` path).
     let mut rank: i32 = 7;
     let mut file: i32 = 0;
-    for ch in placement.chars() {
-        if ch == '/' {
+    for &b in placement.as_bytes() {
+        if b == b'/' {
             if file != 8 {
                 return Err(FenError(format!("rank {rank} has {file} squares")));
             }
@@ -76,11 +77,9 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
             file = 0;
             continue;
         }
-        if let Some(d) = ch.to_digit(10) {
-            if d == 0 || d > 8 {
-                return Err(FenError(format!("invalid digit {ch}")));
-            }
-            file += d as i32;
+        if b >= b'1' && b <= b'8' {
+            let d = (b - b'0') as i32;
+            file += d;
             if file > 8 {
                 return Err(FenError(format!("rank {rank} overflowed past h")));
             }
@@ -89,24 +88,23 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
         if !(0..8).contains(&rank) || !(0..8).contains(&file) {
             return Err(FenError(format!("position {file},{rank} out of range")));
         }
-        let piece = piece_from_byte(ch as u8)
-            .ok_or_else(|| FenError(format!("bad piece char {}", ch)))?;
-        let sq = Square::from_coords(file as u8, rank as u8);
-        board.put_piece(sq.0, Piece::new(piece.0, piece.1).code());
+        let piece = piece_from_byte(b)
+            .ok_or_else(|| FenError(format!("bad piece char {}", b as char)))?;
+        let sq = (rank as u8) * 8 + file as u8;
+        board.put_piece_no_hash(sq, Piece::new(piece.0, piece.1).code());
         file += 1;
     }
     if rank != 0 || file != 8 {
         return Err(FenError("rank does not describe 8 files".into()));
     }
 
-    // 2) Side to move.
-    let turn = Color::from_char(
-        side
-            .chars()
-            .next()
-            .ok_or_else(|| FenError("empty side field".into()))?,
-    )
-    .ok_or_else(|| FenError("side must be 'w' or 'b'".into()))?;
+    // 2) Side to move — single byte check (no `chars`).
+    let turn = match side.as_bytes().first().copied() {
+        Some(b'w') => Color::White,
+        Some(b'b') => Color::Black,
+        Some(_) => return Err(FenError("side must be 'w' or 'b'".into())),
+        None => return Err(FenError("empty side field".into())),
+    };
 
     // 3) Castling rights. Standard K/Q/k/q letters select the outermost rook
     //    of the color on its back rank on that side of the king (X-FEN);
