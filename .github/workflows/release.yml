@@ -5,9 +5,12 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   publish:
-    name: Publish to crates.io
+    name: Build, Test & Publish to crates.io
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,15 +19,30 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Verify Tag matches Cargo.toml version
+        id: version
         run: |
           TAG_VERSION="${GITHUB_REF#refs/tags/v}"
           CARGO_VERSION=$(cargo read-manifest | jq -r .version)
           echo "Tag version: $TAG_VERSION"
           echo "Cargo version: $CARGO_VERSION"
           if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
-            echo "Error: Tag version ($TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
+            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
             exit 1
           fi
+          echo "VERSION=$TAG_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          if [ -f CHANGELOG.md ]; then
+            CHANGELOG=$(awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
+          else
+            CHANGELOG="Release v${VERSION}"
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Verify Tests Pass
         run: cargo test --all-features
@@ -33,11 +51,18 @@ jobs:
         run: cargo publish --dry-run
 
       - name: Publish to crates.io
-        run: cargo publish --token "${{ secrets.CARGO_REGISTRY_TOKEN }}"
+        run: |
+          if [ -z "${{ secrets.CARGO_REGISTRY_TOKEN }}" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN secret is not set in GitHub repository settings."
+            exit 1
+          fi
+          cargo publish --token "${{ secrets.CARGO_REGISTRY_TOKEN }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: v${{ steps.version.outputs.VERSION }}
+          body: ${{ steps.changelog.outputs.CHANGELOG }}
           generate_release_notes: true
           draft: false
           prerelease: false
