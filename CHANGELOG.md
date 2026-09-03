@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2] - 2026-09-04
+
+### Changed
+- Generalized database indexing codecs, benchmark documentation, and internal comments.
+- Polished README marketing, Criterion benchmarks against ultrachess, shakmaty, and cozy-chess.
+- Added dual-ecosystem cross-referencing between Rust and JavaScript/TypeScript libraries.
+
 ## [0.1.1] - 2026-09-04
 
 ### Changed
