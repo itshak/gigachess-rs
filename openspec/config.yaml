@@ -1,11 +1,11 @@
 schema: spec-driven
 
 context: |
-  TurboChess-RS is an ultra-high-performance, 100% MIT-licensed chess engine,
+  GigaChess is an ultra-high-performance, 100% MIT-licensed chess engine,
   PEXT move generator, 16-bit moves2 replay engine, and Shakmaty compatibility
   crate in Rust.
 
-  It serves as the backend engine for blind-base and high-throughput chess databases.
+  It serves as the backend engine for high-throughput chess databases and search engines.
   License: MIT (strictly permissive).
 
 rules:

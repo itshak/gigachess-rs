@@ -9,7 +9,7 @@
 
 ## Context and Problem Statement
 
-`turbochess-rs` is the `blind-base` backend. `ultrachess` (MIT, `yahorbarkouski/ultrachess`, vendored as `ultrachess-core 0.1.0`) is the Rust perft record `836 Mnps` (M4, `LTO=fat`). On M1 Max same `criterion 10` it measures `fen_write 103, fen_parse 208, clone 3.67, isCheck 0.43, hash 0.34, SAN 1.47µs/48, movegen 42ns, make+unmake 736ns, perft ~400 Mnps` (vs `turbo` 98/392/3.28/0.48/0.48/3.9/78/1074/363). The gap is not algorithmic but **micro-architectural**: 144B `Copy` Board with `piece_code_at` 12-scan, `CASTLING_CLEAR` loop, `MoveList→ArrayVec` copy, `attackers_to` per movegen, `MAYBEUNINIT` vs `String`, `OnceLock` branch, and `hash` at offset 128 (third cache line).
+`GigaChess` is designed for ultra-high-performance chess database and search workloads. `ultrachess` (MIT, `yahorbarkouski/ultrachess`, vendored as `ultrachess-core 0.1.0`) is the Rust perft record `836 Mnps` (M4, `LTO=fat`). On M1 Max same `criterion 10` it measures `fen_write 103, fen_parse 208, clone 3.67, isCheck 0.43, hash 0.34, SAN 1.47µs/48, movegen 42ns, make+unmake 736ns, perft ~400 Mnps` (vs `turbo` 98/392/3.28/0.48/0.48/3.9/78/1074/363). The gap is not algorithmic but **micro-architectural**: 144B `Copy` Board with `piece_code_at` 12-scan, `CASTLING_CLEAR` loop, `MoveList→ArrayVec` copy, `attackers_to` per movegen, `MAYBEUNINIT` vs `String`, `OnceLock` branch, and `hash` at offset 128 (third cache line).
 
 ## Decision
 
@@ -49,7 +49,7 @@ Loop over 4 `rook_sq` (8 compares) → `CASTLE_CLEAR_STD[64]` table (`A1 WQ, H1 
 ### Negative / Trade-offs
 - `Board` `#[repr(C)]` fixes layout (was `#[repr(Rust)]` optimal packing) — size stays 144, `clone` x86 7→7ns tie, M1 3.28 parity.
 - `make_move_perft` now pays `+2ns` `attackers_to` for `checkers` (was slim) — perft still wins because movegen saves `5` attacks.
-- `FEN`/`SAN` still use `scan 12 bbs` for `piece_at` (vs `mailbox[64]` 2× faster) — kept for `clone` win; `blind-base` rewrite for max per user.
+- `FEN`/`SAN` still use `scan 12 bbs` for `piece_at` (vs `mailbox[64]` 2× faster) — kept for `clone` win; downstream consumers optimize for high-throughput batching.
 
 ## References
 - `ultrachess` `yahorbarkouski/ultrachess` `MIT` `position.rs:42` `Undo {prev_checkers}`, `movegen.rs:31` `MoveSink`, `fen.rs:189` `ArrayVec<u8,128>`, `san.rs:1` `between` + `make/unmake` suffix

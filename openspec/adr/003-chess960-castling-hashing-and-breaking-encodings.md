@@ -15,8 +15,8 @@ Three consumer-driven requirements converged:
    (`hash_castling` via `has_kingside_castling_rights`, "h-side in Chess960")
    and the JS turbochess library (`castlingKeyIdx`, fold by side-of-king) —
    so there is no stricter standard to adopt.
-2. **blind-base's hot paths** need batch codecs (`movetext ↔ moves2`, hash
-   replay) and an incremental hash. Its current shakmaty-based replay is
+2. **Database hot paths** need batch codecs (`movetext ↔ moves2`, hash
+   replay) and an incremental hash. Standard shakmaty-based replay is
    O(n²) per game (FEN round-trip + re-replay from ply 0 per decoded move)
    and decodes each 2-byte move via a full legal-movegen + linear scan.
 3. **Project directive**: no compatibility modes or legacy paths — where a

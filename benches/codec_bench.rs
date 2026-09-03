@@ -1,8 +1,7 @@
 #![allow(clippy::chunks_exact_to_as_chunks)]
 
-// Codec / import / replay benchmarks: turbochess-rs batch codecs vs a
-// shakmaty-based baseline mirroring blind-base's current `gigabase_moves.rs`
-// loops (ADR-003): per-ply FEN round-trip + full re-replay (O(n^2) per game),
+// Codec / import / replay benchmarks: GigaChess batch codecs vs a
+// standard baseline (ADR-003): per-ply FEN round-trip + full re-replay (O(n^2) per game),
 // legal-movegen + linear-scan word decode, and from-scratch Zobrist
 // recomputation (Legal ep mode).
 //
@@ -67,7 +66,7 @@ fn shak_pos(fen: &str) -> Chess {
         .unwrap()
 }
 
-/// shakmaty baseline mirroring blind-base's gigabase_moves.rs import loop:
+/// Standard shakmaty baseline:
 /// SAN parse via legal-movegen candidates, then a FEN round-trip and full
 /// re-replay from ply 0 for every indexed position (O(n^2) per game), and a
 /// from-scratch Zobrist hash (Legal ep mode) per ply.

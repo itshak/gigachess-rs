@@ -7,7 +7,7 @@
 **GigaChess** is an ultra-high-performance, 100% MIT-licensed chess engine, PEXT/Fancy Magic move generator, 16-bit binary replay engine, and Shakmaty drop-in compatibility crate in Rust.
 
 - **License:** MIT (Permissive, unrestricted commercial and proprietary reuse)
-- **Primary Consumers:** `blind-base` (GigaBase position search, repertoire engine, master game indexing) and the broader Rust chess ecosystem.
+- **Primary Consumers:** Chess engines, position search tools, repertoire engines, master game indexers, and the broader Rust chess ecosystem.
 
 ## Tech Stack & Architecture
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 Defines the database-oriented batch codecs and hash-replay streams that
-high-throughput chess databases (blind-base and similar) use on top of the
+high-throughput chess databases use on top of the
 core engine: movetext ↔ moves2 conversion, incremental hash replay, and
 position-statistics building.
 
@@ -13,7 +13,7 @@ position-statistics building.
 The system SHALL provide `parse_movetext_to_moves2(start_fen, movetext) -> Vec<u8>` that tokenizes movetext at the byte level (handling move numbers, comments `{...}`, NAGs `$n`, variations `(...)` by skipping, and result tokens), resolves each SAN token against the current position, and emits little-endian moves2 words. Invalid SAN SHALL be reported as an error unless the token is ignorable per the tolerance rules.
 
 #### Scenario: Import parity with stored blobs
-- **WHEN** movetext from blind-base's database is parsed
+- **WHEN** movetext is parsed
 - **THEN** the produced moves2 bytes are byte-identical to the stored blobs (modulo the castling re-encoding defined in `turbochess-rs-chess960`)
 
 ### Requirement: moves2 SHALL Render to SAN Movetext

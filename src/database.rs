@@ -2,14 +2,13 @@
 
 // Database batch codecs: movetext <-> moves2 conversion, incremental hash
 // replay streams, and position-statistics building for high-throughput
-// database workloads (blind-base and similar; spec
-// turbochess-rs-database-codecs).
+// database workloads and master game indexing.
 //
-// The codecs are shaped exactly on blind-base's `gigabase_moves.rs` call
-// sites: `parse_movetext_to_moves2` replaces the O(n^2) FEN-round-trip
-// replay loop, `moves2_to_san_movetext` replaces per-ply legal-movegen +
-// linear-scan decoding (words decode in O(1)), and `replay_moves2_hashes`
-// replaces from-scratch Zobrist recomputation with incremental hashes.
+// The codecs provide high-performance database batch routines:
+// `parse_movetext_to_moves2` replaces the O(n^2) FEN-round-trip replay loop,
+// `moves2_to_san_movetext` replaces per-ply legal-movegen + linear-scan
+// decoding (words decode in O(1)), and `replay_moves2_hashes` replaces
+// from-scratch Zobrist recomputation with incremental hashes.
 //
 // SPDX-License-Identifier: MIT
 

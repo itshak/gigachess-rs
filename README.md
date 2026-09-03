@@ -18,8 +18,8 @@
 
 ---
 
-> Designed as the backend engine for high-throughput chess database
-> workstations (`blind-base` / GigaBase) and search front-ends.
+> Designed as the high-performance backend engine for large-scale chess database
+> workstations, master game indexing, and search front-ends.
 >
 > 🌐 **Looking for JavaScript or TypeScript?** Check out [**`gigachess` (JS/TS)**](https://github.com/itshak/gigachess) — the fastest chess library in JavaScript, a 1-line drop-in replacement for `chess.js` and `chessops` with 3.5× faster move validation and 120,000 games/sec PGN parsing for web, mobile, and React frontends. Available on [npm](https://www.npmjs.com/package/gigachess).
 
@@ -33,8 +33,7 @@
   ARM / Apple Silicon; BMI2 support is detected at runtime and the magic path
   is used transparently when unavailable.
 - **16-bit moves2** — every move packs into a `u16`
-  (`from | to << 6 | promo << 12`), matching the `blind-base` binary database
-  wire format.
+  (`from | to << 6 | promo << 12`), enabling ultra-dense binary database storage.
 - **Fully legal move generation** — check/pin-aware generation into a
   stack-allocated `ArrayVec<Move, 256>` (512 bytes, zero heap allocations).
 - **Incremental Zobrist** — Polyglot book-format-compatible hashing maintained

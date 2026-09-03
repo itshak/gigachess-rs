@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-03
-- **Deciders:** GigaChess Core Team & blind-base Maintainers
+- **Deciders:** GigaChess Core Team
 - **Context:** Following ADR-004, GigaChess led Shakmaty on 79% of benchmark axes and Cozy-Chess on 76%, but profiling revealed targeted bottlenecks preventing a 100% clean-sweep:
   1. `san_to_move` allocated a temporary `String` on every call and exhaustively generated all legal moves for the whole board (~3.5 µs latency).
   2. `MoveSink::push_targets` repeatedly recomputed `(from as u16)` inside the `while targets != 0` loop.

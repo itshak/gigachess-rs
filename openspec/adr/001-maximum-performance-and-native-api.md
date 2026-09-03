@@ -2,8 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-01
-- **Deciders:** PureChess & TurboChess Core Team
-- **Context:** Design of the `turbochess-rs` Rust crate for high-throughput chess database workstations (`blind-base`) and search engines.
+- **Deciders:** GigaChess Core Team
+- **Context:** Design of the `gigachess` Rust crate for high-throughput chess database workstations and search engines.
 
 ---
 
@@ -41,7 +41,7 @@ We decide that **maximum throughput and zero-allocation execution are the primar
 - **Uncompromised Speed**: Delivers $\mathbf{75\text{--}80\text{ Million nodes/sec/core}}$ in perft ($\approx 2.3\times$ faster than `shakmaty`).
 - **5x Faster Database Replay**: Batch `moves2` stream replaying processes over **500,000 games/sec**.
 - **Minimal Code Footprint**: Clean, maintainable codebase (~1,500 LOC) without legacy baggage.
-- **100% Permissive MIT License**: Completely eliminates viral GPL copyleft constraints for `blind-base` and downstream consumers.
+- **100% Permissive MIT License**: Completely eliminates viral GPL copyleft constraints for downstream consumers.
 
 ### Negative / Trade-offs
-- Migrating existing `shakmaty` code in `blind-base` requires updating 4 call sites rather than using a 1-line facade alias (takes < 1 hour).
+- Migrating existing `shakmaty` code requires updating call sites rather than using a 1-line facade alias.
