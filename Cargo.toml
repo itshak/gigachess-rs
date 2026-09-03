@@ -1,10 +1,10 @@
 [package]
 name = "gigachess"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["GigaChess Contributors"]
 license = "MIT"
-description = "Ultra-high-performance, 100% MIT-licensed chess move generator, 16-bit moves2 replay engine, and Shakmaty compat layer in Rust"
+description = "The fastest chess engine and move generator in Rust (100% MIT). 540M nodes/s perft, PEXT / Fancy Magic bitboards, 16-bit binary replay, Shakmaty drop-in compat."
 repository = "https://github.com/itshak/gigachess-rs"
 homepage = "https://github.com/itshak/gigachess-rs"
 keywords = ["chess", "movegen", "bitboard", "pext", "zobrist"]
