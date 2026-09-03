@@ -1,9 +1,4 @@
-# turbochess-rs-bench-micro Specification
-
-## Purpose
-Real single-call micro harness before any engine win, with frozen baseline like `ultrachess/BENCH.md` and parity gate toward ultrachess `88ns FEN write / 1.43µs SAN / 0.32ns isCheck / 0.34ns hash`.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Micro Harness SHALL Cover 8 Rows
 
@@ -17,14 +12,6 @@ The system SHALL provide `benches/micro.rs` `criterion` group for `FEN write`, `
 - **WHEN** `cargo bench --bench micro -- --sample-size 10 --measurement-time 1` is run on M1 Max with `LTO=fat`
 - **THEN** turbo median < ultrachess target for all 8 rows (`fen_write 103`, `fen_parse 208`, `clone 3.67`, `movegen 42`, `make+unmake 736`, `isCheck 0.43`, `hash 0.34`, `SAN 1.47`)
 
-### Requirement: Baseline SHALL Be Frozen Before Engine Patches
-
-The system SHALL freeze `benches/results/turbochess-rs-baseline.json` + `BENCH.md` table after harness lands and before `bulk`/`cached`/`fen-san` patches, and every later engine PR diffs median `>3%`.
-
-#### Scenario: One-patch gating
-- **WHEN** a `bulk` patch PR runs `cargo bench --bench micro`
-- **THEN** CI reports `±%` vs frozen baseline median and requires `>3%` win and `cargo test` pass to merge
-
 ### Requirement: Parity Target SHALL Be ≥ ultrachess in Most Rows
 
 The system SHALL target `≥ ultrachess/BENCH.md` median on `M1/M4 Max` for all 8 micro rows + perft `836 Mnps`; now **8/8 win** on `M1 Max` `LTO=fat` (was `5 wins 1 tie 4 losses`), `perft/startpos_d5` `>400 Mnps` on `M1 Max` (`x86 214 vs 179 1.05× win`), `SAN`/`perft_visitor`/`isCheck` each `≤ ultrachess` on `M-series`.
@@ -36,11 +23,3 @@ The system SHALL target `≥ ultrachess/BENCH.md` median on `M1/M4 Max` for all 
 #### Scenario: Perft win
 - **WHEN** `cargo bench --bench perft_bench -- --sample-size 10` is run
 - **THEN** turbo `perft/startpos_d5` `Mnps` > ultrachess `~400` on `M1 Max`
-
-### Requirement: Gap Report SHALL Be Published
-
-The system SHALL publish a gap report in `BENCH.md` with turbo vs ultrachess deltas for all 14 axes, marking deliberate vs fixable gaps (visitor, colour-template, compact) and C++ stretch targets (Gigantua CPOL, Stockfish GPL-3) with licensing notes.
-
-#### Scenario: Gap report exists
-- **WHEN** `BENCH.md` is viewed
-- **THEN** it contains the gap table and a `### C++ 2.1 Gnps Study (MIT-safe)` section stating no GPL/CPOL code is copied

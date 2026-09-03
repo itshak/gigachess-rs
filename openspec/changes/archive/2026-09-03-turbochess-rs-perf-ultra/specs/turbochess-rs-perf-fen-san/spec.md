@@ -1,9 +1,4 @@
-# turbochess-rs-perf-fen-san Specification
-
-## Purpose
-Branchless `FEN`/`SAN` micro-opts matching ultrachess `88ns`/`1.43µs` parity, copied MIT.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: FEN Write SHALL Be Branchless Table Toward 88ns
 
@@ -20,6 +15,8 @@ The system SHALL implement `move_to_san` via `attackers_bb = same_type & !from &
 #### Scenario: SAN micro toward parity
 - **WHEN** `cargo bench --bench micro` `SAN 48` is run
 - **THEN** turbo median < ultrachess 1.47µs/48 on M1 Max (x86 3548 vs 6687 0.53×) and `cargo test` `san` byte-equal to `shakmaty::SanPlus`
+
+## ADDED Requirements
 
 ### Requirement: FEN Parse SHALL Be Bytes Toward 208ns
 

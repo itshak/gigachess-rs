@@ -1,9 +1,4 @@
-# turbochess-rs-perf-cached-checkers Specification
-
-## Purpose
-Branch-free `in_check()` via cached `checkers` in `Undo` + perft slim path — `0.32ns`/`0.34ns` ultrachess parity.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Undo SHALL Cache prev_checkers + Perft Slim
 
@@ -16,11 +11,3 @@ The system SHALL extend `Undo` with `prev_checkers:Bitboard` + `prev_zobrist:u64
 #### Scenario: Make+unmake cycle vs ultrachess
 - **WHEN** `make/unmake 48-ply` micro bench is run
 - **THEN** turbo median < ultrachess 736ns on M1 Max (x86 1903 vs 2073 0.92×) via `piece_code_at_color` 6-scan + `pawn_code_at` + `CASTLE_CLEAR_STD` table, `perft` still wins
-
-### Requirement: Unmake SHALL Restore Without Recompute
-
-The system SHALL restore `checkers` + `zobrist` from `Undo` on `unmake` without `attackers` recompute; perft uses slim path.
-
-#### Scenario: Make+unmake cycle vs ultrachess tradeoff
-- **WHEN** `make/unmake 48-ply` micro bench is run
-- **THEN** `ns/op` not regressed beyond known `503ns vs cozy 353ns` gap which is kept (pays `+2ns/make` for `8× isCheck` `BENCH.md: Deliberate`) and `perft position 3` depth `7` still correct

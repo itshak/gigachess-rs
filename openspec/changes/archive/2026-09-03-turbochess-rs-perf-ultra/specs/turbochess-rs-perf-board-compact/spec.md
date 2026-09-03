@@ -1,10 +1,4 @@
-# turbochess-rs-perf-board-compact Specification
-
-## Purpose
-
-Explores a compact `Board` layout probe behind a `compact` feature to reduce the 368B `Copy` board (mailbox + 4 rook squares + 64B mask) toward ultrachess ~100B, measuring clone and movegen gains while keeping Chess960 compat. (Close-gap outcome: landed as the **default** 144B layout, no feature gate needed.)
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Compact Board Probe SHALL Be Feature-Gated
 

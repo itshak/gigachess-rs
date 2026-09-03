@@ -1,10 +1,4 @@
-# turbochess-rs-perf-gap-report Specification
-
-## Purpose
-
-Documents the parity gap versus ultrachess and the C++ 2.1 Gnps engines (Gigantua, Stockfish) with MIT compliance, technique inventory, and a staged close-gap plan.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Parity-Gap Report SHALL Quantify Each Axis vs ultrachess
 

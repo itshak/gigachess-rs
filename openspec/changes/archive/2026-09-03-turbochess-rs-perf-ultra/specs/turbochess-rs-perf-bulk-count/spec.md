@@ -1,9 +1,4 @@
-# turbochess-rs-perf-bulk-count Specification
-
-## Purpose
-Bulk counting at perft leaves via `MoveSink` generic, avoiding `pop_lsb` — the `geomean 1.23× vs cozy` win (`BENCH.md: caveat 6`) and core of `836 Mnps` parity.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Move Generation SHALL Support MoveSink with Split Pins / Bulk Pawns
 
@@ -16,11 +11,3 @@ The system SHALL expose `generate_legal_moves` via `MoveSink` where `sink.push_t
 #### Scenario: ArrayVec direct
 - **WHEN** `board.legal_moves()` is called
 - **THEN** it generates directly into `ArrayVec` via `MoveSink for ArrayVec` with 0 heap and no `MoveList→ArrayVec` copy (40B bulk)
-
-### Requirement: count_legal_moves SHALL Be Alloc-Free
-
-The system SHALL expose `count_legal_moves(&self)->u32` via `MoveCounter`, `0` heap allocs.
-
-#### Scenario: Perft d6 bulk toward ultrachess parity
-- **WHEN** `perft(board,6)` is run
-- **THEN** its `depth==1` leaves use counter path, `cargo test --test perft` stays green, `>3%` `Mnps` vs baseline and `geomean` moves toward ultrachess `836 Mnps`
