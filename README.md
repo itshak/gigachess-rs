@@ -20,6 +20,8 @@
 
 > Designed as the backend engine for high-throughput chess database
 > workstations (`blind-base` / GigaBase) and search front-ends.
+>
+> 🌐 **Looking for JavaScript or TypeScript?** Check out [**`gigachess` (JS/TS)**](https://github.com/itshak/gigachess) — the fastest chess library in JavaScript, a 1-line drop-in replacement for `chess.js` and `chessops` with 3.5× faster move validation and 120,000 games/sec PGN parsing for web, mobile, and React frontends. Available on [npm](https://www.npmjs.com/package/gigachess).
 
 ## Features
 
@@ -180,6 +182,29 @@ cross-checked against independent oracles. Chess960 perft and FEN handling are
 differential-tested against python-chess (23,907 positions,
 `scripts/diff_python_chess.py`); SAN rendering against shakmaty
 (`tests/san_parity.rs`).
+
+## Ecosystem: Rust & JavaScript / TypeScript
+
+GigaChess is engineered as a unified dual-ecosystem family for maximum performance across the entire chess stack:
+
+| Language & Package | Primary Environment | Benchmark Highlights | Repository |
+|---|---|---|---|
+| **`gigachess` (Rust)** *(this crate)* | Native backends, search engines, database indexing | **540 Mnps** perft, 144B `Copy` board, 1.41M games/s replay, zero heap allocations | [GitHub](https://github.com/itshak/gigachess-rs) / [crates.io](https://crates.io/crates/gigachess) |
+| **`gigachess` (JS / TS)** | Web frontends, Node.js, Electron, React UI | **3.5× faster than chess.js**, 120,000 games/s PGN parser, built-in variation trees | [GitHub](https://github.com/itshak/gigachess) / [npm](https://www.npmjs.com/package/gigachess) |
+
+## Architecture
+
+GigaChess is designed under strict performance invariants codified in formal Architecture Decision Records ([ADRs](openspec/adr/)):
+
+- **[ADR-001](openspec/adr/001-maximum-performance-and-native-api.md)**: Maximum Performance Primacy & Native API Architecture
+- **[ADR-002](openspec/adr/002-parallel-replay-with-rayon.md)**: Parallel Batch Replay Engine with Rayon Work-Stealing
+- **[ADR-003](openspec/adr/003-chess960-castling-hashing-and-breaking-encodings.md)**: Chess960 Castling, Incremental Hashing, and 16-Bit Packed `moves2` Format
+- **[ADR-004](openspec/adr/004-ultra-performance-parity.md)**: Cache Line Optimization and 144-Byte `#[repr(C)]` Plain-Data State
+- **[ADR-005](openspec/adr/005-all-axis-maximum-performance.md)**: All-Axis Leadership, Zero-Allocation SAN Parser, and Compile-Time Path Bitmasks
+
+## Contributing
+
+Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on coding style, benchmark regression checks, and our 100% permissive MIT licensing policy. All participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
