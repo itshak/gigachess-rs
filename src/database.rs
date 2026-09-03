@@ -1,3 +1,5 @@
+#![allow(clippy::chunks_exact_to_as_chunks)]
+
 // Database batch codecs: movetext <-> moves2 conversion, incremental hash
 // replay streams, and position-statistics building for high-throughput
 // database workloads (blind-base and similar; spec

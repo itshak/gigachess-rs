@@ -1,3 +1,5 @@
+#![allow(clippy::chunks_exact_to_as_chunks)]
+
 // Codec / import / replay benchmarks: turbochess-rs batch codecs vs a
 // shakmaty-based baseline mirroring blind-base's current `gigabase_moves.rs`
 // loops (ADR-003): per-ply FEN round-trip + full re-replay (O(n^2) per game),

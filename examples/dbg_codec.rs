@@ -1,3 +1,5 @@
+#![allow(clippy::chunks_exact_to_as_chunks)]
+
 use shakmaty::{fen::Fen, CastlingMode, Chess, Position, Square as SSquare};
 use gigachess::{database, Board};
 

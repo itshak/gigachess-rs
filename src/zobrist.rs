@@ -218,9 +218,9 @@ mod tests {
     #[test]
     fn castle_file_keys_distinct() {
         // All 16 keys must be pairwise distinct (960 rights distinguishability).
-        for i in 0..16usize {
-            for j in (i + 1)..16usize {
-                assert_ne!(CASTLE_FILE_KEYS[i], CASTLE_FILE_KEYS[j]);
+        for (i, &k1) in CASTLE_FILE_KEYS.iter().enumerate() {
+            for &k2 in CASTLE_FILE_KEYS.iter().skip(i + 1) {
+                assert_ne!(k1, k2);
             }
         }
     }
