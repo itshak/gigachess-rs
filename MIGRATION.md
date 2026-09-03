@@ -1,4 +1,4 @@
-# MIGRATION: turbochess-rs Chess960 / Hashing / Codec Changes
+# MIGRATION: GigaChess Chess960 / Hashing / Codec Changes
 
 This release intentionally breaks three stored-data contracts (project
 directive: no compatibility modes — switch outright; see
