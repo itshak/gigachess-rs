@@ -1,11 +1,12 @@
 [package]
-name = "turbochess-rs"
+name = "gigachess"
 version = "0.1.0"
 edition = "2021"
-authors = ["PureChess & TurboChess Contributors"]
+authors = ["GigaChess Contributors"]
 license = "MIT"
 description = "Ultra-high-performance, 100% MIT-licensed chess move generator, 16-bit moves2 replay engine, and Shakmaty compat layer in Rust"
-repository = "https://github.com/itshak/turbochess-rs"
+repository = "https://github.com/itshak/gigachess-rs"
+homepage = "https://github.com/itshak/gigachess-rs"
 keywords = ["chess", "movegen", "bitboard", "pext", "zobrist"]
 categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
@@ -20,7 +21,6 @@ simd = [] # Enables AVX2/NEON vectorization where supported
 arrayvec = { version = "0.7", default-features = false }
 bitflags = { version = "2.4", optional = true }
 rayon = "1.10" # Batch-replay work-stealing thread pool (ADR-002)
-ultrachess-core = { path = "vendor/ultrachess-core", package = "ultrachess-core" } # Vendored ultrachess-core 0.1.0 MIT for standard parity, 960 stays native
 
 [profile.release]
 lto = "fat"
@@ -31,7 +31,6 @@ incremental = false
 [profile.bench]
 lto = "fat"
 codegen-units = 1
-panic = "abort"
 incremental = false
 debug = false
 

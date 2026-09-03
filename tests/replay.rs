@@ -6,10 +6,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use turbochess_rs::board::MAX_MOVES;
-use turbochess_rs::moves::Move;
-use turbochess_rs::replay::{replay_moves2_batch, replay_moves2_stream, ReplayOutcome};
-use turbochess_rs::Board;
+use gigachess::board::MAX_MOVES;
+use gigachess::moves::Move;
+use gigachess::replay::{replay_moves2_batch, replay_moves2_stream, ReplayOutcome};
+use gigachess::Board;
 
 fn xorshift(state: &mut u64) -> u64 {
     *state ^= *state << 13;

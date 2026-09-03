@@ -15,7 +15,6 @@ use core::mem::MaybeUninit;
 
 use crate::bitboard::{bit, lsb, pop_lsb, popcount};
 use crate::moves::Move;
-use crate::types::{Role, Square};
 
 /// Maximum legal moves in any position (hard bound for stack buffer).
 pub const MAX_MOVES: usize = 256;
@@ -39,6 +38,13 @@ pub trait MoveSink {
 pub struct MoveList {
     pub buf: [MaybeUninit<Move>; MAX_MOVES],
     pub len: usize,
+}
+
+impl Default for MoveList {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MoveList {
@@ -76,44 +82,53 @@ impl MoveList {
     pub fn len(&self) -> usize {
         self.len
     }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
 }
 
 impl MoveSink for MoveList {
-    #[inline]
+    #[inline(always)]
     fn push_targets(&mut self, from: u8, mut targets: u64) {
+        let from_bits = from as u16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
             debug_assert!(self.len < MAX_MOVES);
-            self.buf[self.len].write(Move::new(Square(from), Square(to), None));
+            self.buf[self.len].write(Move(from_bits | ((to as u16) << 6)));
             self.len += 1;
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn push_pawn_targets_offset(&mut self, mut targets: u64, offset: i8) {
+        let off = offset as i16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
-            let from = (to as i16 - offset as i16) as u8;
+            let from = (to as i16 - off) as u16;
             debug_assert!(self.len < MAX_MOVES);
-            self.buf[self.len].write(Move::new(Square(from), Square(to), None));
+            self.buf[self.len].write(Move(from | ((to as u16) << 6)));
             self.len += 1;
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn push_pawn_promotions_offset(&mut self, mut targets: u64, offset: i8) {
+        let off = offset as i16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
-            let from = (to as i16 - offset as i16) as u8;
-            for r in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight] {
+            let from = (to as i16 - off) as u16;
+            let base = from | ((to as u16) << 6);
+            for r in 1..=4u16 {
                 debug_assert!(self.len < MAX_MOVES);
-                self.buf[self.len].write(Move::new(Square(from), Square(to), Some(r)));
+                self.buf[self.len].write(Move(base | (r << 12)));
                 self.len += 1;
             }
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn push_one(&mut self, mv: Move) {
         debug_assert!(self.len < MAX_MOVES);
         self.buf[self.len].write(mv);
@@ -122,35 +137,39 @@ impl MoveSink for MoveList {
 }
 
 impl MoveSink for arrayvec::ArrayVec<Move, MAX_MOVES> {
-    #[inline]
+    #[inline(always)]
     fn push_targets(&mut self, from: u8, mut targets: u64) {
+        let from_bits = from as u16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
-            unsafe { self.push_unchecked(Move::new(Square(from), Square(to), None)) };
+            unsafe { self.push_unchecked(Move(from_bits | ((to as u16) << 6))) };
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn push_pawn_targets_offset(&mut self, mut targets: u64, offset: i8) {
+        let off = offset as i16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
-            let from = (to as i16 - offset as i16) as u8;
-            unsafe { self.push_unchecked(Move::new(Square(from), Square(to), None)) };
+            let from = (to as i16 - off) as u16;
+            unsafe { self.push_unchecked(Move(from | ((to as u16) << 6))) };
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn push_pawn_promotions_offset(&mut self, mut targets: u64, offset: i8) {
+        let off = offset as i16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
-            let from = (to as i16 - offset as i16) as u8;
-            for r in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight] {
-                unsafe { self.push_unchecked(Move::new(Square(from), Square(to), Some(r))) };
+            let from = (to as i16 - off) as u16;
+            let base = from | ((to as u16) << 6);
+            for r in 1..=4u16 {
+                unsafe { self.push_unchecked(Move(base | (r << 12))) };
             }
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn push_one(&mut self, mv: Move) {
         unsafe { self.push_unchecked(mv) };
     }

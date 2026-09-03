@@ -15,12 +15,12 @@ position-aware and streaming-friendly.
 
 ---
 
-## 1. Zobrist re-keying (EP condition: Legal → Pseudo)
+## 1. En-passant Zobrist semantics: Legal vs. Pseudo-Legal
 
-The hash of every position is unchanged **except** positions where an
-en-passant capture is pseudo-legally available but illegal (the capturer is
-pinned or the capture would expose the king). Under the old shakmaty-`Legal`
-semantics those positions omitted the ep key; Polyglot (and turbochess-rs)
+`shakmaty`'s default `EnPassantMode::Legal` zeroes the en-passant file if the
+en-passant capture is illegal (e.g. pinned pawn, or pinned enemy capturing
+pawn). Under `gigachess::compat::shakmaty` and the default `gigachess`
+semantics those positions omitted the ep key; Polyglot (and gigachess)
 include it.
 
 **Detection vector** (the only class of divergent positions):
@@ -94,9 +94,9 @@ shapes `e1g1 e1c1 e8g8 e8c8`.
 After re-encoding, verify: replay the new blob and compare the final FEN and
 per-ply hashes against a reference implementation.
 
-## 4. shakmaty → turbochess-rs API mapping
+## 4. shakmaty → gigachess API mapping
 
-| shakmaty (0.30) | turbochess-rs | Notes |
+| shakmaty (0.30) | gigachess | Notes |
 |---|---|---|
 | `Chess::default()` / `Chess::from_setup` | `Board::startpos()` / `fen::parse_fen` | FEN parser validates + rejects illegal placements |
 | `pos.legal_moves()` | `board.legal_moves()` | `ArrayVec<Move, 256>`, zero-alloc |
@@ -129,10 +129,10 @@ for san_token in game {
 }
 ```
 
-**After (turbochess-rs, O(n) per game):**
+**After (gigachess, O(n) per game):**
 
 ```rust
-use turbochess_rs::database;
+use gigachess::database;
 
 // Import: PGN movetext -> binary moves2 (streaming, no intermediate Strings).
 let blob: Vec<u8> = database::parse_movetext_to_moves2(&start_fen, movetext)?;

@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use turbochess_rs::fen::parse_fen;
+use gigachess::fen::parse_fen;
 
 fn perft(fen: &str, depth: u32, expected: u64) {
     let board = parse_fen(fen).unwrap();
@@ -174,7 +174,7 @@ fn legal_moves_roundtrip_consistency() {
     for fen in fens {
         let board = parse_fen(fen).unwrap();
         let hash = board.zobrist();
-        let mut clone = board.clone();
+        let mut clone = board;
         for mv in board.legal_moves() {
             let undo = clone.play(mv).expect("legal move must play");
             clone.unmake_move(mv, undo);

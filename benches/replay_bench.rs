@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use turbochess_rs::replay::replay_moves2_batch;
-use turbochess_rs::Board;
+use gigachess::replay::replay_moves2_batch;
+use gigachess::Board;
 
 fn xorshift(state: &mut u64) -> u64 {
     *state ^= *state << 13;

@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use turbochess_rs::fen::{parse_fen, FenError};
+use gigachess::fen::{parse_fen, FenError};
 
 const FENS: &[&str] = &[
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

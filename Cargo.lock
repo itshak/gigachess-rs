@@ -233,6 +233,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gigachess"
+version = "0.1.0"
+dependencies = [
+ "arrayvec",
+ "bitflags",
+ "cozy-chess",
+ "criterion",
+ "rayon",
+ "shakmaty",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -534,23 +546,6 @@ dependencies = [
  "serde",
  "serde_json",
 ]
-
-[[package]]
-name = "turbochess-rs"
-version = "0.1.0"
-dependencies = [
- "arrayvec",
- "bitflags",
- "cozy-chess",
- "criterion",
- "rayon",
- "shakmaty",
- "ultrachess-core",
-]
-
-[[package]]
-name = "ultrachess-core"
-version = "0.1.0"
 
 [[package]]
 name = "unicode-ident"

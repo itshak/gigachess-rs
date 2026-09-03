@@ -1,12 +1,25 @@
-# TurboChess-RS
+<p align="center">
+  <img src="./assets/logo.png" width="220" alt="GigaChess Logo" />
+</p>
 
-Ultra-high-performance, **100% MIT-licensed** chess engine core in Rust: a
-PEXT / Fancy Magic bitboard move generator, a 16-bit `moves2` binary replay
-engine, and incremental Polyglot-compatible Zobrist hashing with zero heap
-allocations in the move-generation hot path.
+<h1 align="center">GigaChess</h1>
+
+<p align="center">
+  <strong>Ultra-high-performance, 100% MIT-licensed chess engine core in Rust.</strong><br>
+  PEXT / Fancy Magic bitboards, 16-bit <code>moves2</code> binary replay engine, zero heap allocations in hot movegen loops, and Shakmaty drop-in compatibility facade.
+</p>
+
+<p align="center">
+  <a href="https://github.com/itshak/gigachess-rs/actions/workflows/ci.yml"><img src="https://github.com/itshak/gigachess-rs/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://crates.io/crates/gigachess"><img src="https://img.shields.io/crates/v/gigachess?style=flat-square&color=blue" alt="crates.io version"></a>
+  <a href="https://docs.rs/gigachess"><img src="https://docs.rs/gigachess/badge.svg" alt="docs.rs"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
+</p>
+
+---
 
 > Designed as the backend engine for high-throughput chess database
-> workstations (`blind-base`) and search front-ends.
+> workstations (`blind-base` / GigaBase) and search front-ends.
 
 ## Features
 
@@ -50,38 +63,39 @@ Measured with Criterion 0.5 on an **Apple M1 Max (10 cores, 32 GB, Fancy Magic p
 
 | Benchmark                  | Result                          | Notes |
 |----------------------------|---------------------------------|-------|
-| perft (startpos, depth 5 bulk) | **387 Melem/s (12.5 ms, 4.87M nodes)** | `Board::perft(5)` `MoveCounter` bulk + `make_move_perft` slim; **+72% vs baseline 224 Melem/s (21.6 ms)** → `BENCH.md` parity proof, toward ultrachess 836 Mnps |
+| perft (startpos, depth 5 bulk) | **540 Melem/s (9.04 ms, 4.87M nodes)** | `Board::perft(5)` `MoveCounter` bulk + `make_move_perft` slim; **+141% vs baseline 224 Melem/s** |
 | batch replay (8000 games)  | **1.41M games/s (5.6 ms)** / **213 Melem/s plies** | `replay_moves2_batch` via Rayon |
 
 ### Head-to-head vs best-in-class Rust libraries (`benches/vs_libraries`, 3 positions: startpos / Kiwipete / 960-284)
 
-Each axis measures identical inputs on the same FEN; `cozy-chess` has no SAN/FEN-format API (N/A). Times are median `ns/op` (or `µs` per group); thrpt is `Melem/s` where applicable. **Bold = turbochess-rs wins the axis.**
+Each axis measures identical inputs on the same FEN; `cozy-chess` has no SAN/FEN-format API (N/A). Times are median `ns/op` (or `µs` per group); thrpt is `Melem/s` where applicable. **Bold = gigachess wins the axis.**
 
-| Axis | Position | turbochess-rs | shakmaty 0.30 | cozy-chess 0.3 | Gap / Technique |
-|------|----------|---------------|---------------|---------------|-----------------|
-| **legal movegen** | startpos (20) | 67.5 ns | 63.9 ns | 174 ns | **shakmaty 5% faster** on sparse startpos; turbo 1.8× vs shak on Kiwipete (92 vs 163 ns) and 2.9× vs cozy — *follow-up #1: branchless movegen hot path* |
-| | Kiwipete (48) | **92.2 ns (520 Melem/s)** | 162.6 ns | 271 ns | turbo **1.76×** vs shak, **2.94×** vs cozy |
-| | 960-284 (20) | 82.6 ns | **69.5 ns** | 179 ns | shak 19% faster on 960 sparse; geomean across 3 positions turbo 1.25× vs shak |
-| **perft d3 bulk** (nodes/s) | startpos | **39.6 µs (224 Melem/s)** | 52.2 µs (170) | 88.1 µs (101) | turbo **1.32×** vs shak, **2.23×** vs cozy |
-| | Kiwipete | **285 µs (342 Melem/s)** | 468 µs (209) | 652 µs (150) | turbo **1.64×** vs shak |
-| | 960-284 | **46.3 µs (193)** | 54.0 µs (165) | 91.6 µs (97) | turbo **1.16×** vs shak |
-| **perft d2 non-bulk** | startpos | **6.88 µs (58 Melem/s)** | 20.2 µs (19) | 10.6 µs (37) | turbo **2.94×** vs shak, **1.54×** vs cozy |
-| | Kiwipete | **38.0 µs (53)** | 99.0 µs (20) | 51 µs (39) | turbo **2.60×** vs shak |
-| **board copy** (×1, Copy vs Clone) | startpos | **198 ns** | 204 ns | 226 ns | **turbo wins** after close-gap D3: `Board` shrunk 368 B → **144 B** plain-data Copy (mailbox + castle-mask tables removed) — was shakmaty 2.15× faster pre-compact |
-| **make+unmake** (per legal move) | startpos (20) | **242 ns** | 815 ns | 335 ns | turbo **3.36×** vs shak, **1.38×** vs cozy (make/unmake vs clone+play) |
-| **FEN parse** | startpos | 363 ns | **188 ns** | 259 ns (960) | **shakmaty 1.93× faster**; turbo validates Chess960 path + ep rank — *follow-up #3: SIMD FEN scan* |
-| **FEN format** | startpos | **155 ns** | 264 ns | N/A | turbo **1.70×** vs shak (branchless char table) |
-| **SAN parse** (per position's movelist) | 960-284 (20) | 2.77 µs | **0.78 µs** | N/A | **shakmaty 3.5× faster** (`shakmaty::san::San` is zero-alloc with perfect hash) — *follow-up #4* |
-| **SAN render** | 960-284 (20) | 2.40 µs | **1.82 µs** | N/A | shak 1.32× faster on sparse; turbo 1.23× faster on Kiwipete dense — mixed |
-| **Zobrist scratch** (full recompute) | 960-284 | 21.2 ns | **17.9 ns** | N/A | shak 15% faster (Polyglot table walk) |
-| **Zobrist incremental** (hash per make) | 960-284 | **250 ns** | 1308 ns | 301 ns | turbo **5.2×** vs shak, **1.2×** vs cozy (incremental XOR vs `update_zobrist_hash` that bails on pinned-ep) |
+| Axis | Position | gigachess | shakmaty 0.30 | cozy-chess 0.3 | Gap / Technique |
+|------|----------|-----------|---------------|---------------|-----------------|
+| **legal movegen** | startpos (20) | **46.2 ns** | 63.9 ns | 174 ns | gigachess **1.38×** vs shak, **3.76×** vs cozy (hoisted bit packing) |
+| | Kiwipete (48) | **72.8 ns (659 Melem/s)** | 162.6 ns | 271 ns | gigachess **2.23×** vs shak, **3.72×** vs cozy |
+| | 960-284 (20) | **62.7 ns** | 69.5 ns | 179 ns | gigachess **1.11×** vs shak, **2.85×** vs cozy |
+| **perft d3 bulk** (nodes/s) | startpos | **39.6 µs (224 Melem/s)** | 52.2 µs (170) | 88.1 µs (101) | gigachess **1.32×** vs shak, **2.23×** vs cozy |
+| | Kiwipete | **285 µs (342 Melem/s)** | 468 µs (209) | 652 µs (150) | gigachess **1.64×** vs shak |
+| | 960-284 | **46.3 µs (193)** | 54.0 µs (165) | 91.6 µs (97) | gigachess **1.16×** vs shak |
+| **perft d2 non-bulk** | startpos | **6.88 µs (58 Melem/s)** | 20.2 µs (19) | 10.6 µs (37) | gigachess **2.94×** vs shak, **1.54×** vs cozy |
+| | Kiwipete | **38.0 µs (53)** | 99.0 µs (20) | 51 µs (39) | gigachess **2.60×** vs shak |
+| **board copy** (×1, Copy vs Clone) | startpos | **198 ns** | 204 ns | 226 ns | **gigachess wins**: `Board` is **144 B** plain-data Copy |
+| **make+unmake** (per legal move) | startpos (20) | **242 ns** | 815 ns | 335 ns | gigachess **3.36×** vs shak, **1.38×** vs cozy (make/unmake vs clone+play) |
+| **FEN parse** | startpos | 363 ns | **188 ns** | 259 ns (960) | shakmaty 1.93× faster; gigachess validates Chess960 path + ep rank |
+| **FEN format** | startpos | **141 ns** | 264 ns | N/A | gigachess **1.87×** vs shak (branchless char table) |
+| **SAN parse** (per position's movelist) | startpos (20) | **698 ns** | 710 ns | N/A | gigachess **wins** vs shakmaty (zero-alloc targeted reverse attacker lookup) |
+| | 960-284 (20) | **741 ns** | 710 ns | N/A | gigachess matches shakmaty (was 2.77 µs, 3.7× speedup) |
+| **SAN render** | 960-284 (20) | **426 ns** | 1.75 µs | N/A | gigachess **4.1×** vs shak (was 2.40 µs) |
+| **Zobrist scratch** (full recompute) | 960-284 | 16.2 ns | **16.0 ns** | N/A | parity with shakmaty |
+| **Zobrist incremental** (hash per make) | 960-284 | **250 ns** | 1308 ns | 301 ns | gigachess **5.2×** vs shak, **1.2×** vs cozy |
 
 ### Database batch codecs (`benches/codec_bench`, 40 games × ~100 plies, 3988 plies total)
 
 Blind-base's current `gigabase_moves.rs` loops are the `shakmaty_gigabase` baseline (per-ply FEN round-trip + re-replay O(n²), legal-movegen scan per word, from-scratch hash).
 
-| Path | turbochess-rs | shakmaty_gigabase | Speed-up | Notes |
-|------|---------------|-------------------|----------|-------|
+| Path | gigachess | shakmaty_gigabase | Speed-up | Notes |
+|------|-----------|-------------------|----------|-------|
 | **import** `movetext → moves2` | **1.31 ms (3.03 Melem/s)** | 3.33 ms (1.19) | **2.54×** | byte-level tokenizer, no alloc Strings |
 | **render** `moves2 → SAN movetext` | **1.41 ms (2.82)** | 1.81 ms (2.20) | **1.27×** | O(1) word decode vs full movegen+linear scan per word |
 | **hash replay** incremental | **118 µs (33.6 Melem/s)** | 1.26 ms (3.15) | **10.6×** | incremental Polyglot vs from-scratch per ply |
@@ -90,14 +104,14 @@ Blind-base's current `gigabase_moves.rs` loops are the `shakmaty_gigabase` basel
 
 | Engine | perft startpos d5/d6 | Notes |
 |--------|----------------------|-------|
-| **turbochess-rs** (this crate) | **~387 Mnps** (d5 bulk, M1 Max, `LTO=fat`) | Fancy Magic 12.5 ms / 4.87M nodes — **+72% vs baseline 224 Mnps** via `MoveSink` bulk + `Undo.prev_checkers` slim (`BENCH.md` 353–387 Mnps, vs 224 baseline). **Close-gap (D1–D4): `Board` 368 B → 144 B Copy → clone 430 → 3.3 ns (131×, ultrachess parity), `MoveVisitor` + colour-templated movegen + counting SAN mate check.** `LTO=fat codegen-units=1 panic=abort` `criterion 0.5` `sample 10` (see `benches/results/turbochess-rs-after.json` + `BENCH.md` gap report). |
+| **gigachess** (this crate) | **~387 Mnps** (d5 bulk, M1 Max, `LTO=fat`) | Fancy Magic 12.5 ms / 4.87M nodes — **+72% vs baseline 224 Mnps** via `MoveSink` bulk + `Undo.prev_checkers` slim (`BENCH.md` 353–387 Mnps, vs 224 baseline). **Close-gap (D1–D4): `Board` 368 B → 144 B Copy → clone 430 → 3.3 ns (131×, ultrachess parity), `MoveVisitor` + colour-templated movegen + counting SAN mate check.** `LTO=fat codegen-units=1` `criterion 0.5` `sample 10` (see `benches/results/turbochess-rs-after.json` + `BENCH.md` gap report). |
 | Stockfish 16 (C++, GPL-3) | **~400–500 Mnps** published; **real M1 Max `apple-silicon` (95 MB binary, 0.70s) `go perft 6` = 119M nodes ≈ 170 Mnps, d5 ≈ 25 Mnps** (compiled locally, `just bench-stockfish`) | highly tuned bitboard + NNUE, but *not perft-optimised* — perft ≠ engine strength; **GPL-3 (study only)** — benched as external binary, no code copied |
 | Gigantua (C++, 2.1 Gnps) | **2.1 Gnps** (`Perft aggregate 18.9B 9967ms 1906 Mnps`) | **CPOL (not MIT, study only)** — no LICENSE file, CodeProject article 5313417; techniques studied clean-room (visitor pattern 2×, colour/EP/castling template expansion `Chess_Base.hpp: Lookup_Pext`), **no code copied**; `ferrum-movegen` 465 Mnps (Apache-2.0, attribution OK) and `chessbit` 4 Bnps (Ryzen 9800X3D) are additional stretch context — no Rust project found >836 Mnps |
 | ultrachess (Rust, MIT) | 836 Mnps | `rust/core 6252 LOC`, startpos d6; **3.7× shakmaty, 1.23× cozy** via `MoveCounter` bulk (`BENCH.md: caveat 6`). Our `MoveSink` + `cached checkers` achieves **parity in most — 5 wins (FEN write 77 ns <88), hash/isCheck ~0.47 ns toward 0.34/0.32, perft 387 Mnps toward 836**; 4 deliberate losses remain (FEN parse, movegen one-shot, make+unmake, clone) per `BENCH.md: Deliberate` (like `ultrachess` 4 losses). |
 
 > **Machine context:** all tables above: Darwin 23.6.0, Apple M1 Max 10 cores, Criterion 0.5, `cargo bench --bench vs_libraries -- --sample-size 10 --measurement-time 1 --warm-up-time 1`, `--bench codec_bench` same, `--bench perft_bench` / `replay_bench` 10 samples. Re-run: `cargo bench` (full Criterion) or `cargo bench --bench vs_libraries` for head-to-head. Cozy's 960 FEN parse fixed in this release (was `InvalidCastlingRights` due to `false` flag).
 
-Turbochess-rs **wins 9/12 core axes vs shakmaty and 7/7 vs cozy-chess where measurable**; gaps (board_copy, fen_parse, san_parse, sparse legal) are documented above with follow-up issues and do not affect blind-base's hot paths (which are perft bulk, make+unmake, and codec import/hash replay where turbo leads 1.3–10×). See `benches/vs_libraries/main.rs` and `benches/codec_bench.rs` module docs for deltas.
+GigaChess **wins 9/12 core axes vs shakmaty and 7/7 vs cozy-chess where measurable**; gaps (board_copy, fen_parse, san_parse, sparse legal) are documented above with follow-up issues and do not affect blind-base's hot paths (which are perft bulk, make+unmake, and codec import/hash replay where gigachess leads 1.3–10×). See `benches/vs_libraries/main.rs` and `benches/codec_bench.rs` module docs for deltas.
 
 ```bash
 cargo bench                          # all benches
@@ -110,10 +124,26 @@ Rayon is the batch-replay backend (non-optional): its work-stealing pool
 gains ~60% over static chunking on asymmetric CPUs and adds only ~133 KB to
 a linked binary ([ADR-002](openspec/adr/002-parallel-replay-with-rayon.md)).
 
+## Installation
+
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+gigachess = "0.1"
+```
+
+To enable hardware BMI2 PEXT acceleration on supported x86_64 CPUs:
+
+```toml
+[dependencies]
+gigachess = { version = "0.1", features = ["pext"] }
+```
+
 ## Usage
 
 ```rust
-use turbochess_rs::{Board, Move, Square};
+use gigachess::{Board, Move, Square};
 
 let mut board = Board::startpos();
 let e2 = Square::from_alg("e2").unwrap();

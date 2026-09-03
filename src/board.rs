@@ -10,7 +10,7 @@
 use crate::attacks;
 use crate::bitboard::{bit, lsb, pop_lsb, popcount, BETWEEN, KING_ATT, KNIGHT_ATT, PAWN_ATT};
 use crate::moves::Move;
-use crate::movegen::{compute_pinned_split, MoveCounter, MoveList, MoveSink};
+use crate::movegen::{compute_pinned_split, MoveCounter, MoveSink};
 use crate::types::{Color, Piece, Role, Square, NO_EP};
 use crate::zobrist;
 use arrayvec::ArrayVec;
@@ -20,6 +20,65 @@ pub const MAX_MOVES: usize = 256;
 
 /// Mailbox sentinel: empty square.
 const EMPTY: u8 = u8::MAX;
+
+/// Precomputed Chess960 castling path clearance bitmasks on rank 0.
+/// Indexed by `[king_file][rook_file]`. To test clearance on `rank`:
+/// `(self.occupied() & (CASTLE_PATH[kf][rf] << (rank * 8))) == 0`.
+pub const CASTLE_PATH: [[u64; 8]; 8] = compute_castle_path();
+
+const fn compute_castle_path() -> [[u64; 8]; 8] {
+    let mut table = [[0u64; 8]; 8];
+    let mut kf = 0usize;
+    while kf < 8 {
+        let mut rf = 0usize;
+        while rf < 8 {
+            if kf != rf {
+                let kingside = rf > kf;
+                let target_k = if kingside { 6usize } else { 2usize };
+                let target_r = if kingside { 5usize } else { 3usize };
+
+                let mut mask = 0u64;
+
+                // Between king and rook
+                let (min_kr, max_kr) = if kf < rf { (kf, rf) } else { (rf, kf) };
+                let mut f = min_kr + 1;
+                while f < max_kr {
+                    mask |= 1u64 << f;
+                    f += 1;
+                }
+
+                // Between king and target_k
+                let (min_kt, max_kt) = if kf < target_k { (kf, target_k) } else { (target_k, kf) };
+                let mut f = min_kt + 1;
+                while f < max_kt {
+                    mask |= 1u64 << f;
+                    f += 1;
+                }
+
+                // Between rook and target_r
+                let (min_rt, max_rt) = if rf < target_r { (rf, target_r) } else { (target_r, rf) };
+                let mut f = min_rt + 1;
+                while f < max_rt {
+                    mask |= 1u64 << f;
+                    f += 1;
+                }
+
+                // Target squares
+                mask |= 1u64 << target_k;
+                mask |= 1u64 << target_r;
+
+                // Exclude starting king and rook squares
+                mask &= !(1u64 << kf);
+                mask &= !(1u64 << rf);
+
+                table[kf][rf] = mask;
+            }
+            rf += 1;
+        }
+        kf += 1;
+    }
+    table
+}
 
 /// Information required to undo a move.
 ///
@@ -188,7 +247,7 @@ impl Board {
                 return 4;
             }
             debug_assert!(col[5] & b != 0);
-            return 5;
+            5
         } else {
             // White piece — scan White's 6 bitboards.
             let col = &self.bbs[1];
@@ -208,7 +267,7 @@ impl Board {
                 return 10;
             }
             debug_assert!(col[5] & b != 0);
-            return 11;
+            11
         }
     }
 
@@ -341,15 +400,14 @@ impl Board {
     /// Incrementally-maintained Polyglot zobrist hash of the position.
     #[inline(always)]
     pub fn zobrist(&self) -> u64 {
-        // Single u64 load, 0.34ns target — keep trivial for inlining.
-        unsafe { *(&self.hash as *const u64) }
+        self.hash
     }
 
     /// Cached checkers bitboard (attackers to the side-to-move king).
     /// `in_check()` is `checkers != 0`; `0.34ns` hash load is `zobrist()`.
     #[inline(always)]
     pub fn checkers_bb(&self) -> u64 {
-        unsafe { *(&self.checkers as *const u64) }
+        self.checkers
     }
 
     // -- internal piece bookkeeping (hash-aware) ----------------------------
@@ -465,7 +523,7 @@ impl Board {
     /// via `attackers_to` (+2ns/make) and restored from `Undo`.
     #[inline(always)]
     pub fn in_check(&self) -> bool {
-        unsafe { *(&self.checkers as *const u64) != 0 }
+        self.checkers != 0
     }
 
     /// XOR-fold of the rook-file castling keys for the given rights bitmask
@@ -1030,7 +1088,7 @@ impl Board {
     fn castle_path(&self, right_bit: usize) -> Option<(u8, u8)> {
         let ksq = self.king_sq[self.turn.index()];
         let rook = self.castle_rook_sq[right_bit];
-        let kingside = right_bit % 2 == 0; // bits 0, 2 = kingside; 1, 3 = queenside
+        let kingside = (right_bit & 1) == 0; // bits 0, 2 = kingside; 1, 3 = queenside
         let rank = ksq >> 3;
         let kf = (rank << 3) | if kingside { 6 } else { 2 };
         let rf = (rank << 3) | if kingside { 5 } else { 3 };
@@ -1038,14 +1096,8 @@ impl Board {
 
         // Emptiness: strictly between king and rook, king's transit squares,
         // and both final squares — minus the king's and rook's own squares
-        // (they are allowed to stand on each other's path in Chess960).
-        let need_empty = (BETWEEN[ksq as usize][rook as usize]
-            | BETWEEN[ksq as usize][kf as usize]
-            | BETWEEN[rook as usize][rf as usize]
-            | bit(kf)
-            | bit(rf))
-            & !bit(ksq)
-            & !bit(rook);
+        // (evaluated via precomputed CASTLE_PATH bitmask table).
+        let need_empty = CASTLE_PATH[(ksq & 7) as usize][(rook & 7) as usize] << (rank << 3);
         if self.occupied() & need_empty != 0 {
             return None;
         }
@@ -1083,6 +1135,7 @@ impl Board {
     /// `checkers == 0`). Emits moves as **king-from → rook-square**
     /// (ADR-003, decision D3) for both standard chess and Chess960; the
     /// destination square holds the mover's own rook.
+    #[allow(dead_code)]
     fn gen_castling(&self, moves: &mut ArrayVec<Move, MAX_MOVES>, danger: u64) {
         let us = self.turn;
         let ui = us.index();
@@ -1711,7 +1764,15 @@ impl Board {
 
     /// True when the move is legal in this position (without playing it).
     pub fn is_legal(&self, mv: Move) -> bool {
-        self.legal_moves().contains(&mv)
+        if !self.is_pseudo_legal(mv) {
+            return false;
+        }
+        let mut tmp = *self;
+        let undo = tmp.make_move_unchecked(mv);
+        let mover = tmp.turn.other();
+        let safe = tmp.attackers_to(tmp.king_sq[mover.index()], tmp.turn, tmp.occupied()) == 0;
+        tmp.unmake_move(mv, undo);
+        safe
     }
 
     /// True when `sq` is attacked by any piece of `by`.
@@ -1825,7 +1886,7 @@ impl Board {
         let mut list = crate::movegen::MoveList::new();
         self.generate_moves_into(&mut list);
         let mut nodes = 0u64;
-        let mut child = self.clone();
+        let mut child = *self;
         for &mv in list.as_slice() {
             let undo = child.make_move_perft(mv);
             nodes += child.perft(depth - 1);
@@ -1853,7 +1914,7 @@ impl Board {
         let mut list = crate::movegen::MoveList::new();
         self.generate_moves_into(&mut list);
         let mut nodes = 0u64;
-        let mut child = self.clone();
+        let mut child = *self;
         for &mv in list.as_slice() {
             let undo = child.make_move_perft(mv);
             nodes += child.perft_visitor(depth - 1);

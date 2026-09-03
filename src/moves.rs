@@ -21,6 +21,18 @@ impl Move {
         Move((from.0 as u16) | ((to.0 as u16) << 6) | (p << 12))
     }
 
+    /// Quiet (non-capturing, non-promoting) move.
+    #[inline(always)]
+    pub const fn quiet(from: Square, to: Square) -> Move {
+        Move((from.0 as u16) | ((to.0 as u16) << 6))
+    }
+
+    /// Capture move without promotion.
+    #[inline(always)]
+    pub const fn capture(from: Square, to: Square) -> Move {
+        Move((from.0 as u16) | ((to.0 as u16) << 6))
+    }
+
     /// Origin square.
     #[inline]
     pub const fn from(self) -> Square {
@@ -113,6 +125,23 @@ mod tests {
             .to_string(),
             "e7e8q"
         );
+    }
+
+    #[test]
+    fn quiet_and_capture_constructors() {
+        let from = Square::from_alg("e2").unwrap();
+        let to = Square::from_alg("e4").unwrap();
+        let q = Move::quiet(from, to);
+        assert_eq!(q, Move::new(from, to, None));
+        assert_eq!(q.from(), from);
+        assert_eq!(q.to(), to);
+        assert_eq!(q.promotion(), None);
+
+        let c = Move::capture(from, to);
+        assert_eq!(c, Move::new(from, to, None));
+        assert_eq!(c.from(), from);
+        assert_eq!(c.to(), to);
+        assert_eq!(c.promotion(), None);
     }
 
     #[test]

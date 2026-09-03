@@ -1,0 +1,41 @@
+name: 🐛 Bug Report
+description: Report an issue, incorrect move validation, or perft bug in GigaChess (Rust).
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue in GigaChess!
+  - type: input
+    id: version
+    attributes:
+      label: GigaChess Crate Version / Commit
+      placeholder: e.g. 0.1.0 or main @ commit hash
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal Reproduction (Code / FEN / SAN / Moves)
+      description: Please provide Rust code or a test position reproducing the issue.
+      placeholder: |
+        use gigachess::Board;
+
+        let mut board = Board::startpos();
+        // ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What was the expected move list, perft count, or state?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually occurred (panic, incorrect move count, hash mismatch)?
+    validations:
+      required: true

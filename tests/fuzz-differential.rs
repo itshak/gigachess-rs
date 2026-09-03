@@ -8,7 +8,7 @@ use shakmaty::{
     fen::Fen, CastlingMode, Chess, EnPassantMode, Position as SPosition,
     san::San,
 };
-use turbochess_rs::{fen::parse_fen, san::move_to_san, Board};
+use gigachess::{fen::parse_fen, san::move_to_san, Board};
 
 fn xorshift(state: &mut u64) -> u64 {
     *state ^= *state << 13;

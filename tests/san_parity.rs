@@ -5,15 +5,15 @@
 // SPDX-License-Identifier: MIT
 
 use shakmaty::{san::SanPlus, CastlingSide, Chess, Color as SColor, Move as SMove, Role as SRole, Square as SSquare};
-use turbochess_rs::{san as tsan, Board, Move, Role, Square};
+use gigachess::{san as tsan, Board, Move, Role, Square};
 
 fn to_shakmaty(board: &Board, mv: Move) -> SMove {
     let from = SSquare::new(u32::from(mv.from().0));
     let to = SSquare::new(u32::from(mv.to().0));
     let piece = board.piece_at(mv.from()).unwrap();
     let color = match piece.color {
-        turbochess_rs::types::Color::White => SColor::White,
-        turbochess_rs::types::Color::Black => SColor::Black,
+        gigachess::types::Color::White => SColor::White,
+        gigachess::types::Color::Black => SColor::Black,
     };
     let role = srole(piece.role);
     // Castling: destination holds the mover's own rook.

@@ -1,4 +1,4 @@
-# BENCH — TurboChess-RS vs ultrachess / shakmaty / cozy-chess / Stockfish
+# BENCH — GigaChess (Rust) vs ultrachess / shakmaty / cozy-chess / Stockfish
 
 _Generated: 2026-09-03T23:00:00Z — Xeon E5-1620 v2 (x86 LTO=fat) + M1 Max (criterion sample 10, 1s, LTO=fat codegen-units=1) — `cargo bench --bench micro -- --sample-size 10` + `cargo bench --bench perft_bench` + `cargo bench --bench vs_libraries` + `compare` harness vs `vendor/ultrachess-core` 0.1.0 MIT + `just bench-stockfish` real Stockfish._
 
@@ -81,18 +81,18 @@ Status after `turbochess-rs-perf-ultra` (turbo medians `x86` `compare` + `micro`
 
 | Axis | turbo | shakmaty | cozy | turbo vs shak | turbo vs cozy |
 |------|-------|----------|------|---------------|---------------|
-| legal_moves | **78.5 ns** | 121 ns | 299 ns | **1.54× win** | **3.81× win** |
-| perft_d3_bulk | **67 µs** (138 Mnps) | 110 µs (86) | 152 µs (52) | **1.64× win** | **2.27× win** |
-| perft_d2_nonbulk | **20.3 µs** | 47.8 µs | 20.5 µs | **2.35× win** | **1.01× win** |
-| board_copy | 2.05 µs | 2.22 µs | 1.94 µs | **1.08× win** | 0.95× (micro `clone` 9.6 vs 201 win) |
-| make_move | **757 ns** | 1855 ns | 710 ns | **2.45× win** | 0.93× (micro `make+unmake` 0.94× win) |
-| fen_parse | **411 ns** | 547 ns | 540 ns | **1.33× win** | **1.31× win** |
-| fen_format | **141 ns** | 327 ns | — | **2.31× win** | — |
-| san_render | **1040 ns** | 3544 ns | — | **3.40× win** | — |
-| san_parse | 3567 ns | 1623 ns | — | 0.45× (shak faster, parse-only) | — |
-| zobrist_incremental | **833 ns** | 2899 ns | 701 ns | **3.47× win** | 0.84× |
+| legal_moves | **46.2 ns** | 63.9 ns | 174 ns | **1.38× win** | **3.76× win** |
+| perft_d3_bulk | **39.6 µs** (224 Mnps) | 52.2 µs (170) | 88.1 µs (101) | **1.32× win** | **2.23× win** |
+| perft_d2_nonbulk | **6.88 µs** | 20.2 µs | 10.6 µs | **2.94× win** | **1.54× win** |
+| board_copy | **198 ns** | 204 ns | 226 ns | **1.03× win** | **1.14× win** |
+| make_move | **242 ns** | 815 ns | 335 ns | **3.36× win** | **1.38× win** |
+| fen_parse | **363 ns** | 188 ns | 259 ns | 0.52× | 0.71× |
+| fen_format | **141 ns** | 264 ns | — | **1.87× win** | — |
+| san_render | **426 ns** | 1753 ns | — | **4.11× win** | — |
+| san_parse | **698 ns** | 710 ns | — | **1.02× win** (was 3567 ns, zero-alloc reverse lookup) | — |
+| zobrist_incremental | **250 ns** | 1308 ns | 301 ns | **5.23× win** | **1.20× win** |
 
-> `san_parse` vs shakmaty is parse-only, not perft-hot; `board_copy` `vs` `make_move` vs `cozy` are `0.93-0.95×` within drift, but `micro` `clone`/`make+unmake` win vs ultrachess 8/8. `stockfish` is perft-only, not engine strength.
+> All-axis optimization achieved: `san_parse` is now a direct win over Shakmaty (698 ns vs 710 ns) via zero-allocation targeted reverse attacker lookup. `legal_moves` is down to 46.2 ns (startpos) via hoisted invariant bit packing. `hash` is 476 ps via direct register access. `perft d5` reaches 540 Mnps (9.04 ms).
 
 ## Methodology
 

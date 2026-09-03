@@ -11,9 +11,9 @@
 // SPDX-License-Identifier: MIT
 use std::io::{self, BufRead, Write};
 
-use turbochess_rs::fen::parse_fen;
-use turbochess_rs::moves::Move;
-use turbochess_rs::san;
+use gigachess::fen::parse_fen;
+use gigachess::moves::Move;
+use gigachess::san;
 
 fn main() {
     let stdin = io::stdin();

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use turbochess_rs::Board;
+use gigachess::Board;
 
 fn bench_perft(c: &mut Criterion) {
     let board = Board::startpos();
@@ -17,7 +17,7 @@ fn bench_perft(c: &mut Criterion) {
 
     // Visitor leaf win gate (D1/2.2): `perft_visitor(1)` via CountingVisitor
     // must beat `perft(1)` via MoveCounter by >15% median, else revert.
-    let leaf_nodes = board.perft(1) as u64; // 20
+    let leaf_nodes = board.perft(1); // 20
     group.throughput(Throughput::Elements(leaf_nodes));
     group.bench_function("startpos_d1_bulk_counter", |b| {
         b.iter(|| board.perft(black_box(1)))

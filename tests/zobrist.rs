@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: MIT
 
 use arrayvec::ArrayVec;
-use turbochess_rs::board::MAX_MOVES;
-use turbochess_rs::fen::parse_fen;
-use turbochess_rs::moves::Move;
-use turbochess_rs::Board;
+use gigachess::board::MAX_MOVES;
+use gigachess::fen::parse_fen;
+use gigachess::moves::Move;
+use gigachess::Board;
 
 /// The canonical Polyglot startpos hash (public test vector).
 #[test]
@@ -32,8 +32,8 @@ fn kiwipete_hash_matches_full_recompute() {
 fn js_turbochess_parity_after_e4() {
     let mut board = Board::startpos();
     let mv = Move::new(
-        turbochess_rs::Square::from_alg("e2").unwrap(),
-        turbochess_rs::Square::from_alg("e4").unwrap(),
+        gigachess::Square::from_alg("e2").unwrap(),
+        gigachess::Square::from_alg("e4").unwrap(),
         None,
     );
     board.play(mv).unwrap();
@@ -123,8 +123,8 @@ fn hash_is_path_independent() {
     // 1. e4 e5 2. Nf3 reached by play vs. by its known FEN.
     let mut by_play = Board::startpos();
     for uci in ["e2e4", "e7e5", "g1f3"] {
-        let from = turbochess_rs::Square::from_alg(&uci[0..2]).unwrap();
-        let to = turbochess_rs::Square::from_alg(&uci[2..4]).unwrap();
+        let from = gigachess::Square::from_alg(&uci[0..2]).unwrap();
+        let to = gigachess::Square::from_alg(&uci[2..4]).unwrap();
         by_play.play(Move::new(from, to, None)).unwrap();
     }
     let by_fen = parse_fen("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")

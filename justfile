@@ -1,4 +1,4 @@
-# TurboChess-RS — task runner (mirrors `ultrachess` `just bench` gate)
+# GigaChess (Rust) — task runner (mirrors `ultrachess` `just bench` gate)
 #
 # `just bench` refuses to publish from a broken tree: it gates on
 # `cargo test` + in-binary perft sanity (like `ultrachess` `just bench`

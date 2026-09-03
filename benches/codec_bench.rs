@@ -25,7 +25,7 @@ use shakmaty::{
     fen::Fen, san::San, san::SanPlus, Chess, EnPassantMode, Move as SMove, Position, Role as SRole,
     Square as SSquare, zobrist::Zobrist64, CastlingMode,
 };
-use turbochess_rs::{database, Board};
+use gigachess::{database, Board};
 
 fn xorshift(state: &mut u64) -> u64 {
     *state ^= *state << 13;

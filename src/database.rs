@@ -386,7 +386,7 @@ mod tests {
         let games: Vec<Vec<u16>> = (0..64u32)
             .map(|g| {
                 let mut board = Board::startpos();
-                let mut state = 0xB00B_0000 ^ (g as u64) * 0x9E37;
+                let mut state = 0xB00B_0000 ^ ((g as u64) * 0x9E37);
                 let mut words = Vec::new();
                 for _ in 0..40 {
                     let legal = board.legal_moves();

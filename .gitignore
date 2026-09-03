@@ -1,2 +1,28 @@
+# Build & dependency artifacts
 /target
 Cargo.lock.bak
+
+# IDE and Editor configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Agent & AI workspace cache directories
+.agents/
+.claude/
+.cursor/
+.opencode/
+
+# Secrets and environment files
+.env
+.env.*
+*.token
+*.secret
+*.key
+*.pem
+
+# Crash / debug logs
+*.log

@@ -1,5 +1,5 @@
-use shakmaty::{fen::Fen, CastlingMode, Chess, Move as SMove, Position, Square as SSquare};
-use turbochess_rs::{database, Board};
+use shakmaty::{fen::Fen, CastlingMode, Chess, Position, Square as SSquare};
+use gigachess::{database, Board};
 
 fn xorshift(state: &mut u64) -> u64 {
     *state ^= *state << 13;
@@ -57,7 +57,7 @@ fn main() {
                 println!("turbochess FEN before: {}", {
                     let mut b = Board::startpos();
                     for &w in words.iter().take(ply) {
-                        use turbochess_rs::Move;
+                        use gigachess::Move;
                         b.play(Move::from_word(w)).unwrap();
                     }
                     b.to_fen()

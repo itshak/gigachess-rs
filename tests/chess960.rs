@@ -5,10 +5,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-use turbochess_rs::fen::parse_fen;
-use turbochess_rs::moves::Move;
-use turbochess_rs::types::{castle_right_bit, Color, Role, Square};
-use turbochess_rs::Board;
+use gigachess::fen::parse_fen;
+use gigachess::moves::Move;
+use gigachess::types::{castle_right_bit, Color, Role, Square};
+use gigachess::Board;
 
 fn castle_move(board: &Board, kingside: bool) -> Move {
     let us = board.turn();
@@ -163,21 +163,21 @@ fn adjacent_king_rook_castling_swaps_pieces() {
     let undo = board.make_move_unchecked(mv);
     assert_eq!(
         board.piece_at(Square(2)),
-        Some(turbochess_rs::types::Piece::new(Color::White, Role::King))
+        Some(gigachess::types::Piece::new(Color::White, Role::King))
     );
     assert_eq!(
         board.piece_at(Square(3)),
-        Some(turbochess_rs::types::Piece::new(Color::White, Role::Rook))
+        Some(gigachess::types::Piece::new(Color::White, Role::Rook))
     );
     assert_eq!(board.zobrist(), board.zobrist_full());
     board.unmake_move(mv, undo);
     assert_eq!(
         board.piece_at(Square(3)),
-        Some(turbochess_rs::types::Piece::new(Color::White, Role::King))
+        Some(gigachess::types::Piece::new(Color::White, Role::King))
     );
     assert_eq!(
         board.piece_at(Square(2)),
-        Some(turbochess_rs::types::Piece::new(Color::White, Role::Rook))
+        Some(gigachess::types::Piece::new(Color::White, Role::Rook))
     );
     assert_eq!(board.zobrist(), board.zobrist_full());
 }
@@ -187,10 +187,10 @@ fn moves2_castling_round_trip_standard_and_960() {
     // Standard: O-O word is e1h1 (king -> rook square), not e1g1.
     let mut board = Board::startpos();
     for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"] {
-        let mv = turbochess_rs::san::san_to_move(&board, san).unwrap();
+        let mv = gigachess::san::san_to_move(&board, san).unwrap();
         board.play(mv).unwrap();
     }
-    let oo = turbochess_rs::san::san_to_move(&board, "O-O").unwrap();
+    let oo = gigachess::san::san_to_move(&board, "O-O").unwrap();
     assert_eq!(oo.from(), Square::from_alg("e1").unwrap());
     assert_eq!(oo.to(), Square::from_alg("h1").unwrap());
     // Decode by destination-own-rook detection: replaying the word castles.
@@ -209,7 +209,7 @@ fn moves2_castling_round_trip_standard_and_960() {
     // (a normal king step can never land on an own rook, so this decodes
     // unambiguously). King ends on g1, rook on f1.
     let mut board = parse_fen("4k3/8/8/8/8/8/8/3KR3 w K - 0 1").unwrap();
-    let mv = turbochess_rs::san::san_to_move(&board, "O-O").unwrap();
+    let mv = gigachess::san::san_to_move(&board, "O-O").unwrap();
     assert_eq!(mv.from(), Square::from_alg("d1").unwrap());
     assert_eq!(mv.to(), Square::from_alg("e1").unwrap());
     board.play(mv).unwrap();

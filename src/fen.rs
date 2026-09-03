@@ -42,6 +42,7 @@ fn piece_from_byte(b: u8) -> Option<(Color, Role)> {
 
 /// FEN byte for a piece (uppercase for White, lowercase for Black).
 #[inline]
+#[allow(dead_code)]
 fn byte_from_piece(p: Piece) -> u8 {
     let c = p.role.char_upper() as u8;
     if p.color == Color::White {
@@ -77,7 +78,7 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
             file = 0;
             continue;
         }
-        if b >= b'1' && b <= b'8' {
+        if (b'1'..=b'8').contains(&b) {
             let d = (b - b'0') as i32;
             file += d;
             if file > 8 {
@@ -345,8 +346,7 @@ impl Board {
                 if n == 2 && self.castling_rook_square(rights[0]).0 < self.castling_rook_square(rights[1]).0 {
                     rights.swap(0, 1);
                 }
-                for i in 0..n {
-                    let rb = rights[i];
+                for &rb in rights.iter().take(n) {
                     let rook_file = self.castling_rook_square(rb).file();
                     let king_file = self.king_square(color).file();
                     let a_side = rook_file < king_file;

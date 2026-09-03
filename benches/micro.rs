@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: MIT
 
 use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use turbochess_rs::{fen::parse_fen, san::move_to_san, Move, Undo};
+use gigachess::{fen::parse_fen, san::move_to_san, Move, Undo};
 
 // The three reference positions used across `vs_libraries` and this
 // harness — the same triple ultrachess measures.
@@ -176,7 +176,7 @@ fn bench_micro(c: &mut Criterion) {
         // 1.7ns` deliberate; 960 rook squares + mailbox kept).
         g.throughput(Throughput::Elements(1));
         g.bench_function("clone", |b| {
-            b.iter(|| black_box(&board).clone())
+            b.iter(|| *black_box(&board))
         });
 
         // 10) perft_visitor — D1 visitor leaf path (CountingVisitor, no

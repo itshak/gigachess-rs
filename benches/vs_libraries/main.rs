@@ -34,7 +34,7 @@ use shakmaty::{fen::Fen, san::SanPlus, CastlingMode, Chess, EnPassantMode, Move 
 
 
 use shakmaty::zobrist::Zobrist64;
-use turbochess_rs::{fen::parse_fen, san as tsan, Board, Move as TMove};
+use gigachess::{fen::parse_fen, san as tsan, Board, Move as TMove};
 
 
 

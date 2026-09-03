@@ -7,10 +7,10 @@
 // SPDX-License-Identifier: MIT
 
 use crate::attacks;
-use crate::bitboard::{bit, KING_ATT, KNIGHT_ATT};
+use crate::bitboard::{bit, pop_lsb, KING_ATT, KNIGHT_ATT, PAWN_ATT};
 use crate::board::Board;
 use crate::moves::Move;
-use crate::types::{Role, Square};
+use crate::types::{Color, Role, Square};
 use arrayvec::{ArrayString, ArrayVec};
 
 /// Maximum rendered SAN length (longest: "Qh4xe1=Q+" style strings).
@@ -161,30 +161,37 @@ pub fn san_to_move(board: &Board, san: &str) -> Option<Move> {
     if s.is_empty() {
         return None;
     }
-    let legal = board.legal_moves();
+
+    let bytes = s.as_bytes();
 
     // Castling (accept O-O, 0-0, O-O-O, 0-0-0 with or without dashes).
     // The move words are king-from → rook-square (ADR-003 D3); the side is
     // determined by the rook file relative to the king file.
-    let normalized: String = s
-        .chars()
-        .filter(|c| *c != '-')
-        .map(|c| if c == '0' { 'O' } else { c })
-        .collect();
-    if normalized == "OO" || normalized == "OOO" {
-        let kingside = normalized == "OO";
-        return legal.into_iter().find(|m| {
-            board.piece_at(m.from()).map(|p| p.role) == Some(Role::King)
-                && board.piece_at(m.to()) == Some(crate::types::Piece::new(board.turn(), Role::Rook))
-                && (if kingside {
-                    m.to().file() > m.from().file()
-                } else {
-                    m.to().file() < m.from().file()
-                })
-        });
+    let mut castle_chars = 0u8;
+    let mut is_castle = true;
+    for &b in bytes {
+        if b == b'O' || b == b'0' {
+            castle_chars += 1;
+        } else if b != b'-' {
+            is_castle = false;
+            break;
+        }
     }
-
-    let bytes = s.as_bytes();
+    if is_castle && (castle_chars == 2 || castle_chars == 3) {
+        let kingside = castle_chars == 2;
+        let us = board.turn();
+        let rb = crate::types::castle_right_bit(us, kingside);
+        if board.castling_rights() & (1 << rb) == 0 {
+            return None;
+        }
+        let ksq = board.king_square(us);
+        let rsq = board.castling_rook_square(rb);
+        let mv = Move::quiet(ksq, rsq);
+        if board.is_legal(mv) {
+            return Some(mv);
+        }
+        return None;
+    }
 
     // Promotion suffix.
     let (body, promo) = if bytes.len() >= 2 && bytes[bytes.len() - 2] == b'=' {
@@ -196,6 +203,18 @@ pub fn san_to_move(board: &Board, san: &str) -> Option<Move> {
             _ => return None,
         };
         (&bytes[..bytes.len() - 2], p)
+    } else if bytes.len() >= 3
+        && matches!(bytes[bytes.len() - 1], b'N' | b'B' | b'R' | b'Q')
+        && bytes[bytes.len() - 2].is_ascii_digit()
+    {
+        let p = match bytes[bytes.len() - 1] {
+            b'N' => Some(Role::Knight),
+            b'B' => Some(Role::Bishop),
+            b'R' => Some(Role::Rook),
+            b'Q' => Some(Role::Queen),
+            _ => return None,
+        };
+        (&bytes[..bytes.len() - 1], p)
     } else {
         (bytes, None)
     };
@@ -215,7 +234,12 @@ pub fn san_to_move(board: &Board, san: &str) -> Option<Move> {
     if rest.len() < 2 {
         return None;
     }
-    let to = Square::from_alg(core::str::from_utf8(&rest[rest.len() - 2..]).ok()?)?;
+    let file = rest[rest.len() - 2].wrapping_sub(b'a');
+    let rank = rest[rest.len() - 1].wrapping_sub(b'1');
+    if file > 7 || rank > 7 {
+        return None;
+    }
+    let to = Square::from_coords(file, rank);
     let prefix = &rest[..rest.len() - 2];
 
     // Disambiguation hints from the prefix (e.g. "b" in Nbd2, "1" in N1d2,
@@ -231,28 +255,70 @@ pub fn san_to_move(board: &Board, san: &str) -> Option<Move> {
         }
     }
 
+    let us = board.turn();
+    let them = us.other();
+    let occ = board.occupied();
+    let piece_bb = board.piece_bb(us, role);
+
+    let mut candidates = match role {
+        Role::Knight => KNIGHT_ATT[to.index()] & piece_bb,
+        Role::Bishop => attacks::bishop_attacks(to.0, occ) & piece_bb,
+        Role::Rook => attacks::rook_attacks(to.0, occ) & piece_bb,
+        Role::Queen => attacks::queen_attacks(to.0, occ) & piece_bb,
+        Role::King => KING_ATT[to.index()] & piece_bb,
+        Role::Pawn => {
+            let is_cap = board.piece_at(to).is_some()
+                || board.en_passant() == Some(to)
+                || prefix.iter().any(|&c| c == b'x' || c == b'X')
+                || (hint_file.is_some() && hint_file != Some(to.file()));
+            if is_cap {
+                PAWN_ATT[them.index()][to.index()] & piece_bb
+            } else {
+                let white = us == Color::White;
+                let mut cand = 0u64;
+                if occ & bit(to.0) == 0 {
+                    if white {
+                        if to.0 >= 8 && (piece_bb & bit(to.0 - 8)) != 0 {
+                            cand |= bit(to.0 - 8);
+                        } else if to.rank() == 3
+                            && (occ & bit(to.0 - 8)) == 0
+                            && (piece_bb & bit(to.0 - 16)) != 0
+                        {
+                            cand |= bit(to.0 - 16);
+                        }
+                    } else {
+                        if to.0 <= 55 && (piece_bb & bit(to.0 + 8)) != 0 {
+                            cand |= bit(to.0 + 8);
+                        } else if to.rank() == 4
+                            && (occ & bit(to.0 + 8)) == 0
+                            && (piece_bb & bit(to.0 + 16)) != 0
+                        {
+                            cand |= bit(to.0 + 16);
+                        }
+                    }
+                }
+                cand
+            }
+        }
+    };
+
+    if let Some(f) = hint_file {
+        candidates &= crate::types::FILE_BB[f as usize];
+    }
+    if let Some(r) = hint_rank {
+        candidates &= crate::types::RANK_BB[r as usize];
+    }
+
     let mut result: Option<Move> = None;
-    for m in legal {
-        if m.to() != to
-            || board.piece_at(m.from()).map(|p| p.role) != Some(role)
-            || m.promotion() != promo
-        {
-            continue;
-        }
-        if let Some(f) = hint_file {
-            if m.from().file() != f {
-                continue;
+    while candidates != 0 {
+        let from = pop_lsb(&mut candidates);
+        let mv = Move::new(Square(from), to, promo);
+        if board.is_legal(mv) {
+            if result.is_some() {
+                return None; // ambiguous
             }
+            result = Some(mv);
         }
-        if let Some(r) = hint_rank {
-            if m.from().rank() != r {
-                continue;
-            }
-        }
-        if result.is_some() {
-            return None; // ambiguous
-        }
-        result = Some(m);
     }
     result
 }
