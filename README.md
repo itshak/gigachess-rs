@@ -33,7 +33,7 @@
   ARM / Apple Silicon; BMI2 support is detected at runtime and the magic path
   is used transparently when unavailable.
 - **16-bit moves2** — every move packs into a `u16`
-  (`from | to << 6 | promo << 12`), enabling ultra-dense binary database storage.
+  (`from | to << 6 | promo << 12`, promo: 0=none, 1=N, 2=B, 3=R, 4=Q), enabling ultra-dense binary database storage (2 bytes per ply). Castling moves use king-from → rook-square wire format (`e1h1`, `e1a1`, `e8h8`, `e8a8` for standard chess, and king → initial rook square for Chess960).
 - **Fully legal move generation** — check/pin-aware generation into a
   stack-allocated `ArrayVec<Move, 256>` (512 bytes, zero heap allocations).
 - **Incremental Zobrist** — Polyglot book-format-compatible hashing maintained
@@ -47,8 +47,10 @@
   (differential-tested over thousands of random games).
 - **Chess960** — full Fischer Random support: castling rights as rook squares,
   path-based castling legality (incl. adjacent king+rook swap castling),
-  X-FEN / Shredder FEN dialects, and per-rook-file castling hashing that keeps
-  standard-chess Polyglot parity ([ADR-003](openspec/adr/003-chess960-castling-hashing-and-breaking-encodings.md)).
+  X-FEN / Shredder FEN dialects, and 16 per-rook-file castling Zobrist keys
+  (`color.index() * 8 + file`: standard a/h files map to Polyglot keys 768..771;
+  files b..g derived via deterministic splitmix64 seed `0x00C0_FFEE_DABA_D00D`)
+  that keeps standard-chess Polyglot parity ([ADR-003](openspec/adr/003-chess960-castling-hashing-and-breaking-encodings.md)).
 - **Database batch APIs** — `parse_movetext_to_moves2` (PGN import without
   intermediate strings), `moves2_to_san_movetext`, incremental
   `replay_moves2_hashes`, and a Rayon-parallel `position_stats` builder
