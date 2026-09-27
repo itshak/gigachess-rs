@@ -4,6 +4,20 @@ Defines the core `turbochess-rs` engine architecture: native `u64` bitboards, ha
 
 ## Requirements
 
+### Requirement: Null Move SHALL Pass the Turn as a Board Primitive
+
+The system SHALL expose `Board::make_null_move() -> Result<Undo, IllegalMove>` and `Board::unmake_null_move(Undo)` as the null-move (pass) primitive: placement and castling rights untouched, side to move flipped, en-passant square cleared, halfmove clock advanced, and the full move completed (the number advances, whoever passed — after the pass White is to move at the next number). The incremental Polyglot hash and the cached `checkers` SHALL be maintained, so `zobrist()` still equals `zobrist_full()` and `in_check()` stays branch-free. A null move with the side to move in check SHALL return `IllegalMove`. Unmake SHALL restore the exact prior position when paired like `unmake_move` (no ordinary moves interleaved past the matching make).
+
+#### Scenario: Pass flips the side and preserves the placement
+
+- **WHEN** `make_null_move()` is played on `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1`
+- **THEN** the board becomes `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2` (turn flipped, ep cleared, clocks advanced) with `zobrist() == zobrist_full()`, and `unmake_null_move` restores the position bit-for-bit
+
+#### Scenario: Null move in check is illegal
+
+- **WHEN** the side to move is in check
+- **THEN** `make_null_move()` returns `IllegalMove`
+
 ### Requirement: Sliding Attacks SHALL Execute via PEXT with Fancy Magic Fallback
 
 The system SHALL implement sliding attacks via `hardware _pext_u64` when `pext` feature on BMI2 else compact Fancy Magic fallback, with `colour-templated` `generate_legal_templated::<const WHITE: bool>` and `MoveVisitor` path, both monomorphised `LTO=fat`. `attacks::bishop/rook_attacks` SHALL be `#[inline(always)]` `get_unchecked` and `#[cfg(feature="pext")]` branch elided when `!pext`.

@@ -1392,6 +1392,75 @@ impl Board {
         undo
     }
 
+    /// Plays a null move (pass): the position stays, the side to move flips.
+    ///
+    /// Semantics mirror an ordinary move's state transition: castling rights are untouched, the
+    /// en-passant square clears (any pending double push lapses), the halfmove clock advances and
+    /// the move always completes a full move (a pass is a move, not a half-move: after the pass
+    /// White is to move with the number advanced, whoever passed). The incremental Polyglot hash
+    /// and the cached `checkers` are maintained, so [`Board::zobrist`] still equals
+    /// [`Board::zobrist_full`] and [`Board::in_check`] stays branch-free.
+    ///
+    /// Returns [`IllegalMove`] when the side to move is in check: a null move answers no check.
+    /// Unlike a normal move there is no [`Move`] to play or unmake, so this takes and returns
+    /// nothing but the [`Undo`] snapshot.
+    ///
+    /// This is the primitive CBH null-move tokens (`0xffff` in `moves2`) decode onto: the format
+    /// stores pass turns as moves, and legality of the surrounding moves is checked against the
+    /// position it produces.
+    #[inline(always)]
+    pub fn make_null_move(&mut self) -> Result<Undo, IllegalMove> {
+        if self.in_check() {
+            return Err(IllegalMove);
+        }
+        let undo = Undo {
+            hash: self.hash,
+            checkers: self.checkers,
+            castling: self.castling,
+            ep: self.ep,
+            halfmove: self.halfmove,
+            captured: EMPTY,
+            castled: false,
+        };
+        let us = self.turn;
+        // Hash out the old en-passant contribution (relevance uses the mover's pawns, which have
+        // not changed yet) before clearing it.
+        if self.ep_relevant(self.ep, us) {
+            self.hash ^= zobrist::ep_key(Square(self.ep));
+        }
+        self.ep = NO_EP;
+        self.halfmove = self.halfmove.saturating_add(1);
+        // A pass is a move, not a half-move: after the pass White is to move with the number
+        // advanced, whoever passed (this is what keeps FEN's "White to move" and number increments
+        // consistent).
+        self.fullmove += 1;
+        self.turn = us.other();
+        self.hash ^= zobrist::turn_key();
+        self.checkers = self.attackers_to(
+            self.king_sq[self.turn.index()],
+            self.turn.other(),
+            self.occupied(),
+        );
+        Ok(undo)
+    }
+
+    /// Reverts the most recent null move, restoring the exact prior position.
+    ///
+    /// Each null must be unmade before an older one, with no ordinary moves interleaved past the
+    /// matching make — exactly like `unmake_move`. Ordinary moves mutate state the null [`Undo`]
+    /// does not record, so unmaking a null across an ordinary move restores the clocks, turn and
+    /// hash but not the pieces.
+    #[inline(always)]
+    pub fn unmake_null_move(&mut self, undo: Undo) {
+        self.turn = self.turn.other();
+        self.fullmove -= 1;
+        self.hash = undo.hash;
+        self.checkers = undo.checkers;
+        self.castling = undo.castling;
+        self.ep = undo.ep;
+        self.halfmove = undo.halfmove;
+    }
+
     /// Slim perft path — like `ultrachess/position.rs:389` `Safe only for perft`.
     ///
     /// Skips `zobrist` XORs, `history_hashes` push, `halfmove`/`fullmove` clock
