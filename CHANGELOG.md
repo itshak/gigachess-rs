@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.3] - 2026-09-27
+
+### Added
+- Null-move pass primitive: `Board::make_null_move() -> Result<Undo, IllegalMove>` and
+  `Board::unmake_null_move(Undo)`. A pass flips the side to move without moving a piece:
+  placement and castling rights untouched, en-passant square cleared, halfmove clock advanced,
+  and the full move completed (the number advances, whoever passed). Incremental Polyglot hash
+  and cached checkers are maintained, so `zobrist() == zobrist_full()` across the pass. A null
+  move in check returns `IllegalMove`. CBH null-move tokens (`0xffff` in `moves2`) decode onto
+  this primitive. Covered by `tests/null_move.rs` (pass semantics, EP clearing, move-number
+  completion for both colors, in-check refusal, make/unmake round-trip with hash parity) and by
+  the `turbochess-rs-core-engine` spec's null-move requirement.
+
 ## [0.1.2] - 2026-09-04
 
 ### Changed
