@@ -202,6 +202,7 @@ GigaChess is designed under strict performance invariants codified in formal Arc
 - **[ADR-003](openspec/adr/003-chess960-castling-hashing-and-breaking-encodings.md)**: Chess960 Castling, Incremental Hashing, and 16-Bit Packed `moves2` Format
 - **[ADR-004](openspec/adr/004-ultra-performance-parity.md)**: Cache Line Optimization and 144-Byte `#[repr(C)]` Plain-Data State
 - **[ADR-005](openspec/adr/005-all-axis-maximum-performance.md)**: All-Axis Leadership, Zero-Allocation SAN Parser, and Compile-Time Path Bitmasks
+- **[ADR-006](openspec/adr/006-skipped-caches-and-rendering-seams.md)**: A Skipped Cache Is Part of the API (`play_fast` leaves `checkers` stale), and SAN Rendering Is Split at the Seam (`move_to_san_body` + `check_mate_suffix`)
 
 ## Contributing
 
