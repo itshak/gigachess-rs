@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.4] - 2026-09-28
+
+### Added
+- Fast move execution primitives: `Board::play_fast(mv) -> Result<Undo, IllegalMove>`,
+  `Board::make_move_fast(mv) -> Undo`, and `Board::unmake_move_fast(mv, undo)`. Allows high-throughput
+  move replay and legality verification while skipping incremental Polyglot Zobrist hashing and
+  checkers bitboard recalculation. Preserves 100% bit-for-bit parity with standard `play` on piece
+  placement bitboards, turn, castling rights, en-passant square, halfmove clock, and fullmove number.
+  Covered by property-based testing across 100,000 positions in `tests/play_fast_property.rs`.
+
+
 ## [0.1.3] - 2026-09-27
 
 ### Added

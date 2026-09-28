@@ -31,6 +31,19 @@ The system SHALL implement sliding attacks via `hardware _pext_u64` when `pext` 
 - **THEN** median drops >10% vs baseline without `pext` branch (was 121ns) toward ultrachess 42ns
 
 ### Requirement: Move Representation SHALL Use 16-bit Packed Encoding
+### Requirement: Fast Move Execution SHALL Support Replay Without Hashing Overhead
+
+The system SHALL expose `Board::play_fast(Move) -> Result<Undo, IllegalMove>`, `Board::make_move_fast(Move) -> Undo`, and `Board::unmake_move_fast(Move, Undo)` to allow high-throughput move execution and legality validation without computing or updating incremental Polyglot Zobrist hashes or checkers bitboards. The fast replay methods SHALL preserve 100% bit-for-bit parity with standard `play` across piece placement, castling rights, active turn, en-passant square, halfmove clock, and fullmove number.
+
+#### Scenario: State parity between fast replay and standard play
+- **WHEN** a legal move is played on a position via `play_fast` vs `play`
+- **THEN** both boards SHALL have identical piece placement bitboards, color turn, castling rights, en-passant square, halfmove clock, and fullmove number.
+
+#### Scenario: Illegal move rejection
+- **WHEN** an illegal move or move leaving the king in check is executed with `play_fast`
+- **THEN** it SHALL return `IllegalMove` and the board position SHALL be restored unaltered.
+
+
 
 The system SHALL represent moves as `u16` (`from|to<<6|promo<<12`) and `Board` SHALL be `#[repr(C)]` 144B `Copy` with `hash:u64` at offset 0, `checkers:u64` at 8, `bbs 96` at 16, `occ 16` at 112, `king_sq 2` at 128 (first cache line hot `hash/checkers`), `profile.release`/`bench` `lto=fat codegen-units=1 panic=abort`.
 

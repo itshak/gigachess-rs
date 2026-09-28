@@ -1830,6 +1830,287 @@ impl Board {
         }
         Ok(undo)
     }
+    /// Applies `mv` without incremental Zobrist hash updates or checkers calculation.
+    /// Clocks, turn, castling rights, en-passant, piece bitboards, and king safety
+    /// validation are fully maintained.
+    ///
+    /// Returns the [`Undo`] needed by `unmake_move_fast`.
+    #[inline(always)]
+    pub fn make_move_fast(&mut self, mv: Move) -> Undo {
+        let mut undo = Undo {
+            hash: 0,
+            checkers: 0,
+            castling: self.castling,
+            ep: self.ep,
+            halfmove: self.halfmove,
+            captured: EMPTY,
+            castled: false,
+        };
+        let from = mv.from().0;
+        let to = mv.to().0;
+        let us = self.turn;
+        let them = us.other();
+        let moved = self.piece_code_at_color(from, us);
+        debug_assert_ne!(moved, EMPTY, "make_move_fast on empty square");
+        let role = moved % 6;
+        let is_pawn = role == Role::Pawn as u8;
+        let diag = from & 7 != to & 7;
+
+        // Castling encoded king-from → rook-square — fast dest.
+        let dest = if self.occ[us.index()] & bit(to) != 0 {
+            self.piece_code_at_color(to, us)
+        } else if self.occ[them.index()] & bit(to) != 0 {
+            self.piece_code_at_color(to, them)
+        } else {
+            EMPTY
+        };
+        let is_castle = role == Role::King as u8
+            && dest != EMPTY
+            && dest % 6 == Role::Rook as u8
+            && (dest / 6) == us as u8;
+
+        // Captures (including en passant onto an empty square) — without hash.
+        let mut captured_sq = to;
+        if is_pawn && diag && dest == EMPTY {
+            captured_sq = if us == Color::White { to - 8 } else { to + 8 };
+        }
+        if !is_castle && captured_sq != from {
+            if captured_sq != to {
+                let cap = self.pawn_code_at(captured_sq, them);
+                if cap != EMPTY {
+                    undo.captured = cap;
+                    let color = (cap / 6) as usize;
+                    let role_idx = (cap % 6) as usize;
+                    let b = bit(captured_sq);
+                    self.bbs[color][role_idx] &= !b;
+                    self.occ[color] &= !b;
+                }
+            } else if dest != EMPTY {
+                undo.captured = dest;
+                let color = (dest / 6) as usize;
+                let role_idx = (dest % 6) as usize;
+                let b = bit(to);
+                self.bbs[color][role_idx] &= !b;
+                self.occ[color] &= !b;
+            }
+        }
+
+        // Move the piece (promotion and castling rook relocation) — without hash.
+        match mv.promotion() {
+            Some(r) => {
+                let color = (moved / 6) as usize;
+                let role_idx = (moved % 6) as usize;
+                let b = bit(from);
+                self.bbs[color][role_idx] &= !b;
+                self.occ[color] &= !b;
+
+                let code = Piece::new(us, r).code();
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(to);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+                if role_idx == Role::King.index() {
+                    self.king_sq[color] = to;
+                }
+            }
+            None => {
+                if is_castle {
+                    let rank = from >> 3;
+                    let kingside = (to & 7) > (from & 7);
+                    let kf = (rank << 3) | if kingside { 6 } else { 2 };
+                    let rf = (rank << 3) | if kingside { 5 } else { 3 };
+                    undo.castled = true;
+                    let rook_code = dest;
+                    for sq_code in [(from, moved), (to, rook_code)] {
+                        let (sq, code) = sq_code;
+                        let color = (code / 6) as usize;
+                        let role_idx = (code % 6) as usize;
+                        let b = bit(sq);
+                        self.bbs[color][role_idx] &= !b;
+                        self.occ[color] &= !b;
+                    }
+                    for sq_code in [(kf, moved), (rf, rook_code)] {
+                        let (sq, code) = sq_code;
+                        let color = (code / 6) as usize;
+                        let role_idx = (code % 6) as usize;
+                        let b = bit(sq);
+                        self.bbs[color][role_idx] |= b;
+                        self.occ[color] |= b;
+                        if role_idx == Role::King.index() {
+                            self.king_sq[color] = sq;
+                        }
+                    }
+                } else {
+                    let color = (moved / 6) as usize;
+                    let role_idx = (moved % 6) as usize;
+                    let b_from = bit(from);
+                    let b_to = bit(to);
+                    self.bbs[color][role_idx] &= !b_from;
+                    self.bbs[color][role_idx] |= b_to;
+                    self.occ[color] &= !b_from;
+                    self.occ[color] |= b_to;
+                    if role_idx == Role::King.index() {
+                        self.king_sq[color] = to;
+                    }
+                }
+            }
+        }
+
+        self.castling &= self.castle_rights_after(role, us, from, to);
+
+        self.ep = if is_pawn && to.abs_diff(from) == 16 {
+            (from + to) / 2
+        } else {
+            NO_EP
+        };
+
+        if is_pawn || undo.captured != EMPTY {
+            self.halfmove = 0;
+        } else {
+            self.halfmove += 1;
+        }
+        if us == Color::Black {
+            self.fullmove += 1;
+        }
+
+        self.turn = us.other();
+        undo
+    }
+
+
+    /// Reverts a fast move (paired with `make_move_fast`).
+    #[inline(always)]
+    pub fn unmake_move_fast(&mut self, mv: Move, undo: Undo) {
+        let us = self.turn.other(); // mover
+        self.turn = us;
+        if us == Color::Black {
+            self.fullmove -= 1;
+        }
+        let from = mv.from().0;
+        let to = mv.to().0;
+
+        if undo.castled {
+            debug_assert_ne!(to, from, "castling move with from == to");
+            let rank = from >> 3;
+            let kingside = (to & 7) > (from & 7);
+            let kf = (rank << 3) | if kingside { 6 } else { 2 };
+            let rf = (rank << 3) | if kingside { 5 } else { 3 };
+            let king_code = self.piece_code_at_color(kf, us);
+            let rook_code = self.piece_code_at_color(rf, us);
+            debug_assert_eq!(king_code % 6, Role::King as u8);
+            debug_assert_eq!(rook_code % 6, Role::Rook as u8);
+            for sq_code in [(kf, king_code), (rf, rook_code)] {
+                let (sq, code) = sq_code;
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(sq);
+                self.bbs[color][role_idx] &= !b;
+                self.occ[color] &= !b;
+            }
+            for sq_code in [(from, king_code), (to, rook_code)] {
+                let (sq, code) = sq_code;
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(sq);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+                if role_idx == Role::King.index() {
+                    self.king_sq[color] = sq;
+                }
+            }
+            self.castling = undo.castling;
+            self.ep = undo.ep;
+            self.halfmove = undo.halfmove;
+            return;
+        }
+
+        let moved = self.piece_code_at_color(to, us);
+        debug_assert_ne!(moved, EMPTY, "unmake_move_fast on empty destination");
+        {
+            let color = (moved / 6) as usize;
+            let role_idx = (moved % 6) as usize;
+            let b = bit(to);
+            self.bbs[color][role_idx] &= !b;
+            self.occ[color] &= !b;
+        }
+        match mv.promotion() {
+            Some(_) => {
+                let code = Piece::new(us, Role::Pawn).code();
+                let color = (code / 6) as usize;
+                let role_idx = (code % 6) as usize;
+                let b = bit(from);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+            }
+            None => {
+                let color = (moved / 6) as usize;
+                let role_idx = (moved % 6) as usize;
+                let b = bit(from);
+                self.bbs[color][role_idx] |= b;
+                self.occ[color] |= b;
+                if role_idx == Role::King.index() {
+                    self.king_sq[color] = from;
+                }
+                if moved % 6 == Role::King as u8 && (to & 7).abs_diff(from & 7) == 2 {
+                    let (rfrom, rto) = match to {
+                        6 => (5, 7),
+                        2 => (3, 0),
+                        62 => (61, 63),
+                        _ => (59, 56),
+                    };
+                    let rook = self.piece_code_at_color(rfrom, us);
+                    if rook != EMPTY {
+                        let color = (rook / 6) as usize;
+                        let role_idx = (rook % 6) as usize;
+                        let b_from = bit(rfrom);
+                        let b_to = bit(rto);
+                        self.bbs[color][role_idx] &= !b_from;
+                        self.bbs[color][role_idx] |= b_to;
+                        self.occ[color] &= !b_from;
+                        self.occ[color] |= b_to;
+                    }
+                }
+            }
+        }
+        if undo.captured != EMPTY {
+            let ep_capture = moved % 6 == Role::Pawn as u8
+                && from & 7 != to & 7
+                && undo.ep != crate::types::NO_EP
+                && to == undo.ep;
+            let cap_sq = if ep_capture {
+                if us == Color::White { to - 8 } else { to + 8 }
+            } else { to };
+            let code = undo.captured;
+            let color = (code / 6) as usize;
+            let role_idx = (code % 6) as usize;
+            let b = bit(cap_sq);
+            self.bbs[color][role_idx] |= b;
+            self.occ[color] |= b;
+        }
+        self.castling = undo.castling;
+        self.ep = undo.ep;
+        self.halfmove = undo.halfmove;
+    }
+
+    /// Fast validation and application of `mv`: validates pseudo-legal geometry,
+    /// applies via `make_move_fast`, and confirms king safety (rolling back via
+    /// `unmake_move_fast` and returning [`IllegalMove`] on failure).
+    ///
+    /// Skips incremental Polyglot Zobrist hashing and checkers bitboard calculation.
+    #[inline(always)]
+    pub fn play_fast(&mut self, mv: Move) -> Result<Undo, IllegalMove> {
+        if !self.is_pseudo_legal(mv) {
+            return Err(IllegalMove);
+        }
+        let undo = self.make_move_fast(mv);
+        let mover = self.turn.other();
+        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
+            self.unmake_move_fast(mv, undo);
+            return Err(IllegalMove);
+        }
+        Ok(undo)
+    }
 
     /// True when the move is legal in this position (without playing it).
     pub fn is_legal(&self, mv: Move) -> bool {
