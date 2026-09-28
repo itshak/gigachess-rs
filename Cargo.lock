@@ -234,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "gigachess"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "arrayvec",
  "bitflags",

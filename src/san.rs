@@ -25,6 +25,26 @@ pub type San = ArrayString<12>;
 /// `ultrachess/src/san.rs:1` `1.43µs/48` path (MIT attribution).
 #[inline(always)]
 pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
+    let mut out = move_to_san_body(board, mv)?;
+    if let Some(c) = check_mate_suffix_after_make(board, mv) {
+        out.push(c);
+    }
+    Some(out)
+}
+
+/// Renders everything of `mv`'s SAN except the check/mate suffix: the piece
+/// letter, the minimal disambiguation, the capture `x`, the target squares and
+/// the promotion — all of which need only the position the move is played from.
+///
+/// Returns `None` if there is no piece on the move's origin square.
+///
+/// A caller that already holds the position *after* `mv` — a replay engine, a
+/// database exporter, anything whose walk makes the move anyway — appends
+/// [`check_mate_suffix`] itself and so pays neither the board copy nor the
+/// make/unmake [`move_to_san`] needs to reach that position itself.
+/// [`move_to_san`] is exactly this function plus that suffix.
+#[inline(always)]
+pub fn move_to_san_body(board: &Board, mv: Move) -> Option<San> {
     let from = mv.from();
     let to = mv.to();
     let piece = board.piece_at(from)?;
@@ -134,20 +154,42 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
         }
     }
 
-    // Check / mate annotation — `make`/`unmake` not `clone`, gated behind O(1)
-    // `in_check()` (D3, 0.32ns) so expensive `has_no_legal_moves` is skipped
-    // when not in check (ultrachess `san.rs:1` `append_check_suffix`).
+    Some(out)
+}
+
+/// The check/mate suffix of `after` — the position a move leads to, already
+/// reached: `Some('#')` when the side to move is checkmated, `Some('+')` when
+/// it is in check with a legal reply, `None` when it is not in check.
+///
+/// `in_check()` is the O(1) `checkers != 0` cache (0.32 ns, D3), so the
+/// expensive mate test runs only in check (ultrachess `san.rs:1`
+/// `append_check_suffix`).
+///
+/// The position must have been reached through a make that maintains
+/// `checkers` — `make_move_unchecked`, `make_move_perft`, or `play` on top of
+/// one. The v0.1.4 fast makes (`make_move_fast`, `play_fast`) deliberately skip
+/// the cache, and a stale `checkers` reads as "not in check".
+#[inline(always)]
+pub fn check_mate_suffix(after: &Board) -> Option<char> {
+    if !after.in_check() {
+        return None;
+    }
+    // `has_no_legal_moves` via the MoveCounter bulk path (`count +=
+    // popcount`, no `Move` materialisation, close-gap D4 task 5.1) — gated
+    // behind the O(1) `in_check()` cache.
+    Some(if after.count_legal_moves() == 0 { '#' } else { '+' })
+}
+
+/// [`check_mate_suffix`] for a move that has not been made yet: makes it on a
+/// copy — `make`/`unmake`, not `clone`, gigachess's deliberate make+unmake
+/// tradeoff — reads the suffix, unmakes.
+#[inline(always)]
+fn check_mate_suffix_after_make(board: &Board, mv: Move) -> Option<char> {
     let mut tmp = *board;
     let undo = tmp.make_move_unchecked(mv);
-    if tmp.in_check() {
-        // `has_no_legal_moves` via the MoveCounter bulk path (`count +=
-        // popcount`, no `Move` materialisation, close-gap D4 task 5.1) —
-        // gated behind the O(1) `in_check()` cache.
-        let is_mate = tmp.count_legal_moves() == 0;
-        out.push(if is_mate { '#' } else { '+' });
-    }
+    let suffix = check_mate_suffix(&tmp);
     tmp.unmake_move(mv, undo);
-    Some(out)
+    suffix
 }
 
 /// Parses a SAN token against `board` and returns the legal move it denotes.
@@ -392,6 +434,108 @@ mod tests {
         assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "Qh4#");
         // Suffixed token parses too.
         assert!(san_to_move(&board, "Qh4#").is_some());
+    }
+
+    #[test]
+    fn san_body_carries_no_suffix_and_the_suffix_seam_agrees() {
+        // `f3 e5 g4` leaves Black one move from mate: Qh4 is `#`.
+        let board = play_all(&["f3", "e5", "g4"]);
+        let mv = san_to_move(&board, "Qh4").unwrap();
+        assert_eq!(move_to_san_body(&board, mv).unwrap().as_str(), "Qh4");
+        // `Board` is `Copy`: making the move on the copy left `board` alone.
+        let untouched = board;
+        let mut after = board;
+        after.make_move_unchecked(mv);
+        assert_eq!(check_mate_suffix(&after), Some('#'));
+        // The monolith is the composition, byte for byte.
+        let mut joined = move_to_san_body(&board, mv).unwrap();
+        joined.push(check_mate_suffix(&after).expect("mate"));
+        assert_eq!(joined, move_to_san(&board, mv).unwrap());
+        assert_eq!(untouched, board, "the make did not touch the original");
+    }
+
+    #[test]
+    fn a_quiet_move_has_no_suffix() {
+        let board = play_all(&["e4", "e5", "Nf3"]);
+        let mv = san_to_move(&board, "Nc6").unwrap();
+        let mut after = board;
+        after.make_move_unchecked(mv);
+        assert_eq!(check_mate_suffix(&after), None);
+        assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "Nc6");
+    }
+
+    #[test]
+    fn a_check_with_a_reply_is_a_plus() {
+        // 1. e4 e5 2. Qh5 Nf6 3. Qxe5+ — the e-file is open and Black can block
+        // on e7, so this is a `+` and not a `#`.
+        let board = play_all(&["e4", "e5", "Qh5", "Nf6"]);
+        let mv = san_to_move(&board, "Qxe5+").unwrap();
+        assert_eq!(move_to_san_body(&board, mv).unwrap().as_str(), "Qxe5");
+        let mut after = board;
+        after.make_move_unchecked(mv);
+        assert_eq!(check_mate_suffix(&after), Some('+'));
+        assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "Qxe5+");
+        assert!(!after.legal_moves().is_empty(), "the reply is what makes it a `+`");
+    }
+
+    #[test]
+    fn the_split_composition_holds_for_every_notation_shape() {
+        // Castling both sides, en passant and a checking move: the body and the
+        // suffix compose into `move_to_san` for each.
+        let lines: [&[&str]; 4] = [
+            &["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "O-O"],
+            &["d4", "d5", "Nc3", "Nf6", "Bf4", "e6", "Qd2", "Bd6", "O-O-O"],
+            &["e4", "e6", "e5", "d5", "exd6"],
+            &["e4", "e5", "Qh5", "Nf6", "Qxe5"],
+        ];
+        for line in lines {
+            let mut board = Board::startpos();
+            for san in line {
+                let mv = san_to_move(&board, san).unwrap_or_else(|| panic!("parse {san}"));
+                let mut joined = move_to_san_body(&board, mv).unwrap();
+                let mut after = board;
+                after.make_move_unchecked(mv);
+                if let Some(c) = check_mate_suffix(&after) {
+                    joined.push(c);
+                }
+                assert_eq!(joined, move_to_san(&board, mv).unwrap(), "line {san}");
+                board = after;
+            }
+        }
+        // A disambiguated move (knights on b2 and d2 both reach c4): the body
+        // carries the origin file, the suffix nothing.
+        let board = crate::fen::parse_fen("5k2/8/8/8/8/8/1N1N4/4K3 w - - 0 1").unwrap();
+        let mv = san_to_move(&board, "Nbc4").unwrap();
+        assert_eq!(move_to_san_body(&board, mv).unwrap().as_str(), "Nbc4");
+        let mut after = board;
+        after.make_move_unchecked(mv);
+        assert_eq!(check_mate_suffix(&after), None);
+        assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "Nbc4");
+        // A promotion with check: the seam must not disturb `=Q`.
+        let board = crate::fen::parse_fen("7k/P7/8/8/8/8/8/6K1 w - - 0 1").unwrap();
+        let mv = san_to_move(&board, "a8=Q+").unwrap();
+        assert_eq!(move_to_san_body(&board, mv).unwrap().as_str(), "a8=Q");
+        let mut after = board;
+        after.make_move_unchecked(mv);
+        assert_eq!(check_mate_suffix(&after), Some('+'));
+        assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "a8=Q+");
+    }
+
+    #[test]
+    fn a_stale_checkers_cache_would_be_a_stale_suffix() {
+        // Why the doc comment insists on a checkers-maintaining make:
+        // `make_move_fast` leaves `checkers` untouched, so the O(1)
+        // `in_check()` a suffix reads is stale — pinned here so the trade-off
+        // cannot be quietly lost.
+        let board = play_all(&["f3", "e5", "g4"]);
+        let mv = san_to_move(&board, "Qh4").unwrap();
+        let mut after = board;
+        after.make_move_fast(mv);
+        assert!(!after.in_check(), "a stale `checkers` reads as no check");
+        let mut after = board;
+        after.make_move_unchecked(mv);
+        assert!(after.in_check());
+        assert_eq!(check_mate_suffix(&after), Some('#'));
     }
 
     #[test]

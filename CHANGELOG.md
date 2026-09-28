@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.5] - 2026-09-28
+
+### Added
+- Splittable SAN rendering: `san::move_to_san_body(board, mv) -> Option<San>` renders everything
+  of a move's SAN except the check/mate suffix, and `san::check_mate_suffix(after: &Board) ->
+  Option<char>` returns that suffix for a position the caller has already reached — `Some('#')` when
+  the side to move is checkmated, `Some('+')` when it is in check with a legal reply, `None`
+  otherwise. `move_to_san` is exactly the two composed and is byte-identical to its previous
+  output, so no existing caller changes and nothing about the notation rules moved. A caller whose
+  walk makes the move anyway — a replay engine, a database exporter — no longer pays for a 144B
+  `Board` copy, a second `make_move_unchecked` and an `unmake_move` per SAN: the suffix costs the
+  O(1) cached `in_check()` (0.32 ns) and, only in check, `count_legal_moves()`. The after-position
+  must be reached through a make that maintains `checkers` (`make_move_unchecked`,
+  `make_move_perft`, `play`); the v0.1.4 fast makes leave that cache stale and must not be used
+  with it. Covered by `tests/san_split_property.rs` (100,000 positions from random playouts across
+  the standard start and Chess960 starts 284 and 518, asserting the split equals the monolith) and
+  by unit tests for the quiet, `+`, `#`, promotion-with-check, disambiguation and castling shapes.
+
+
 ## [0.1.4] - 2026-09-28
 
 ### Added
