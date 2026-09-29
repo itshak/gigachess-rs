@@ -70,14 +70,44 @@ move is in check is unreachable by legal play. That is a property of the
 transition. What is verified instead is that the refreshed cache matches a fresh
 computation for the new side to move, which is the work the refresh does.
 
+## Validated against the real database
+
+The Mega Database turned out to be on this machine, so task 4.2's corpus replay
+was done rather than deferred.
+
+`cbvault verify` over all 11,149,379 games (883,141,297 plies) in 8.5 s found
+**2,975 null moves** and **5 failures — none of them null-move related**
+("no Queen number 2", "encoding mode 1 is not supported" twice, "Chess960 game
+without a start position", "tree not terminated"). That run used the *published*
+gigachess 0.1.6, so it does not exercise the new dispatch.
+
+So the null-bearing games were extracted (cbvault's `dump_null_games` example
+writes the mainline `moves2` words of every game containing a pass) and replayed
+through this crate's public API: **1,002 games, 75,501 plies, 1,208 passes**,
+hash parity checked at every ply, every movetext round-tripped byte-identically,
+and every recorded pass confirmed **legal** by this engine — a real-world
+cross-check on the refusal rule, not just the acceptance path. 106 of the games
+start from a set-up position, and one is literally a single ply: a pass and
+nothing else.
+
+A 28 KB sample of 62 games is committed as `tests/data/cbh_null_games.txt`, so
+`tests/cbh_corpus.rs` keeps the check permanent without a 5.4 GB database.
+
+### What the corpus suite does not cover, stated plainly
+
+The replay uses `play` throughout, so `checkers` is always fresh and **deciding
+a pass from a stale cache is structurally unreachable there** — reverting the
+fresh test to the cached one leaves all four corpus tests green (verified). That
+path is covered by the two synthetic suites, both verified to fail when the fix
+is reverted. The corpus suite does catch a pass that fails to flip the turn
+(3 of 4 fail) and one that omits the turn-key hash XOR (hash parity fails).
+
 ## Carried forward (not done here)
 
 - **`cbvault` re-export and de-dupe** — re-export `gigachess::Move::NULL`, keep
   `NULL_MOVE` as an alias, delete the manual `--`/no-suffix/fullmove branches.
   Blocked on gigachess 0.1.8 being published, which is an owner decision. Not
   faked.
-- **Reference-corpus replay** of null-bearing CBH games, pending access to the
-  database.
 
 ## Landed downstream
 

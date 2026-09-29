@@ -26,3 +26,9 @@ Cargo.lock.bak
 
 # Crash / debug logs
 *.log
+
+# Extracted game data from licensed databases (e.g. ChessBase Mega Database) is
+# copyrighted and must never be committed. Regenerate locally with cbvault's
+# `dump_null_games` example and point GIGACHESS_CBH_NULL_GAMES at the result.
+tests/data/cbh_null_games.txt
+fixtures-local/

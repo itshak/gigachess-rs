@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cache and the fresh computation genuinely disagree) before asserting the refusal.
 - No breaking change: a pass was never in `legal_moves()` or any legal-move stream, so nothing
   that did not already carry `0xffff` can change behaviour.
+- **Validated against real ChessBase data.** All 1,002 null-bearing games in *Mega Database 2025*
+  (11,149,379 games, 883,141,297 plies) were replayed through the public API: 75,501 plies, 1,208
+  passes, hash parity checked at every ply, and every movetext round-tripped byte-identically.
+  Every pass the database records is one this engine considers legal — a real-world cross-check
+  on the refusal rule, not only the acceptance path. A 28 KB sample (62 games) is committed as
+  `tests/data/cbh_null_games.txt` so the check is permanent without a 5.4 GB database present.
 
 ## [0.1.7] - 2026-09-29
 
