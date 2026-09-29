@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.9] - 2026-09-29
+
+### Changed
+- **Removed a 28 KB sample of games extracted from ChessBase's *Mega Database 2025*, which had
+  been committed in error.** Game records from a licensed database are copyrighted and this
+  repository is public, so the extraction has no place in it. The history was rewritten, the path
+  is now in `.gitignore`, and the corpus check reads a dump you generate yourself from
+  `GIGACHESS_CBH_NULL_GAMES` rather than a committed file. Every test in `tests/cbh_corpus.rs` is
+  `#[ignore]`d, so with no dump the suite reports **4 ignored** — inert and visibly so, never
+  silently green for want of data.
+- The null-move contract is still validated against the real corpus, on demand: all 1,002
+  null-bearing games in *Mega Database 2025* (11,149,379 games, 883,141,297 plies) replay through
+  `play` — 75,501 plies, 1,208 passes, hash parity at every ply, every movetext round-tripping
+  byte-identically, and every pass the database records confirmed legal by this engine.
+- `cargo publish` is now idempotent: a version already on crates.io is reported as a notice
+  rather than a failure, so moving or re-pushing a published tag cannot produce a red build that
+  needs no action.
+
 ## [0.1.8] - 2026-09-29
 
 ### Added
