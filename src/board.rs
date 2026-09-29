@@ -1265,7 +1265,10 @@ impl Board {
     /// for branch-free `in_check()` (0.32ns) and increments/decrements `hash`
     /// for `zobrist()` load (0.34ns). Cost +2ns/make `attackers_to` to refresh
     /// `checkers` is kept per `BENCH.md: Deliberate make+unmake tradeoff`.
-    pub fn make_move_unchecked(&mut self, mv: Move) -> Undo {
+    fn make_move_unchecked_with<const HASH: bool, const CHECKERS: bool>(
+        &mut self,
+        mv: Move,
+    ) -> Undo {
         let mut undo = Undo {
             hash: self.hash,
             checkers: self.checkers,
@@ -1287,7 +1290,7 @@ impl Board {
 
         // Hash out the old en-passant contribution (relevance uses the
         // mover's pawns, which have not changed yet).
-        if self.ep_relevant(self.ep, us) {
+        if HASH && self.ep_relevant(self.ep, us) {
             self.hash ^= zobrist::ep_key(Square(self.ep));
         }
 
@@ -1357,7 +1360,9 @@ impl Board {
         // derived from `castle_rook_sq` + mover role (close-gap D3, task 4.1).
         let new_castling = self.castling & self.castle_rights_after(role, us, from, to);
         if new_castling != self.castling {
-            self.hash ^= self.castle_rights_hash(self.castling ^ new_castling);
+            if HASH {
+                self.hash ^= self.castle_rights_hash(self.castling ^ new_castling);
+            }
             self.castling = new_castling;
         }
 
@@ -1367,7 +1372,7 @@ impl Board {
         } else {
             NO_EP
         };
-        if self.ep_relevant(self.ep, us.other()) {
+        if HASH && self.ep_relevant(self.ep, us.other()) {
             self.hash ^= zobrist::ep_key(Square(self.ep));
         }
 
@@ -1382,14 +1387,47 @@ impl Board {
         }
 
         self.turn = us.other();
-        self.hash ^= zobrist::turn_key();
+        if HASH {
+            self.hash ^= zobrist::turn_key();
+        }
         // Refresh cached checkers for the new side to move (+2ns/make, D3).
-        self.checkers = self.attackers_to(
-            self.king_sq[self.turn.index()],
-            self.turn.other(),
-            self.occupied(),
-        );
+        if CHECKERS {
+            self.checkers = self.attackers_to(
+                self.king_sq[self.turn.index()],
+                self.turn.other(),
+                self.occupied(),
+            );
+        }
         undo
+    }
+
+    /// Applies `mv` without legality validation, maintaining the incremental
+    /// Polyglot hash and the cached `checkers`. The default for callers that read
+    /// both.
+    #[inline(always)]
+    pub fn make_move_unchecked(&mut self, mv: Move) -> Undo {
+        self.make_move_unchecked_with::<true, true>(mv)
+    }
+
+    /// Applies `mv` without legality validation, maintaining the incremental
+    /// Polyglot hash but **not** the cached `checkers` — for a caller that
+    /// indexes positions and never asks `in_check()`. Skips the `attackers_to`
+    /// refresh the caching make pays.
+    ///
+    /// `zobrist()` stays correct; `in_check()` is **stale** and must not be read.
+    #[inline(always)]
+    pub fn make_move_hashed(&mut self, mv: Move) -> Undo {
+        self.make_move_unchecked_with::<true, false>(mv)
+    }
+
+    /// Applies `mv` without legality validation, maintaining the cached
+    /// `checkers` but **not** the incremental Polyglot hash — for a caller that
+    /// renders SAN and never indexes a position.
+    ///
+    /// `in_check()` stays correct; `zobrist()` is **stale** and must not be read.
+    #[inline(always)]
+    pub fn make_move_checkered(&mut self, mv: Move) -> Undo {
+        self.make_move_unchecked_with::<false, true>(mv)
     }
 
     /// Plays a null move (pass): the position stays, the side to move flips.
@@ -1409,7 +1447,9 @@ impl Board {
     /// stores pass turns as moves, and legality of the surrounding moves is checked against the
     /// position it produces.
     #[inline(always)]
-    pub fn make_null_move(&mut self) -> Result<Undo, IllegalMove> {
+    fn make_null_move_with<const HASH: bool, const CHECKERS: bool>(
+        &mut self,
+    ) -> Result<Undo, IllegalMove> {
         if self.in_check() {
             return Err(IllegalMove);
         }
@@ -1425,7 +1465,7 @@ impl Board {
         let us = self.turn;
         // Hash out the old en-passant contribution (relevance uses the mover's pawns, which have
         // not changed yet) before clearing it.
-        if self.ep_relevant(self.ep, us) {
+        if HASH && self.ep_relevant(self.ep, us) {
             self.hash ^= zobrist::ep_key(Square(self.ep));
         }
         self.ep = NO_EP;
@@ -1435,12 +1475,71 @@ impl Board {
         // consistent).
         self.fullmove += 1;
         self.turn = us.other();
-        self.hash ^= zobrist::turn_key();
-        self.checkers = self.attackers_to(
+        if HASH {
+            self.hash ^= zobrist::turn_key();
+        }
+        if CHECKERS {
+            self.checkers = self.attackers_to(
+                self.king_sq[self.turn.index()],
+                self.turn.other(),
+                self.occupied(),
+            );
+        }
+        Ok(undo)
+    }
+
+    /// Plays a null move, maintaining the hash and the cached `checkers`.
+    #[inline(always)]
+    pub fn make_null_move(&mut self) -> Result<Undo, IllegalMove> {
+        self.make_null_move_with::<true, true>()
+    }
+
+    /// Plays a null move maintaining the hash but not the cached `checkers`; the
+    /// keyed-conversion counterpart of [`Board::make_move_hashed`].
+    #[inline(always)]
+    pub fn make_null_move_hashed(&mut self) -> Result<Undo, IllegalMove> {
+        self.make_null_move_with::<true, false>()
+    }
+
+    /// Plays a null move maintaining the cached `checkers` but not the hash; the
+    /// SAN counterpart of [`Board::make_move_checkered`].
+    #[inline(always)]
+    pub fn make_null_move_checkered(&mut self) -> Result<Undo, IllegalMove> {
+        self.make_null_move_with::<false, true>()
+    }
+
+    /// Plays a null move maintaining neither the hash nor the cached `checkers` —
+    /// the null-move counterpart of [`Board::play_fast`], for a walker that keeps
+    /// neither cache current.
+    ///
+    /// The check test is computed from the bitboards rather than read from the
+    /// cache: after a fast make the cache is stale, and a null move that trusted it
+    /// would accept or refuse the wrong positions. `zobrist()` and `in_check()`
+    /// are both stale afterwards and must not be read.
+    #[inline(always)]
+    pub fn make_null_move_fast(&mut self) -> Result<Undo, IllegalMove> {
+        if self.attackers_to(
             self.king_sq[self.turn.index()],
             self.turn.other(),
             self.occupied(),
-        );
+        ) != 0
+        {
+            return Err(IllegalMove);
+        }
+        let undo = Undo {
+            hash: self.hash,
+            checkers: self.checkers,
+            castling: self.castling,
+            ep: self.ep,
+            halfmove: self.halfmove,
+            captured: EMPTY,
+            castled: false,
+        };
+        let us = self.turn;
+        self.ep = NO_EP;
+        self.halfmove = self.halfmove.saturating_add(1);
+        self.fullmove += 1;
+        self.turn = us.other();
         Ok(undo)
     }
 
@@ -2107,6 +2206,47 @@ impl Board {
         let mover = self.turn.other();
         if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
             self.unmake_move_fast(mv, undo);
+            return Err(IllegalMove);
+        }
+        Ok(undo)
+    }
+
+    /// Validates and applies `mv`, maintaining the incremental Polyglot hash but
+    /// **not** the cached `checkers` — the shape a position indexer wants: it
+    /// reads `zobrist()` on every ply and never asks `in_check()`.
+    ///
+    /// Skips the `attackers_to` refresh [`Board::play`] pays to keep `in_check()`
+    /// branch-free. `zobrist()` stays correct; `in_check()` is **stale** after the
+    /// move and must not be read.
+    #[inline(always)]
+    pub fn play_hashed(&mut self, mv: Move) -> Result<Undo, IllegalMove> {
+        if !self.is_pseudo_legal(mv) {
+            return Err(IllegalMove);
+        }
+        let undo = self.make_move_hashed(mv);
+        let mover = self.turn.other();
+        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
+            self.unmake_move(mv, undo);
+            return Err(IllegalMove);
+        }
+        Ok(undo)
+    }
+
+    /// Validates and applies `mv`, maintaining the cached `checkers` but **not**
+    /// the incremental Polyglot hash — the shape a SAN writer wants: it reads
+    /// `in_check()` for the check/mate suffix and never indexes a position.
+    ///
+    /// `in_check()` stays correct; `zobrist()` is **stale** after the move and
+    /// must not be read.
+    #[inline(always)]
+    pub fn play_checkered(&mut self, mv: Move) -> Result<Undo, IllegalMove> {
+        if !self.is_pseudo_legal(mv) {
+            return Err(IllegalMove);
+        }
+        let undo = self.make_move_checkered(mv);
+        let mover = self.turn.other();
+        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
+            self.unmake_move(mv, undo);
             return Err(IllegalMove);
         }
         Ok(undo)

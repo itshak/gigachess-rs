@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.7] - 2026-09-29
+
+### Added
+- **The make now declares the state it maintains.** A make maintains two things beyond the
+  position: the incremental Polyglot `hash` and the cached `checkers` bitboard. The API offered
+  only "both" (`play`, `make_move_unchecked`) and "neither" (`play_fast`, `make_move_fast`), so
+  a caller that wanted the key but had no use for the checkers cache paid for both. The two
+  missing corners are now available and cost nothing:
+  - `play_hashed` / `make_move_hashed` — hash maintained, `checkers` **stale**.
+  - `play_checkered` / `make_move_checkered` — `checkers` maintained, `zobrist()` **stale**.
+  - Null-move counterparts: `make_null_move_hashed`, `make_null_move_checkered`,
+    `make_null_move_fast`.
+
+  All four are instantiations of one implementation, so the half a caller does not need is
+  removed at compile time rather than branched over. Each entry point's docs state which
+  accessor stays correct and which must not be read.
+
+### Fixed
+- **`make_null_move_fast`, and with it a latent correctness bug in every cache-free walker.**
+  `make_null_move` decided legality with `in_check()`, which reads the cached `checkers`. A
+  walker that keeps neither cache makes its moves with `play_fast`, which leaves that cache
+  stale — so a CBH null-move token (`0xffff` in `moves2`) was validated against a stale value
+  and a game with a pass turn could be accepted or refused wrongly. The new
+  `make_null_move_fast` answers the in-check test from the bitboards instead.
+
+### Changed
+- The `make_move_perft` doc comment claimed it skips the `checkers` refresh; the code maintains
+  it (once per node, which is what perft wants). The comment now matches the code, and says
+  plainly that `zobrist()` is stale and the clocks are not advanced.
+
+### Performance
+Measured by the `cbvault` consumer over ChessBase's Mega Database 2025 — 11,149,374 games,
+883,141,466 positions, one thread, identical record plumbing per pass:
+
+| pass | make | wall clock | ns/ply |
+|------|------|-----------|--------|
+| A | `play_fast` (neither) | 42.92 s | 48.6 |
+| B | `play` (hash + checkers) | 46.96 s | 53.2 |
+| C | `play` + 8 B per position written | 47.18 s | 53.4 |
+| D | `play_hashed` + 8 B per position written | 43.26 s | 49.0 |
+
+The `checkers` refresh costs **3.92 s over 883 M positions — 4.4 ns/ply**, about twice the
+~2 ns the source comment assumed; the incremental hash is 0.1–0.5 s, i.e. noise. A conversion
+that writes a position key per ply therefore drops from **+9.9 %** over a moves-only pass to
+**+0.8 %**. The SAN path keeps `checkers` (it is what decides `+`/`#`) and so gains only the
+hash, which is noise; its output is byte-identical — the consumer's gold comparison stays at
+407,350 of 419,385 exact, 0 read errors, 0 decode errors.
+
+### Tests
+- `tests/make_variants.rs` (9 tests): the hash contract against `zobrist_full()` across a
+  double push, an en-passant capture, a capture, a promotion, castling and a check evasion; the
+  checkers contract against a fresh `attackers_to`; position parity across all four variants
+  (perft held to its documented clock-skipping contract); illegal-move rejection with board
+  restoration on all four validating entry points; a pass refused in check by every null-move
+  variant; the stale-cache regression; the canonical Polyglot start-position key.
+
+---
+
 ## [0.1.6] - 2026-09-29
 
 ### Changed
