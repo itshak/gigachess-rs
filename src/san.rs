@@ -20,11 +20,23 @@ pub type San = ArrayString<12>;
 ///
 /// Returns `None` if the move is not legal in the position.
 ///
+/// A [`Move::NULL`] renders as `--` and nothing else. The pass is returned
+/// before the suffix logic rather than after it: a pass can neither give nor
+/// answer check, so `--` must never carry a `+` or `#`. Returning here also
+/// means the rendering makes no move, so it touches neither the incremental hash
+/// nor the cached `checkers` — a SAN scan over a game full of passes leaves both
+/// exactly as it found them.
+///
 /// Branchless via `tables::between` (for `SAN` disambig pre-filter) +
 /// `make`/`unmake` suffix and `attacks_from_target` pre-filter, copying
 /// `ultrachess/src/san.rs:1` `1.43µs/48` path (MIT attribution).
 #[inline(always)]
 pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
+    if mv.is_null() {
+        let mut pass = San::new();
+        pass.push_str("--");
+        return Some(pass);
+    }
     let mut out = move_to_san_body(board, mv)?;
     if let Some(c) = check_mate_suffix_after_make(board, mv) {
         out.push(c);
@@ -45,6 +57,14 @@ pub fn move_to_san(board: &Board, mv: Move) -> Option<San> {
 /// [`move_to_san`] is exactly this function plus that suffix.
 #[inline(always)]
 pub fn move_to_san_body(board: &Board, mv: Move) -> Option<San> {
+    // A pass is `--`, in or out, with no suffix and no make. Returning before the
+    // legality `debug_assert` below also keeps the null word away from the
+    // `unmake_move` it is not paired with.
+    if mv.is_null() {
+        let mut pass = San::new();
+        pass.push_str("--");
+        return Some(pass);
+    }
     let from = mv.from();
     let to = mv.to();
     let piece = board.piece_at(from)?;
@@ -212,12 +232,28 @@ fn check_mate_suffix_after_make(board: &Board, mv: Move) -> Option<char> {
 ///
 /// Accepts standard SAN (with optional `+`, `#`, `!`, `?` suffixes, the
 /// `=Q` promotion spelling and both `O-O` / `0-0` castling spellings).
+///
+/// A pass is written `--` (and, as ChessBase also spells it, `Z0`); both yield
+/// [`Move::NULL`], or `None` when the side to move is in check, where a pass is
+/// not legal. Those two are the only accepted spellings — `null` and `pass` are
+/// rejected rather than guessed at, so a token this parser does not understand
+/// surfaces as an unresolvable move instead of quietly becoming one.
 pub fn san_to_move(board: &Board, san: &str) -> Option<Move> {
     let s = san.trim();
     // Strip annotation suffixes.
     let s = s.trim_end_matches(['+', '#', '!', '?']);
     if s.is_empty() {
         return None;
+    }
+
+    // The pass. Checked before the castling scan below, which would otherwise
+    // see nothing here, and before any move generation.
+    if s == "--" || s == "Z0" {
+        return if board.is_legal(Move::NULL) {
+            Some(Move::NULL)
+        } else {
+            None
+        };
     }
 
     let bytes = s.as_bytes();

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.8] - 2026-09-29
+
+### Added
+- **The null move is a first-class move.** ChessBase (`.cbh`) databases encode a pass as the
+  single word `0xffff` in the `moves2` stream. That word used to reach the board and be treated
+  as an ordinary move with squares: it aborted on an incidental debug assert, and in release it
+  moved whatever decoded out of `0xffff` and destroyed castling rights.
+  - `Move::NULL` is the word, with `is_null()` — a single `u16` compare, and no legal move
+    collides with it.
+  - It dispatches in **all eight** make/play entries (`play`, `play_fast`, `play_hashed`,
+    `play_checkered`, `make_move_unchecked`, `make_move_hashed`, `make_move_checkered`,
+    `make_move_fast`), so a generic `play` loop over a `moves2` stream handles a pass without
+    the caller knowing passes exist.
+  - `is_pseudo_legal(Move::NULL)` is `true` — the sentinel is structurally well-formed, needing
+    no piece, geometry or target. `is_legal(Move::NULL)` is answered by a **dedicated branch**.
+  - SAN out is `--`, never suffixed; in, exactly `--` and `Z0`. UCI is `0000`.
+  - `parse_movetext_to_moves2`, `moves2_to_san_movetext`, `replay_*` and `position_stats` all
+    carry a pass, with no per-caller branches: they reach the transition through `play`.
+  - `Move::NULL` pairs exclusively with `unmake_null_move`; `unmake_move` on a null word is
+    undefined and asserts in debug.
+
+### Fixed
+- **`is_legal(Move::NULL)` would have been answered by the wrong question.** The generic
+  make-and-test body asks whether the *mover's* king survives the move. A pass moves no king, so
+  that body cannot express it — it ends up testing the *opponent's* king, which is safe, and
+  returns `true` on exactly the positions where a pass must be refused. Verified on a
+  stale-cache check position: the generic body says `true`, the correct fresh test says `false`.
+  `is_legal` now has its own branch, and a test named after the hazard fails if it is removed.
+- `make_null_move_fast` was a hand-copied duplicate of the null transition. All four variants now
+  share one definition of what a pass does to a board.
+
+### Notes
+- The pass/refuse test is always a fresh `attackers_to`, never the cached `in_check()` — the same
+  rule 0.1.7 established, now carried by all eight entry points. A test asserts the premise (the
+  cache and the fresh computation genuinely disagree) before asserting the refusal.
+- No breaking change: a pass was never in `legal_moves()` or any legal-move stream, so nothing
+  that did not already carry `0xffff` can change behaviour.
+
 ## [0.1.7] - 2026-09-29
 
 ### Added

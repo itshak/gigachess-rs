@@ -11,6 +11,26 @@ use crate::types::{Role, Square};
 pub struct Move(pub u16);
 
 impl Move {
+    /// The null move: a pass, changing nothing but the side to move.
+    ///
+    /// ChessBase (.cbh) databases encode a pass as the single word `0xffff` in the
+    /// `moves2` stream, so this is the word a decoder produces and the word a
+    /// re-encoder must accept. No legal move can collide with it: the low 12 bits
+    /// are the from/to squares and the top 4 the promotion role, and `0xffff`
+    /// would decode as a knight promoting onto square 63, which no move generation
+    /// path can produce. One `u16` compare is the whole test.
+    ///
+    /// A pass is **not** in [`Board::legal_moves`], is illegal while the side to
+    /// move is in check, and pairs with [`Board::unmake_null_move`] — never with
+    /// [`Board::unmake_move`], which asserts on a null word.
+    pub const NULL: Move = Move(0xffff);
+
+    /// True for [`Move::NULL`], the pass.
+    #[inline(always)]
+    pub const fn is_null(self) -> bool {
+        self.0 == 0xffff
+    }
+
     /// Packs `from`, `to` and an optional promotion role into 16 bits.
     #[inline]
     pub const fn new(from: Square, to: Square, promo: Option<Role>) -> Move {
@@ -66,7 +86,12 @@ impl Move {
 
 impl core::fmt::Display for Move {
     /// Renders the move in UCI notation (e.g. `e2e4`, `e7e8q`).
+    ///
+    /// [`Move::NULL`] renders as `0000`, the UCI spelling of a pass.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.is_null() {
+            return f.write_str("0000");
+        }
         let [ff, fr] = self.from().to_alg();
         let [tf, tr] = self.to().to_alg();
         write!(f, "{}{}{}{}", ff as char, fr as char, tf as char, tr as char)?;

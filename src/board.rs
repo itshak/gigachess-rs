@@ -1269,6 +1269,11 @@ impl Board {
         &mut self,
         mv: Move,
     ) -> Undo {
+        // A pass is not a move with squares. Every entry that could reach here
+        // dispatches `Move::NULL` onto the null transition first, so finding one
+        // means a new entry point bypassed that dispatch — fail loudly in debug
+        // rather than corrupting the board in release.
+        debug_assert!(!mv.is_null(), "null move reached the generic make body");
         let mut undo = Undo {
             hash: self.hash,
             checkers: self.checkers,
@@ -1404,8 +1409,18 @@ impl Board {
     /// Applies `mv` without legality validation, maintaining the incremental
     /// Polyglot hash and the cached `checkers`. The default for callers that read
     /// both.
+    ///
+    /// A [`Move::NULL`] is dispatched onto the null-move transition, unchecked
+    /// like any other move here; pair it with [`Board::unmake_null_move`].
     #[inline(always)]
     pub fn make_move_unchecked(&mut self, mv: Move) -> Undo {
+        if mv.is_null() {
+            debug_assert!(
+                self.pass_is_legal(),
+                "make_move_unchecked(Move::NULL) while in check"
+            );
+            return self.null_transition::<true, true>();
+        }
         self.make_move_unchecked_with::<true, true>(mv)
     }
 
@@ -1417,6 +1432,13 @@ impl Board {
     /// `zobrist()` stays correct; `in_check()` is **stale** and must not be read.
     #[inline(always)]
     pub fn make_move_hashed(&mut self, mv: Move) -> Undo {
+        if mv.is_null() {
+            debug_assert!(
+                self.pass_is_legal(),
+                "make_move_hashed(Move::NULL) while in check"
+            );
+            return self.null_transition::<true, false>();
+        }
         self.make_move_unchecked_with::<true, false>(mv)
     }
 
@@ -1427,6 +1449,13 @@ impl Board {
     /// `in_check()` stays correct; `zobrist()` is **stale** and must not be read.
     #[inline(always)]
     pub fn make_move_checkered(&mut self, mv: Move) -> Undo {
+        if mv.is_null() {
+            debug_assert!(
+                self.pass_is_legal(),
+                "make_move_checkered(Move::NULL) while in check"
+            );
+            return self.null_transition::<false, true>();
+        }
         self.make_move_unchecked_with::<false, true>(mv)
     }
 
@@ -1450,20 +1479,37 @@ impl Board {
     fn make_null_move_with<const HASH: bool, const CHECKERS: bool>(
         &mut self,
     ) -> Result<Undo, IllegalMove> {
-        // The pass/refuse test asks the bitboards, never the cache — in every
-        // variant, not just the fast one. A caller that reached here after
-        // `play_fast` (or any other cache-free make) holds a `checkers` value
-        // that describes some earlier position, and reading it would allow a
-        // pass while the side to move is in check. The scan costs one
-        // `attackers_to` on a path taken roughly once per ten thousand plies.
-        if self.attackers_to(
+        if !self.pass_is_legal() {
+            return Err(IllegalMove);
+        }
+        Ok(self.null_transition::<HASH, CHECKERS>())
+    }
+
+    /// Whether a pass is legal here: the side to move must not be in check.
+    ///
+    /// This asks the bitboards, never the cache — in every variant, not just the
+    /// fast one. A caller that reached here after `play_fast` (or any other
+    /// cache-free make) holds a `checkers` value that describes some earlier
+    /// position, and reading it would allow a pass while the side to move is in
+    /// check. The scan costs one `attackers_to` on a path taken roughly once per
+    /// ten thousand plies.
+    #[inline(always)]
+    fn pass_is_legal(&self) -> bool {
+        self.attackers_to(
             self.king_sq[self.turn.index()],
             self.turn.other(),
             self.occupied(),
-        ) != 0
-        {
-            return Err(IllegalMove);
-        }
+        ) == 0
+    }
+
+    /// The null-move state transition, with no legality test.
+    ///
+    /// Split out of [`Board::make_null_move_with`] so that the raw unchecked make
+    /// entries can dispatch a [`Move::NULL`] onto exactly the same transition the
+    /// validating entries use, instead of each re-deriving it. There is one
+    /// definition of what a pass does to a board.
+    #[inline(always)]
+    fn null_transition<const HASH: bool, const CHECKERS: bool>(&mut self) -> Undo {
         let undo = Undo {
             hash: self.hash,
             checkers: self.checkers,
@@ -1496,7 +1542,7 @@ impl Board {
                 self.occupied(),
             );
         }
-        Ok(undo)
+        undo
     }
 
     /// Plays a null move, maintaining the hash and the cached `checkers`.
@@ -1529,29 +1575,7 @@ impl Board {
     /// are both stale afterwards and must not be read.
     #[inline(always)]
     pub fn make_null_move_fast(&mut self) -> Result<Undo, IllegalMove> {
-        if self.attackers_to(
-            self.king_sq[self.turn.index()],
-            self.turn.other(),
-            self.occupied(),
-        ) != 0
-        {
-            return Err(IllegalMove);
-        }
-        let undo = Undo {
-            hash: self.hash,
-            checkers: self.checkers,
-            castling: self.castling,
-            ep: self.ep,
-            halfmove: self.halfmove,
-            captured: EMPTY,
-            castled: false,
-        };
-        let us = self.turn;
-        self.ep = NO_EP;
-        self.halfmove = self.halfmove.saturating_add(1);
-        self.fullmove += 1;
-        self.turn = us.other();
-        Ok(undo)
+        self.make_null_move_with::<false, false>()
     }
 
     /// Reverts the most recent null move, restoring the exact prior position.
@@ -1732,6 +1756,10 @@ impl Board {
     /// Reverts a perft slim move (paired with `make_move_perft`).
     #[inline(always)]
     pub fn unmake_move_perft(&mut self, mv: Move, undo: Undo) {
+        debug_assert!(
+            !mv.is_null(),
+            "unmake_move_perft(Move::NULL): a pass pairs with unmake_null_move"
+        );
         let us = self.turn.other(); // mover
         self.turn = us;
         self.checkers = undo.checkers;
@@ -1846,6 +1874,14 @@ impl Board {
 
     /// Reverts the most recent move, restoring the exact prior position.
     pub fn unmake_move(&mut self, mv: Move, undo: Undo) {
+        // A pass pairs with `unmake_null_move`. Round-tripping a null word through
+        // here would decode `0xffff` as h1h1 — a layout coincidence, not a
+        // contract — and would restore the turn but not the fullmove number the
+        // pass advanced.
+        debug_assert!(
+            !mv.is_null(),
+            "unmake_move(Move::NULL): a pass pairs with unmake_null_move"
+        );
         let us = self.turn.other(); // the mover
         self.turn = us;
         if us == Color::Black {
@@ -1928,7 +1964,13 @@ impl Board {
     /// Validates `mv` against pseudo-legal geometry, applies it, and then
     /// confirms the mover's king is safe; rolls back and reports
     /// [`IllegalMove`] otherwise. This is the safe public entry point.
+    ///
+    /// A [`Move::NULL`] passes: it is legal exactly when the side to move is not
+    /// in check, and pairs with [`Board::unmake_null_move`].
     pub fn play(&mut self, mv: Move) -> Result<Undo, IllegalMove> {
+        if mv.is_null() {
+            return self.make_null_move();
+        }
         if !self.is_pseudo_legal(mv) {
             return Err(IllegalMove);
         }
@@ -1945,8 +1987,14 @@ impl Board {
     /// validation are fully maintained.
     ///
     /// Returns the [`Undo`] needed by `unmake_move_fast`.
+    ///
+    /// A [`Move::NULL`] is dispatched onto the null-move transition.
     #[inline(always)]
     pub fn make_move_fast(&mut self, mv: Move) -> Undo {
+        if mv.is_null() {
+            debug_assert!(self.pass_is_legal(), "make_move_fast(Move::NULL) while in check");
+            return self.null_transition::<false, false>();
+        }
         let mut undo = Undo {
             hash: 0,
             checkers: 0,
@@ -2092,6 +2140,10 @@ impl Board {
     /// Reverts a fast move (paired with `make_move_fast`).
     #[inline(always)]
     pub fn unmake_move_fast(&mut self, mv: Move, undo: Undo) {
+        debug_assert!(
+            !mv.is_null(),
+            "unmake_move_fast(Move::NULL): a pass pairs with unmake_null_move"
+        );
         let us = self.turn.other(); // mover
         self.turn = us;
         if us == Color::Black {
@@ -2208,8 +2260,14 @@ impl Board {
     /// `unmake_move_fast` and returning [`IllegalMove`] on failure).
     ///
     /// Skips incremental Polyglot Zobrist hashing and checkers bitboard calculation.
+    ///
+    /// A [`Move::NULL`] passes: it is legal exactly when the side to move is not
+    /// in check, and pairs with [`Board::unmake_null_move`].
     #[inline(always)]
     pub fn play_fast(&mut self, mv: Move) -> Result<Undo, IllegalMove> {
+        if mv.is_null() {
+            return self.make_null_move_fast();
+        }
         if !self.is_pseudo_legal(mv) {
             return Err(IllegalMove);
         }
@@ -2229,8 +2287,14 @@ impl Board {
     /// Skips the `attackers_to` refresh [`Board::play`] pays to keep `in_check()`
     /// branch-free. `zobrist()` stays correct; `in_check()` is **stale** after the
     /// move and must not be read.
+    ///
+    /// A [`Move::NULL`] passes: it is legal exactly when the side to move is not
+    /// in check, and pairs with [`Board::unmake_null_move`].
     #[inline(always)]
     pub fn play_hashed(&mut self, mv: Move) -> Result<Undo, IllegalMove> {
+        if mv.is_null() {
+            return self.make_null_move_hashed();
+        }
         if !self.is_pseudo_legal(mv) {
             return Err(IllegalMove);
         }
@@ -2249,8 +2313,14 @@ impl Board {
     ///
     /// `in_check()` stays correct; `zobrist()` is **stale** after the move and
     /// must not be read.
+    ///
+    /// A [`Move::NULL`] passes: it is legal exactly when the side to move is not
+    /// in check, and pairs with [`Board::unmake_null_move`].
     #[inline(always)]
     pub fn play_checkered(&mut self, mv: Move) -> Result<Undo, IllegalMove> {
+        if mv.is_null() {
+            return self.make_null_move_checkered();
+        }
         if !self.is_pseudo_legal(mv) {
             return Err(IllegalMove);
         }
@@ -2264,7 +2334,19 @@ impl Board {
     }
 
     /// True when the move is legal in this position (without playing it).
+    ///
+    /// A [`Move::NULL`] is answered by its own branch, **not** by the generic body
+    /// below. That body asks whether the *mover's* king survives the move — but a
+    /// pass moves no king, so there is no mover's king to expose, and the only
+    /// question a pass raises is whether the side to move is already in check. The
+    /// generic body cannot express that: it would test the opponent's king, and
+    /// return `true` on precisely the positions where a pass must be refused.
+    /// The test is the same fresh `attackers_to` the pass path uses, never the
+    /// cached `in_check()`.
     pub fn is_legal(&self, mv: Move) -> bool {
+        if mv.is_null() {
+            return self.pass_is_legal();
+        }
         if !self.is_pseudo_legal(mv) {
             return false;
         }
@@ -2284,7 +2366,15 @@ impl Board {
     /// Structural (pseudo-legal) validation of `mv`: piece geometry,
     /// capture/en-passant/castling preconditions. King safety is verified by
     /// `play` after applying.
+    ///
+    /// [`Move::NULL`] is pseudo-legal: the sentinel is structurally well-formed,
+    /// needing no piece, no geometry and no capture target. Whether a pass is
+    /// actually *legal* — the side to move must not be in check — belongs to
+    /// [`Board::is_legal`], not to geometry.
     pub fn is_pseudo_legal(&self, mv: Move) -> bool {
+        if mv.is_null() {
+            return true;
+        }
         let from = mv.from().0;
         let to = mv.to().0;
         if from == to || from > 63 || to > 63 {
