@@ -38,6 +38,12 @@ The null move SHALL additionally be a first-class `Move` word: `Move::NULL` is `
 - **THEN** it is `false`, whether the `checkers` cache is fresh or stale
 - **AND** a test pins this against a position where the generic body's opponent-king test would return `true`
 
+#### Scenario: Every pass variant allows and refuses the same positions
+
+- **WHEN** a pass is requested in each maintenance shape, across 200,000 positions from random playouts including two Chess960 starts
+- **THEN** all verdicts agree with each other and with a fresh `attackers_to` test, and the new dispatching entry points agree with the four null-move variants
+- **AND** each variant's unmake restores the prior position exactly.
+
 #### Scenario: Null pairs only with its own unmake
 
 - **WHEN** a null move is unmade with `unmake_null_move`

@@ -1,5 +1,11 @@
 # Tasks — gigachess-rs-make-state-contract
 
+> **Archived with two tasks deliberately left open**, and they are not lost:
+> **3.3** (publish 0.1.7 to crates.io — an owner step, a public release) and
+> **3.4** (a dedicated tree-wide `cargo fmt` pass, 86 rustfmt diffs at HEAD,
+> tracked because this change is where the gap was measured). Both are listed
+> under "Carried forward" in the archive notes.
+
 **Commit prefix: `[gigachess-rs-make-state-contract]`.**
 
 - [x] 1.1 Parameterise the make on what it maintains: one body, `make_move_unchecked_with::<HASH, CHECKERS>`, with every `hash` update and the `checkers` refresh behind the corresponding const parameter. Verify: `make_move_unchecked` and `make_move_perft` are unchanged call sites of the same body, and the existing suite passes.

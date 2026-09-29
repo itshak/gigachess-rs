@@ -1,35 +1,5 @@
 ## MODIFIED Requirements
 
-### Requirement: Cached Checkers Shall Be Maintained Only for Callers That Read Them
-
-The system SHALL keep the cached `checkers` bitboard current on the make paths
-whose callers read it through the branch-free `in_check()` — `play`,
-`make_move_unchecked` and their null-move counterpart — and SHALL offer a make
-that skips the refresh for callers that do not (`make_move_hashed`,
-`make_null_move_hashed`), documented on each function.
-
-The refresh cost SHALL be recorded as measured, not as estimated: over a real
-consumer's corpus of 11,149,374 games and 883,141,466 positions, the difference
-between the checkers-maintaining and the checkers-free keyed walk is **3.92 s,
-4.4 ns per ply**, against the ~2 ns per make previously assumed in the source
-comment. A caller that needs the Polyglot key per ply and never asks
-`in_check()` — a position indexer building a postings index over a whole
-database — SHALL NOT pay it, and the keyed conversion it enables SHALL stay
-within 15 % of a moves-only pass.
-
-#### Scenario: The checkers refresh is measured, not assumed
-
-- **WHEN** the same corpus is walked once with the checkers-maintaining make and
-  once with the checkered-free one, both maintaining the hash
-- **THEN** the difference is reported in seconds and in nanoseconds per ply
-- **AND** the keyed, index-emitting pass is within 15 % of a moves-only pass.
-
-#### Scenario: A caller that never reads the cache is not asked to maintain it
-
-- **WHEN** a caller replays a corpus with `play_hashed` and reads only
-  `zobrist()`
-- **THEN** `zobrist()` equals `zobrist_full()` at every position
-- **AND** `in_check()` is documented as stale for that make.
 ### Requirement: Undo SHALL Cache prev_checkers + Perft Slim
 
 The system SHALL extend `Undo` with `prev_checkers:Bitboard` + `prev_zobrist:u64` and maintain `Board.checkers` + `history` in `make`/`unmake` (`checkers !=0` is `in_check` 0.32ns); `make_move_perft`/`unmake_move_perft` slim now also maintains `checkers` (`attackers_to` after turn flip) so `generate_moves_templated` can use cached `self.checkers` (saves 5 attacks ~20ns per movegen) for both `legal_moves()` and perft.
@@ -61,3 +31,36 @@ The system SHALL restore `checkers` + `zobrist` from `Undo` on `unmake` without 
 - **WHEN** a legal move is made and unmade with each of the five make shapes, over the fixture positions and 200,000 positions from random playouts including two Chess960 starts
 - **THEN** the position, and every piece of state the make claims to maintain, are restored exactly
 - **AND** the make/unmake pairing table is walked explicitly, so the rule is stated once and checked in every corner.
+
+## ADDED Requirements
+
+### Requirement: Cached Checkers Shall Be Maintained Only for Callers That Read Them
+
+The system SHALL keep the cached `checkers` bitboard current on the make paths
+whose callers read it through the branch-free `in_check()` — `play`,
+`make_move_unchecked` and their null-move counterpart — and SHALL offer a make
+that skips the refresh for callers that do not (`make_move_hashed`,
+`make_null_move_hashed`), documented on each function.
+
+The refresh cost SHALL be recorded as measured, not as estimated: over a real
+consumer's corpus of 11,149,374 games and 883,141,466 positions, the difference
+between the checkers-maintaining and the checkers-free keyed walk is **3.92 s,
+4.4 ns per ply**, against the ~2 ns per make previously assumed in the source
+comment. A caller that needs the Polyglot key per ply and never asks
+`in_check()` — a position indexer building a postings index over a whole
+database — SHALL NOT pay it, and the keyed conversion it enables SHALL stay
+within 15 % of a moves-only pass.
+
+#### Scenario: The checkers refresh is measured, not assumed
+
+- **WHEN** the same corpus is walked once with the checkers-maintaining make and
+  once with the checkered-free one, both maintaining the hash
+- **THEN** the difference is reported in seconds and in nanoseconds per ply
+- **AND** the keyed, index-emitting pass is within 15 % of a moves-only pass.
+
+#### Scenario: A caller that never reads the cache is not asked to maintain it
+
+- **WHEN** a caller replays a corpus with `play_hashed` and reads only
+  `zobrist()`
+- **THEN** `zobrist()` equals `zobrist_full()` at every position
+- **AND** `in_check()` is documented as stale for that make.
