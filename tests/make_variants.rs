@@ -293,3 +293,82 @@ fn the_role_of_a_promoted_piece_survives_the_hashed_variant() {
         Some(gigachess::Piece::new(Color::White, Role::Queen))
     );
 }
+
+/// Each make is paired with its own unmake, and the pair is a set: handing a
+/// fast or perft make's `Undo` to `unmake_move` does not fail, it silently
+/// rewrites the key. This walks the whole table so the rule is stated once and
+/// checked in every corner, including the perft path.
+#[test]
+fn every_make_is_paired_with_its_own_unmake() {
+    for (fen, uci) in POSITIONS {
+        let m = mv(uci);
+        let start = board(fen);
+        let start_key = start.zobrist();
+
+        // (name, make, unmake) — the unmake is the one the make documents.
+        let mut hashed = start;
+        let undo = hashed.make_move_hashed(m);
+        hashed.unmake_move(m, undo);
+        assert_eq!(
+            position_fingerprint(&hashed),
+            position_fingerprint(&start),
+            "hashed/{uci}"
+        );
+        assert_eq!(
+            hashed.zobrist(),
+            start_key,
+            "hashed unmake lost the key for {uci}"
+        );
+
+        let mut checkered = start;
+        let undo = checkered.make_move_checkered(m);
+        checkered.unmake_move(m, undo);
+        assert_eq!(
+            position_fingerprint(&checkered),
+            position_fingerprint(&start),
+            "checkered/{uci}"
+        );
+        assert!(
+            checkers_are_fresh(&checkered),
+            "checkered unmake left a stale cache for {uci}"
+        );
+
+        let mut both = start;
+        let undo = both.make_move_unchecked(m);
+        both.unmake_move(m, undo);
+        assert_eq!(
+            position_fingerprint(&both),
+            position_fingerprint(&start),
+            "both/{uci}"
+        );
+        assert_eq!(
+            both.zobrist(),
+            start_key,
+            "both unmake lost the key for {uci}"
+        );
+
+        let mut fast = start;
+        let undo = fast.make_move_fast(m);
+        fast.unmake_move_fast(m, undo);
+        assert_eq!(
+            position_fingerprint(&fast),
+            position_fingerprint(&start),
+            "fast/{uci}"
+        );
+        // The fast make never touched either derived value, so both survive it.
+        assert_eq!(
+            fast.zobrist(),
+            start_key,
+            "fast disturbed the key for {uci}"
+        );
+
+        let mut perft = start;
+        let undo = perft.make_move_perft(m);
+        perft.unmake_move_perft(m, undo);
+        assert_eq!(
+            core_fingerprint(&perft),
+            core_fingerprint(&start),
+            "perft/{uci} (clocks are documented as not maintained)"
+        );
+    }
+}

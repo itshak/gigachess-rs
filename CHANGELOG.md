@@ -56,12 +56,20 @@ hash, which is noise; its output is byte-identical — the consumer's gold compa
 407,350 of 419,385 exact, 0 read errors, 0 decode errors.
 
 ### Tests
-- `tests/make_variants.rs` (9 tests): the hash contract against `zobrist_full()` across a
+- `tests/make_variants.rs` (10 tests): the hash contract against `zobrist_full()` across a
   double push, an en-passant capture, a capture, a promotion, castling and a check evasion; the
   checkers contract against a fresh `attackers_to`; position parity across all four variants
   (perft held to its documented clock-skipping contract); illegal-move rejection with board
   restoration on all four validating entry points; a pass refused in check by every null-move
-  variant; the stale-cache regression; the canonical Polyglot start-position key.
+  variant; the stale-cache regression; the canonical Polyglot start-position key; and the
+  make/unmake pairing table.
+- `tests/make_variants_property.rs` (1 test, 200,335 moves): the same questions asked of every
+  position a random game passes through, from the standard opening and two Chess960 starts —
+  1,005 castlings, 510 promotions, 9,016 en-passant captures. The fixtures cannot reach a
+  Chess960 castle, which moves the rook file the castling keys are built from. It caught a real
+  hazard on its first run: a fast make's `Undo` handed to `unmake_move` does not fail, it
+  silently rewrites the key, so the pairing is now explicit in the docs, in the spec and in a
+  test that walks all five shapes.
 
 ---
 
