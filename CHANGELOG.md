@@ -32,6 +32,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a game with a pass turn could be accepted or refused wrongly. The new
   `make_null_move_fast` answers the in-check test from the bitboards instead.
 
+### Fixed
+- **A null move decided legality from a stale cache in three of the four variants.** `make_null_move_with`
+  — the body behind `make_null_move`, `make_null_move_hashed` and `make_null_move_checkered` — tested the
+  pass with `in_check()`, which reads the cached `checkers` bitboard. A caller that reached a pass after
+  `play_fast` (or any other cache-free make) held a cache describing an earlier position, so the pass was
+  **allowed while the side to move was in check**. Verified on `f3 e5 g4 Qh4#` walked with `play_fast`:
+  the three cached variants allowed the pass, only `make_null_move_fast` refused it. Every variant now
+  asks the bitboards with `attackers_to`, so all four refuse in exactly the same positions. The scan costs
+  one `attackers_to` on a path taken roughly once per ten thousand plies.
+
+  The regression test that was supposed to catch this was **vacuous**: its fixtures (`e2e4`, `g1f3`,
+  `d2d4`) never leave the mover in check, so it compared two agreeing `true`s. It now uses two positions
+  that do leave the side to move in check, asserts that premise, and checks all four variants on
+  independent boards — and it fails if the fix is reverted.
+
 ### Changed
 - The `make_move_perft` doc comment claimed it skips the `checkers` refresh; the code maintains
   it (once per node, which is what perft wants). The comment now matches the code, and says

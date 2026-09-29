@@ -210,29 +210,71 @@ fn a_null_move_never_trusts_a_stale_checkers_cache() {
     // `play_fast`, which leaves `checkers` stale, and the null move's "may the
     // side to move pass while in check?" test used to read that stale cache
     // instead of asking the bitboards.
-    let start = board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    for uci in ["e2e4", "g1f3", "d2d4"] {
-        let mut fast = start;
-        if fast.play_fast(mv(uci)).is_err() {
-            continue;
+    //
+    // The positions below MUST leave the side to move in check, or this compares
+    // two agreeing `true`s and guards nothing. The first case is reached by
+    // playing moves that no fast make would naturally produce in one game, so
+    // each is walked explicitly; the comment records why each is in check.
+    let cases: [(&str, &[&str]); 2] = [
+        // Scholar's mate: Qh4 is mate, so White may not pass.
+        (
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            &["f2f3", "e7e5", "g2g4", "d8h4"],
+        ),
+        // A rook check along the eighth rank: the side to move is in check but
+        // not mated, so the pass is the only thing under test.
+        ("4k3/8/8/8/8/8/8/R3K3 w - - 0 1", &["a1a8"]),
+    ];
+
+    for (fen, uci) in cases {
+        let mut fast = board(fen);
+        for step in uci {
+            fast.play_fast(mv(step))
+                .unwrap_or_else(|_| panic!("{step} must be legal in {}", fast.to_fen()));
         }
         // `checkers` is now whatever the previous position left behind.
-        let fresh = fast.make_null_move_fast();
-        let cached = fast.make_null_move();
-        assert_eq!(
-            fresh.is_ok(),
-            cached.is_ok(),
-            "fast and cached null moves disagree after {uci}"
-        );
         let in_check = fast.attackers_to(
             fast.king_square(fast.turn()).0,
             fast.turn().other(),
             fast.occupied(),
         ) != 0;
-        assert_eq!(
-            fresh.is_ok(),
-            !in_check,
-            "wrong null-move verdict after {uci}"
+        assert!(in_check, "fixture must leave the mover in check: {fen}");
+
+        // Every variant gets its own board: the first call mutates, so sharing
+        // one board would make the later verdicts meaningless.
+        let verdicts = [
+            ("make_null_move", board(fen)),
+            ("make_null_move_hashed", board(fen)),
+            ("make_null_move_checkered", board(fen)),
+            ("make_null_move_fast", board(fen)),
+        ];
+        for (name, start) in verdicts {
+            let mut b = start;
+            for step in uci {
+                b.play_fast(mv(step)).unwrap();
+            }
+            // Walk the same way, then ask each variant on a fresh copy.
+            let mut probe = b;
+            let allowed = match name {
+                "make_null_move" => probe.make_null_move().is_ok(),
+                "make_null_move_hashed" => probe.make_null_move_hashed().is_ok(),
+                "make_null_move_checkered" => probe.make_null_move_checkered().is_ok(),
+                _ => probe.make_null_move_fast().is_ok(),
+            };
+            assert!(
+                !allowed,
+                "{name} allowed a pass while the side to move is in check, in {fen}"
+            );
+        }
+
+        // And the stale cache really is stale, which is the premise of the bug: if
+        // the cache happened to agree, the variants above would all pass anyway
+        // and this case would guard nothing. Asserting they *disagree* keeps the
+        // fixture honest.
+        assert_ne!(
+            fast.in_check(),
+            in_check,
+            "this case only guards the bug while the cache disagrees in {fen}"
         );
     }
 }

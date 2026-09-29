@@ -1450,7 +1450,18 @@ impl Board {
     fn make_null_move_with<const HASH: bool, const CHECKERS: bool>(
         &mut self,
     ) -> Result<Undo, IllegalMove> {
-        if self.in_check() {
+        // The pass/refuse test asks the bitboards, never the cache — in every
+        // variant, not just the fast one. A caller that reached here after
+        // `play_fast` (or any other cache-free make) holds a `checkers` value
+        // that describes some earlier position, and reading it would allow a
+        // pass while the side to move is in check. The scan costs one
+        // `attackers_to` on a path taken roughly once per ten thousand plies.
+        if self.attackers_to(
+            self.king_sq[self.turn.index()],
+            self.turn.other(),
+            self.occupied(),
+        ) != 0
+        {
             return Err(IllegalMove);
         }
         let undo = Undo {
