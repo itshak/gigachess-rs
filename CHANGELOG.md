@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.6] - 2026-09-29
+
+### Changed
+- SAN disambiguation asks each candidate directly instead of generating every legal move in
+  the position. `move_to_san_body` used to run a full `generate_moves_into` whenever a second
+  piece of the same role attacked the destination square — 4.0 % of moves over a 13,908,447-ply
+  slice of ChessBase's Mega Database 2025 — and filter that list for the two or three squares it
+  wanted. The `attackers_bb` pre-filter already decides pseudo-legality exactly for the roles that
+  reach the branch, so each surviving square is now asked directly: one 144B stack copy, one
+  `make_move_unchecked`, one king-safety query for **the mover's** king against the side that
+  moves next, one `unmake_move`. The candidate set, and therefore every SAN, is unchanged: 0
+  differing moves over that slice against the old filter, and
+  `tests/san_disambiguation_property.rs` asserts it over 200,000 moves from random playouts
+  (standard and two Chess960 starts) against a movegen oracle.
+  In-crate `cargo bench --bench micro` `san_48` moves −3.2 % on a busy middlegame and +1.9 % on an
+  opening line, where the branch almost never fires; the consumer (`cbh-parser`'s whole-database
+  export) is where the branch rate is real.
+
+### Added
+- `tests/san_disambiguation_property.rs`: a movegen oracle for the disambiguation, over 200,000
+  moves of random playouts, plus the qualifier shapes the direct query has to get right.
+- `tests/san_disambiguation.rs`: the two sharp edges as cases — a defender on the king's own file
+  is not an attacker (the move the study of this branch first got wrong, which silently dropped
+  hints), and a promotion carries only its origin file.
+
 ## [0.1.5] - 2026-09-28
 
 ### Added

@@ -1,17 +1,4 @@
-# turbochess-rs-perf-fen-san Specification
-
-## Purpose
-Branchless `FEN`/`SAN` micro-opts matching ultrachess `88ns`/`1.43µs` parity, copied MIT.
-
-## Requirements
-
-### Requirement: FEN Write SHALL Be Branchless Table Toward 88ns
-
-The system SHALL implement `write_fen` via `const PIECE_CHAR:[u8;12]` `ArrayVec<u8,128>` without `format!`, stamping `mailbox[64]` via 12 `bbs` scans (32 pieces) then `for rank in (0..8).rev() for file in 0..8` 64 loads, `Cargo.toml` `profile` `lto=fat` as measured.
-
-#### Scenario: FEN micro toward parity
-- **WHEN** `cargo bench --bench micro` `FEN write startpos` is run
-- **THEN** turbo median < ultrachess 103ns on M1 Max (x86 148 vs 198 0.75×) and `Fen` round-trip 1k random games byte-equal
+## MODIFIED Requirements
 
 ### Requirement: SAN Write SHALL Reuse Tables Toward 1.43µs
 
@@ -32,11 +19,3 @@ The suffix clause SHALL be a callable seam rather than a private block: `check_m
 #### Scenario: The direct candidate query beats the movegen it replaces
 - **WHEN** the SAN body is rendered for every move of a 13,908,447-ply slice of a real game database, once through `move_to_san_body` and once through a per-candidate query
 - **THEN** the two forms differ on no move, and the direct form costs no more per SAN body than 8.1 ns against the movegen form's 13.5 ns
-
-### Requirement: FEN Parse SHALL Be Bytes Toward 208ns
-
-The system SHALL parse via `bytes` not `chars` (`for &b in placement.as_bytes()`), `piece_from_byte` table, `put_piece_no_hash` (no per-piece `hash ^=`; `set_state` recomputes `zobrist_full` once), fast `KQkq` path `use_fast_standard`.
-
-#### Scenario: FEN parse micro
-- **WHEN** `cargo bench --bench micro` `FEN parse startpos` is run
-- **THEN** turbo median < ultrachess 208ns on M1 Max (x86 430 vs 452 0.95×)

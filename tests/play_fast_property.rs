@@ -31,7 +31,7 @@ fn play_fast_produces_identical_state_across_100k_positions() {
             }
 
             // Also test pseudo_legal moves that might be illegal to test play_fast error return parity
-            let test_pseudo = (xorshift(&mut rng) % 10) == 0;
+            let test_pseudo = xorshift(&mut rng).is_multiple_of(10);
             if test_pseudo {
                 let pseudo = normal_board.pseudo_legal_moves();
                 if !pseudo.is_empty() {

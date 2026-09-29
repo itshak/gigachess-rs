@@ -53,18 +53,14 @@ pub fn move_to_san_body(board: &Board, mv: Move) -> Option<San> {
     // (ultrachess `debug_assert_move_is_legal` — saves 1 `make/unmake` per SAN,
     // `48` `make/unmake` for `SAN 48` bench `→ ~1µs` win).
     debug_assert!(
-        board.is_pseudo_legal(mv)
-            && {
-                let mut tmp = *board;
-                let undo = tmp.make_move_unchecked(mv);
-                let ok = tmp.attackers_to(
-                    tmp.king_square(board.turn()).0,
-                    tmp.turn(),
-                    tmp.occupied(),
-                ) == 0;
-                tmp.unmake_move(mv, undo);
-                ok
-            },
+        board.is_pseudo_legal(mv) && {
+            let mut tmp = *board;
+            let undo = tmp.make_move_unchecked(mv);
+            let ok =
+                tmp.attackers_to(tmp.king_square(board.turn()).0, tmp.turn(), tmp.occupied()) == 0;
+            tmp.unmake_move(mv, undo);
+            ok
+        },
         "move_to_san called with illegal move"
     );
 
@@ -75,7 +71,11 @@ pub fn move_to_san_body(board: &Board, mv: Move) -> Option<San> {
     let is_castle = piece.role == Role::King
         && board.piece_at(to) == Some(crate::types::Piece::new(piece.color, Role::Rook));
     if is_castle {
-        out.push_str(if to.file() > from.file() { "O-O" } else { "O-O-O" });
+        out.push_str(if to.file() > from.file() {
+            "O-O"
+        } else {
+            "O-O-O"
+        });
     } else {
         let is_capture = board.piece_at(to).is_some()
             || (piece.role == Role::Pawn
@@ -84,12 +84,20 @@ pub fn move_to_san_body(board: &Board, mv: Move) -> Option<San> {
 
         if piece.role != Role::Pawn {
             out.push(piece.role.char_upper());
-            // Disambiguation via `attacks_from_target` pre-filter + single
-            // `generate_legal_moves` (ultrachess `san.rs:1` 1.43µs/48).
-            // Pre-filter avoids the full movegen in the common case (no other
-            // attacker). When needed, one movegen filters all candidates at once
-            // — cheaper than per-candidate `is_pseudo_legal+make/unmake` which
-            // pays hash+checkers per candidate.
+            // Disambiguation via the `attacks_from_target` pre-filter, then a
+            // direct question per candidate (ultrachess `san.rs:1` 1.43µs/48).
+            //
+            // The pre-filter is exact pseudo-legality for the roles that reach
+            // here: a knight or king cannot be blocked, and a slider on the set
+            // has an unobstructed ray to `to` (the ray stops at the first
+            // blocker, so a piece behind one is correctly excluded). A pawn is
+            // disambiguated by its file and never gets here. So legality is the
+            // one remaining question, and asking it per candidate is cheaper
+            // than generating every legal move in the position to reach the same
+            // answer: one stack copy, one `make_move_unchecked`, one
+            // king-safety query and one `unmake_move` — the same
+            // make/unmake the movegen performed, for each of at most eight
+            // squares instead of all thirty-five.
             let same_bb = board.piece_bb(piece.color, piece.role);
             let attackers_bb = {
                 let occ = board.occupied();
@@ -104,24 +112,28 @@ pub fn move_to_san_body(board: &Board, mv: Move) -> Option<San> {
                 att & same_bb & !bit(from.0)
             };
             if attackers_bb != 0 {
-                let mut ml = crate::movegen::MoveList::new();
-                board.generate_moves_into(&mut ml);
+                // The mover, read from the caller's board: a candidate's
+                // legality is about *its* king, attacked by the side that moves
+                // next, and both values have to be taken before the candidate is
+                // made. That is what the `debug_assert` above spells out — a
+                // friendly piece on the king's own file defends it, so asking
+                // the wrong question drops hints the notation requires.
+                let us = board.turn();
                 let mut others: ArrayVec<Square, 8> = ArrayVec::new();
-                for &cm in ml.as_slice() {
-                    if cm.to() != to || cm.from() == from {
-                        continue;
-                    }
-                    if cm.promotion() != mv.promotion() {
-                        continue;
-                    }
-                    // Must be same piece type (covers promoted pawns etc).
-                    // We already filtered via same_bb & attacks, but use bit test for speed.
-                    if same_bb & bit(cm.from().0) == 0 {
-                        continue;
-                    }
-                    others.push(cm.from());
-                    if others.len() >= 8 {
-                        break;
+                let mut candidates = attackers_bb;
+                while candidates != 0 {
+                    let sq = Square::new(pop_lsb(&mut candidates));
+                    let cm = Move::new(sq, to, mv.promotion());
+                    let mut tmp = *board;
+                    let undo = tmp.make_move_unchecked(cm);
+                    let legal =
+                        tmp.attackers_to(tmp.king_square(us).0, us.other(), tmp.occupied()) == 0;
+                    tmp.unmake_move(cm, undo);
+                    if legal {
+                        others.push(sq);
+                        if others.len() >= 8 {
+                            break;
+                        }
                     }
                 }
                 if !others.is_empty() {
@@ -177,7 +189,11 @@ pub fn check_mate_suffix(after: &Board) -> Option<char> {
     // `has_no_legal_moves` via the MoveCounter bulk path (`count +=
     // popcount`, no `Move` materialisation, close-gap D4 task 5.1) — gated
     // behind the O(1) `in_check()` cache.
-    Some(if after.count_legal_moves() == 0 { '#' } else { '+' })
+    Some(if after.count_legal_moves() == 0 {
+        '#'
+    } else {
+        '+'
+    })
 }
 
 /// [`check_mate_suffix`] for a move that has not been made yet: makes it on a
@@ -475,7 +491,10 @@ mod tests {
         after.make_move_unchecked(mv);
         assert_eq!(check_mate_suffix(&after), Some('+'));
         assert_eq!(move_to_san(&board, mv).unwrap().as_str(), "Qxe5+");
-        assert!(!after.legal_moves().is_empty(), "the reply is what makes it a `+`");
+        assert!(
+            !after.legal_moves().is_empty(),
+            "the reply is what makes it a `+`"
+        );
     }
 
     #[test]
@@ -578,7 +597,9 @@ mod tests {
         let mv = san_to_move(&board, "exd6").unwrap();
         assert_eq!(mv.to(), Square::from_alg("d6").unwrap());
         assert_eq!(
-            move_to_san(&board, mv).unwrap().trim_end_matches(['+', '#']),
+            move_to_san(&board, mv)
+                .unwrap()
+                .trim_end_matches(['+', '#']),
             "exd6"
         );
     }
