@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.10] - 2026-10-28
+
+### Added
+- **`ReachSignature` for reachability pruning (design D1).**
+  - Precomputes home-rank pawn bitboards and material / piece-type counts from a target board.
+  - `unreachable_from(&board)` evaluates rules (a)–(c) in a few bitboard operations:
+    - (a) target home-rank pawn missing from home square (pawns never move backwards).
+    - (b) candidate side has fewer pawns or fewer men than target (neither ever grows).
+    - (c) candidate piece type count plus excess pawns is below target piece type count (promotion budget).
+  - Proven sound by property test across 50,000 legal playout positions.
+- **`replay_moves2_trusted` and `Flow` (design D2).**
+  - Unchecked make path based on `make_move_hashed` (fastest correct Polyglot key make) with `Move::NULL` dispatch.
+  - Per-ply `Flow::Continue` / `Flow::Break` callback for early-exit search workflows.
+
 ## [0.1.9] - 2026-09-29
 
 ### Changed

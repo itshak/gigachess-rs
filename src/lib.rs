@@ -10,6 +10,7 @@ pub mod database;
 pub mod movegen;
 pub mod fen;
 pub mod moves;
+pub mod reach;
 pub mod replay;
 pub mod san;
 mod polyglot_keys;
@@ -18,4 +19,6 @@ pub mod zobrist;
 
 pub use board::{Board, IllegalMove, Undo};
 pub use moves::Move;
+pub use reach::ReachSignature;
+pub use replay::{replay_moves2_trusted, Flow};
 pub use types::{Color, Piece, Role, Square};

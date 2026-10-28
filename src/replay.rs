@@ -29,6 +29,40 @@ impl ReplayOutcome {
     }
 }
 
+/// Execution control for replay callbacks.
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Flow {
+    /// Continue replaying the next move.
+    Continue,
+    /// Stop replaying moves for this game immediately.
+    Break,
+}
+
+/// Replays a validated `moves2` stream using fast unvalidated makes (`make_move_hashed`).
+///
+/// Designed for trusted stores (such as `.bbrb` reference collections or validated `.bbdb` databases)
+/// where moves were already verified legal upon ingest.
+/// Dispatches `Move::NULL` transparently.
+/// Invokes `callback(&board, ply)` at ply 0 (initial board) and after each move.
+/// If `callback` returns `Flow::Break`, replay terminates early and returns the current board.
+pub fn replay_moves2_trusted<F>(start: &Board, moves: &[u16], mut callback: F) -> Board
+where
+    F: FnMut(&Board, usize) -> Flow,
+{
+    let mut board = *start;
+    if callback(&board, 0) == Flow::Break {
+        return board;
+    }
+    for (i, &word) in moves.iter().enumerate() {
+        let mv = Move::from_word(word);
+        board.make_move_hashed(mv);
+        if callback(&board, i + 1) == Flow::Break {
+            break;
+        }
+    }
+    board
+}
+
 /// Replays a single `moves2` stream from the starting position.
 pub fn replay_moves2_stream(moves: &[u16]) -> ReplayOutcome {
     let mut board = Board::startpos();
@@ -118,5 +152,58 @@ mod tests {
             let single = replay_moves2_stream(&games[i]);
             assert_eq!(*o, single);
         }
+    }
+
+    #[test]
+    fn replay_moves2_trusted_parity_with_play() {
+        let mut game = Vec::new();
+        push(&mut game, "e2", "e4");
+        push(&mut game, "e7", "e5");
+        push(&mut game, "g1", "f3");
+        push(&mut game, "b8", "c6");
+        push(&mut game, "f1", "b5");
+        game.push(Move::NULL.word()); // pass
+        game.push(Move::NULL.word()); // reply pass
+        push(&mut game, "a7", "a6");
+
+        let mut checked_hashes = Vec::new();
+        let mut b_checked = Board::startpos();
+        checked_hashes.push(b_checked.zobrist());
+        for &w in &game {
+            b_checked.play(Move::from_word(w)).unwrap();
+            checked_hashes.push(b_checked.zobrist());
+        }
+
+        let mut trusted_hashes = Vec::new();
+        let final_board = replay_moves2_trusted(&Board::startpos(), &game, |b, _ply| {
+            trusted_hashes.push(b.zobrist());
+            Flow::Continue
+        });
+
+        assert_eq!(trusted_hashes, checked_hashes);
+        assert_eq!(final_board.zobrist(), b_checked.zobrist());
+    }
+
+    #[test]
+    fn replay_moves2_trusted_early_break() {
+        let mut game = Vec::new();
+        push(&mut game, "e2", "e4");
+        push(&mut game, "e7", "e5");
+        push(&mut game, "g1", "f3");
+
+        let mut count = 0;
+        let final_board = replay_moves2_trusted(&Board::startpos(), &game, |_b, ply| {
+            count += 1;
+            if ply == 1 {
+                Flow::Break
+            } else {
+                Flow::Continue
+            }
+        });
+
+        assert_eq!(count, 2); // ply 0 and ply 1
+        let mut expected = Board::startpos();
+        expected.play(Move::from_word(game[0])).unwrap();
+        assert_eq!(final_board.zobrist(), expected.zobrist());
     }
 }

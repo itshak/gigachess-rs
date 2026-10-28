@@ -59,6 +59,26 @@ The system SHALL carry the null move (`0xffff` word, `--` SAN) through every dat
 - **WHEN** a `moves2` stream with `0xffff` is replayed for hashes
 - **THEN** every yielded hash equals from-scratch recomputation at that ply, including the positions before and after the pass
 
+### Requirement: Reachability Pruning SHALL Provide Sound Early-Exit Bounds
+
+The system SHALL provide `ReachSignature::from_board(target)` that extracts home-rank pawn bitboards, piece counts, and pawn counts. `ReachSignature::unreachable_from(&candidate)` SHALL return `true` if any of:
+- (a) a target home-rank pawn is missing from that square on the candidate board;
+- (b) the candidate board has fewer pawns or fewer men than the target;
+- (c) the candidate board's count of a piece type plus excess pawns is below the target's count of that type.
+Pruning SHALL be sound: no legal continuation from an unreachable candidate can reach the target.
+
+#### Scenario: Pruning soundness across legal games
+- **WHEN** random legal games are played
+- **THEN** no position pruned as unreachable is followed by the target position in the game's history
+
+### Requirement: Trusted Replay SHALL Support Fast Unchecked Makes with Flow Callbacks
+
+The system SHALL provide `replay_moves2_trusted(start, words, callback)` which executes moves using `make_move_hashed` (including `Move::NULL` dispatch) and invokes `callback(&board, ply) -> Flow`. If `Flow::Break` is returned, replay terminates early.
+
+#### Scenario: Trusted replay matches checked play
+- **WHEN** a valid `moves2` game is replayed with `replay_moves2_trusted`
+- **THEN** position hashes at every ply match checked `play` byte-for-byte
+
 #### Scenario: Position stats count across nulls
 
 - **WHEN** a batch containing null moves is aggregated

@@ -55,6 +55,10 @@
   intermediate strings), `moves2_to_san_movetext`, incremental
   `replay_moves2_hashes`, and a Rayon-parallel `position_stats` builder
   ([MIGRATION.md](MIGRATION.md) covers adopting apps).
+- **Reachability pruning & trusted replay** — `ReachSignature` provides O(1) early-stop
+  pruning for database position search based on home-rank pawn invariance, material conservation,
+  and promotion budgets; `replay_moves2_trusted` replays validated binary games with
+  `make_move_hashed` and per-ply `Flow` callbacks.
 - **Engine API** — `Board` is plain data and `Copy`; `pseudo_legal_moves()`
   for engines with their own legality filters.
 

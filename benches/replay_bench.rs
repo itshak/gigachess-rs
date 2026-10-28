@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use gigachess::replay::replay_moves2_batch;
+use gigachess::replay::{replay_moves2_batch, replay_moves2_trusted, Flow};
 use gigachess::Board;
 
 fn xorshift(state: &mut u64) -> u64 {
@@ -53,6 +53,14 @@ fn bench_replay(c: &mut Criterion) {
     group.throughput(Throughput::Elements(games.len() as u64));
     group.bench_function("batch_8000_games", |b| {
         b.iter(|| replay_moves2_batch(black_box(&refs)))
+    });
+    group.bench_function("trusted_8000_games", |b| {
+        b.iter(|| {
+            let start = Board::startpos();
+            for game in black_box(&refs) {
+                replay_moves2_trusted(&start, game, |_b, _ply| Flow::Continue);
+            }
+        })
     });
     group.throughput(Throughput::Elements(total_plies));
     group.bench_function("batch_8000_games_plies", |b| {
