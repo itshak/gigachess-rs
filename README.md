@@ -217,3 +217,35 @@ Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for 
 MIT — see [LICENSE](LICENSE). All table data (Zobrist keys, magic numbers)
 is either generated at runtime with fixed seeds or taken from public format
 specifications.
+
+---
+
+## Shared JavaScript/Rust chess rules contract
+
+`gigachess` (this Rust crate) and the independent pure TypeScript
+[`gigachess`](https://github.com/itshak/gigachess) share the same moves2 word
+layout, promotion codes, canonical king-to-initial-rook-square castling wire,
+null-move sentinel `0xffff`, Polyglot vector keys, and seeded Chess960
+castling-file keys. Neither package depends on the other or on WebAssembly.
+See the identical [mirrored contract](openspec/changes/dual-engine-hardening-20261123/specs/mirrored-core-contract/spec.md)
+and the golden `tests/data/position-keys-v1.tsv` and `tests/data/moves2-v1.tsv`.
+
+**Two different hashes serve different purposes:** `board.zobrist()` returns
+canonical Polyglot and is appropriate for Polyglot opening books and cross-language
+position keys; `board.repetition_key()` excludes en-passant when *no legal*
+en-passant capture exists, which is required for FIDE repetition equivalence.
+In particular, a geometrically capturable but pinned en-passant target may
+contribute to the Polyglot hash and must not affect the repetition key. Both
+hash methods require a state-maintaining move path, not `play_fast()` or slim
+perft makes that explicitly skip hash maintenance.
+
+`fen::parse_fen()` validates legal reachable positions, including the last
+mover not leaving its own king in check. For deliberate synthetic positions
+used to test checker-cache or null-move behavior,
+`fen::parse_fen_allow_illegal()` is an explicit opt-in that skips only that
+opponent-in-check validity check while retaining the FEN syntax and basic
+piece validation.
+
+Re-run the [Rust performance and rules audit](openspec/changes/dual-engine-hardening-20261123/research.md)
+before relying on unqualified fastest claims beyond the documented historical
+hardware and workload.

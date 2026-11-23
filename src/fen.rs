@@ -55,6 +55,19 @@ fn byte_from_piece(p: Piece) -> u8 {
 /// Parses a FEN string into a validated [`Board`] — `split_ascii_whitespace`
 /// + `chars` direct (no `Vec` alloc) like `ultrachess` `144ns` path.
 pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
+    parse_fen_with_legality(fen, true)
+}
+
+/// Parse a syntactically valid but potentially unreachable analysis position.
+/// The only omitted legal-position check is whether the *opponent* is already
+/// in check. For ordinary game states use [`parse_fen`], which enforces that
+/// rule, consistent with gigachess/TypeScript. This explicit escape hatch is
+/// used for adversarial null-move/checker-cache tests.
+pub fn parse_fen_allow_illegal(fen: &str) -> Result<Board, FenError> {
+    parse_fen_with_legality(fen, false)
+}
+
+fn parse_fen_with_legality(fen: &str, require_reachable: bool) -> Result<Board, FenError> {
     let mut it = fen.split_ascii_whitespace();
     let placement = it.next().ok_or_else(|| FenError("expected at least 4 fields".into()))?;
     let side = it.next().ok_or_else(|| FenError("expected at least 4 fields".into()))?;
@@ -62,6 +75,9 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
     let ep_field = it.next().ok_or_else(|| FenError("expected at least 4 fields".into()))?;
     let halfmove_s = it.next();
     let fullmove_s = it.next();
+    if it.next().is_some() {
+        return Err(FenError("too many FEN fields".into()));
+    }
 
     let mut board = Board::empty();
 
@@ -100,11 +116,10 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
     }
 
     // 2) Side to move — single byte check (no `chars`).
-    let turn = match side.as_bytes().first().copied() {
-        Some(b'w') => Color::White,
-        Some(b'b') => Color::Black,
-        Some(_) => return Err(FenError("side must be 'w' or 'b'".into())),
-        None => return Err(FenError("empty side field".into())),
+    let turn = match side {
+        "w" => Color::White,
+        "b" => Color::Black,
+        _ => return Err(FenError("side must be exactly 'w' or 'b'".into())),
     };
 
     // 3) Castling rights. Standard K/Q/k/q letters select the outermost rook
@@ -240,6 +255,11 @@ pub fn parse_fen(fen: &str) -> Result<Board, FenError> {
     let bk = board.king_square(Color::Black);
     if wk.distance(bk) <= 1 {
         return Err(FenError("kings adjacent".into()));
+    }
+    // The opponent has just moved; their king cannot legally remain in check.
+    // Mirrors gigachess/TS `fen/oppositeCheck` validation.
+    if require_reachable && board.king_attacked(turn.other()) {
+        return Err(FenError("side not to move king is in check".into()));
     }
 
     board.set_state(turn, castling, castle_rook_sq, ep, halfmove, fullmove);

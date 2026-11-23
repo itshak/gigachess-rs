@@ -1,0 +1,9 @@
+# id	from	to	promoCode	hex
+quiet-e4	12	28	0	070c
+castle-wk	4	7	0	01c4
+castle-wq	4	0	0	0004
+castle-bk	60	63	0	0ffc
+castle-bq	60	56	0	0e3c
+promo-knight	48	56	1	1e30
+promo-queen	48	56	4	4e30
+null	63	63	15	ffff

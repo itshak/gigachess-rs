@@ -403,6 +403,32 @@ impl Board {
         self.hash
     }
 
+    /// FIDE repetition-equivalence key. Unlike Polyglot `zobrist()`, an
+    /// en-passant square contributes only if at least one EP capture is LEGAL.
+    /// Standard and Chess960 use the same king-to-rook castling representation
+    /// and rook-file castling keys as the TypeScript implementation.
+    ///
+    /// This reads the incrementally maintained hash; after `play_fast` or
+    /// perft-only makes, use a fully state-maintaining make before reading it.
+    /// Hashing for Polyglot opening books remains intentionally unchanged.
+    #[inline]
+    pub fn repetition_key(&self) -> u64 {
+        if !self.ep_relevant(self.ep, self.turn) {
+            return self.hash;
+        }
+        let mut candidate_pawns = PAWN_ATT[self.turn.other().index()][self.ep as usize]
+            & self.piece_bb(self.turn, Role::Pawn);
+        while candidate_pawns != 0 {
+            let from = pop_lsb(&mut candidate_pawns);
+            if self.is_legal(Move::quiet(Square(from), Square(self.ep))) {
+                return self.hash;
+            }
+        }
+        // Polyglot hashes geometrically capturable EP, even when a pin or
+        // discovered check makes all such captures illegal for repetition.
+        self.hash ^ zobrist::ep_key(Square(self.ep))
+    }
+
     /// Cached checkers bitboard (attackers to the side-to-move king).
     /// `in_check()` is `checkers != 0`; `0.34ns` hash load is `zobrist()`.
     #[inline(always)]
@@ -498,7 +524,7 @@ impl Board {
     pub fn attackers_to(&self, sq: u8, by: Color, occ: u64) -> u64 {
         let bi = by.index();
         let mut a = 0u64;
-        // Pawns of `by` attacking sq stand where a pawn of the other color
+        //Pawns of `by` attacking sq stand where a pawn of the other color
         // placed on sq would attack.
         a |= PAWN_ATT[by.other().index()][sq as usize] & self.bbs[bi][Role::Pawn.index()];
         a |= KNIGHT_ATT[sq as usize] & self.bbs[bi][Role::Knight.index()];
@@ -1355,7 +1381,7 @@ impl Board {
                     self.remove_piece(to, rook_code);
                     self.put_piece(kf, moved);
                     self.put_piece(rf, rook_code);
-                } else {
+} else {
                     self.move_piece(from, to, moved);
                 }
             }

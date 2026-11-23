@@ -1,0 +1,11 @@
+# id	variant	fen	polyglot_zobrist_hex	fide_repetition_hex
+start	std	rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1	463b96181691fc9c	463b96181691fc9c
+after-e4	std	rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1	823c9b50fd114196	823c9b50fd114196
+kiwipete	std	r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1	c3ce103f01d15e1d	c3ce103f01d15e1d
+ep-pinned	std	k3r3/8/8/3pP3/8/8/8/4K3 w - d6 0 1	fc93a44181d50f4e	e00a7a92bd6d9fef
+ep-pinned-none	std	k3r3/8/8/3pP3/8/8/8/4K3 w - - 0 1	e00a7a92bd6d9fef	e00a7a92bd6d9fef
+ep-legal	std	4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1	5f442aad040588ec	5f442aad040588ec
+ep-legal-none	std	4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1	43ddf47e38bd184d	43ddf47e38bd184d
+960-pos0	960	bbqnnrkr/pppppppp/8/8/8/8/PPPPPPPP/BBQNNRKR w KQkq - 0 1	f76ce488648e5278	f76ce488648e5278
+960-pos284	960	nbrknrbq/pppppppp/8/8/8/8/PPPPPPPP/NBRKNRBQ w KQkq - 0 1	bef5f90d84b34570	bef5f90d84b34570
+960-pos959	960	rkrnnqbb/pppppppp/8/8/8/8/PPPPPPPP/RKRNNQBB w KQkq - 0 1	2eeaaab1c87735ce	2eeaaab1c87735ce

@@ -7,14 +7,19 @@ context: |
 
   It serves as the backend engine for high-throughput chess databases and search engines.
   License: MIT (strictly permissive).
+  The peer pure-TypeScript package is itshak/gigachess and has no WASM backend.
+  Both must retain the same king-to-rook castling, moves2, Polyglot and FIDE
+  repetition contracts; see dual-engine-hardening-20261123 in both repos.
 
 rules:
   proposal:
     - Keep proposals focused on high-performance engine architecture and zero-alloc contracts
     - Ensure 100% MIT compliance
+    - Flag any change to mirrored JavaScript/Rust chess semantics or wire data
   specs:
     - Use Given/When/Then scenarios for testable behavior
     - Verify perft parity against reference test suites
+    - Verify identical golden FEN, moves2, Polyglot and repetition-key vectors
   design:
     - Detail bitboard layouts, PEXT tables, and 16-bit moves2 packing
   tasks:

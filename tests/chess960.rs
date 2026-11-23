@@ -156,7 +156,7 @@ fn castling_rights_cleared_when_rook_moves() {
 #[test]
 fn adjacent_king_rook_castling_swaps_pieces() {
     // King d1, rook c1: queenside castling swaps them (Kc1, Rd1).
-    let mut board = parse_fen("4k3/8/8/8/8/8/8/2RKR3 w Q - 0 1").unwrap();
+    let mut board = parse_fen("7k/8/8/8/8/8/8/2RKR3 w Q - 0 1").unwrap();
     let mv = castle_move(&board, false); // king d1 -> rook c1
     assert_eq!(mv.from(), Square(3));
     assert_eq!(mv.to(), Square(2));
@@ -208,7 +208,7 @@ fn moves2_castling_round_trip_standard_and_960() {
     // Chess960: king d1, adjacent kingside rook e1 -> castling word d1e1
     // (a normal king step can never land on an own rook, so this decodes
     // unambiguously). King ends on g1, rook on f1.
-    let mut board = parse_fen("4k3/8/8/8/8/8/8/3KR3 w K - 0 1").unwrap();
+    let mut board = parse_fen("7k/8/8/8/8/8/8/3KR3 w K - 0 1").unwrap();
     let mv = gigachess::san::san_to_move(&board, "O-O").unwrap();
     assert_eq!(mv.from(), Square::from_alg("d1").unwrap());
     assert_eq!(mv.to(), Square::from_alg("e1").unwrap());
