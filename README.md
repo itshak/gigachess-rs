@@ -5,8 +5,8 @@
 <h1 align="center">GigaChess</h1>
 
 <p align="center">
-  <strong>The Fastest Chess Engine & Move Generator in Rust (100% MIT).</strong><br>
-  PEXT / Fancy Magic bitboards, 540M nodes/s perft, 16-bit <code>moves2</code> binary replay engine, zero heap allocations in hot loops, and Shakmaty drop-in compatibility facade.
+  <strong>High-Performance Chess Move Generation in Rust (100% MIT).</strong><br>
+  PEXT / Fancy Magic bitboards, fast perft, 16-bit <code>moves2</code> binary replay engine, zero heap allocations in hot loops, and Shakmaty drop-in compatibility facade.
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 > Designed as the high-performance backend engine for large-scale chess database
 > workstations, master game indexing, and search front-ends.
 >
-> 🌐 **Looking for JavaScript or TypeScript?** Check out [**`gigachess` (JS/TS)**](https://github.com/itshak/gigachess) — the fastest chess library in JavaScript, a 1-line drop-in replacement for `chess.js` and `chessops` with 3.5× faster move validation and 120,000 games/sec PGN parsing for web, mobile, and React frontends. Available on [npm](https://www.npmjs.com/package/gigachess).
+> 🌐 **Looking for JavaScript or TypeScript?** Check out [**`gigachess` (JS/TS)**](https://github.com/itshak/gigachess) — a high-performance chess library in JavaScript, a 1-line drop-in replacement for `chess.js` and `chessops` with 3.5× faster move validation and 120,000 games/sec PGN parsing for web, mobile, and React frontends. Available on [npm](https://www.npmjs.com/package/gigachess).
 
 ## Features
 
@@ -64,7 +64,7 @@
 
 ## Performance
 
-> **GigaChess is the fastest chess move generation and perft library in the Rust ecosystem**, engineered for zero-allocation hot paths, single-cycle register board queries, and high-throughput parallel database workloads.
+> **GigaChess is an optimized chess move generation and perft library in the Rust ecosystem**, engineered for zero-allocation hot paths, single-cycle register board queries, and high-throughput parallel database workloads.
 
 Measured with Criterion 0.5 on an **Apple M1 Max (10 cores, 32 GB, release profile `lto = "fat" codegen-units = 1`, `sample-size 10`, `measurement-time 1s`, `warm-up 1s`)**:
 

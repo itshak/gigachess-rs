@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.11] - 2026-11-24
+
+### Fixed
+- Harden FEN validation: reject malformed positions and en-passant fields, while preserving explicit permissive parsing for legacy imports.
+- Align FIDE repetition with legal en-passant availability, distinct from Polyglot hashing conventions.
+- Synchronize Chess960, binary moves2, and null-move contracts with the JavaScript engine through shared golden vectors.
+- Add further null-move and cached-state regression tests.
+
+### Added
+- Experimental Board::perft_reuse(depth) reuses one move list per recursion ply, leaving the stable Board::perft and public move APIs unchanged.
+- Reproducible perft benchmarks and parity tests on standard and Chess960 positions.
+
+### Performance
+- Experimental perft reuse improved 1.1 to 3.5 percent on five positions on an Intel Xeon E5-1620 v2, with modest and hardware-dependent gains. No claim of an overall performance record.
+
+### Compatibility
+- Additive API; no new production dependencies or breaking moves2 format changes.
+
 ## [0.1.10] - 2026-10-28
 
 ### Added
