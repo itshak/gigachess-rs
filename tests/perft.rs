@@ -183,3 +183,21 @@ fn legal_moves_roundtrip_consistency() {
         assert_eq!(clone, board);
     }
 }
+
+
+/// The per-ply buffer experiment cannot change move sets or perft results.
+#[test]
+fn depth_scoped_workspace_perft_parity() {
+    for (fen, depth) in [
+        (STARTPOS, 4),
+        (KIWIPETE, 4),
+        (POS3, 4),
+        (POS4, 3),
+        (POS5, 3),
+        (POS6, 3),
+        ("nbrknrbq/pppppppp/8/8/8/8/PPPPPPPP/NBRKNRBQ w KQkq - 0 1", 3),
+    ] {
+        let board = parse_fen(fen).unwrap();
+        assert_eq!(board.perft_reuse(depth), board.perft(depth), "{fen}");
+    }
+}

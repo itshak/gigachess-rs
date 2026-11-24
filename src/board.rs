@@ -524,7 +524,7 @@ impl Board {
     pub fn attackers_to(&self, sq: u8, by: Color, occ: u64) -> u64 {
         let bi = by.index();
         let mut a = 0u64;
-        //Pawns of `by` attacking sq stand where a pawn of the other color
+        // Pawns of `by` attacking sq stand where a pawn of the other color
         // placed on sq would attack.
         a |= PAWN_ATT[by.other().index()][sq as usize] & self.bbs[bi][Role::Pawn.index()];
         a |= KNIGHT_ATT[sq as usize] & self.bbs[bi][Role::Knight.index()];
@@ -1381,7 +1381,7 @@ impl Board {
                     self.remove_piece(to, rook_code);
                     self.put_piece(kf, moved);
                     self.put_piece(rf, rook_code);
-} else {
+                } else {
                     self.move_piece(from, to, moved);
                 }
             }
@@ -2510,6 +2510,43 @@ impl Board {
             child.unmake_move_perft(mv, undo);
         }
         nodes
+    }
+
+    /// Experimental depth-scoped reusable move buffers.
+    ///
+    /// Unlike perft, which creates one temporary MoveList per node,
+    /// prepare one list per ply. Each child receives only the remaining
+    /// slice, avoiding mutation of its parent's live moves.
+    ///
+    /// Ordinary perft remains the stable reference until both correct
+    /// perft vectors and representative benchmarks are completed.
+    pub fn perft_reuse(&self, depth: u32) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        let mut board = *self;
+        let mut workspace: Vec<crate::movegen::MoveList> =
+            (0..depth).map(|_| crate::movegen::MoveList::new()).collect();
+
+        #[inline]
+        fn visit(board: &mut Board, depth: u32, lists: &mut [crate::movegen::MoveList]) -> u64 {
+            if depth == 1 {
+                return board.count_legal_moves() as u64;
+            }
+            let (moves, remaining) = lists.split_first_mut().expect("depth-scoped perft buffer");
+            moves.len = 0;
+            board.generate_moves_into(moves);
+            let len = moves.len();
+            let mut nodes = 0u64;
+            for i in 0..len {
+                let mv = moves.as_slice()[i];
+                let undo = board.make_move_perft(mv);
+                nodes += visit(board, depth - 1, remaining);
+                board.unmake_move_perft(mv, undo);
+            }
+            nodes
+        }
+        visit(&mut board, depth, &mut workspace)
     }
 
     /// Visitor-pattern perft (D1): leaf `depth==1` counts via
