@@ -403,6 +403,32 @@ impl Board {
         self.hash
     }
 
+    /// FIDE repetition-equivalence key. Unlike Polyglot `zobrist()`, an
+    /// en-passant square contributes only if at least one EP capture is LEGAL.
+    /// Standard and Chess960 use the same king-to-rook castling representation
+    /// and rook-file castling keys as the TypeScript implementation.
+    ///
+    /// This reads the incrementally maintained hash; after `play_fast` or
+    /// perft-only makes, use a fully state-maintaining make before reading it.
+    /// Hashing for Polyglot opening books remains intentionally unchanged.
+    #[inline]
+    pub fn repetition_key(&self) -> u64 {
+        if !self.ep_relevant(self.ep, self.turn) {
+            return self.hash;
+        }
+        let mut candidate_pawns = PAWN_ATT[self.turn.other().index()][self.ep as usize]
+            & self.piece_bb(self.turn, Role::Pawn);
+        while candidate_pawns != 0 {
+            let from = pop_lsb(&mut candidate_pawns);
+            if self.is_legal(Move::quiet(Square(from), Square(self.ep))) {
+                return self.hash;
+            }
+        }
+        // Polyglot hashes geometrically capturable EP, even when a pin or
+        // discovered check makes all such captures illegal for repetition.
+        self.hash ^ zobrist::ep_key(Square(self.ep))
+    }
+
     /// Cached checkers bitboard (attackers to the side-to-move king).
     /// `in_check()` is `checkers != 0`; `0.34ns` hash load is `zobrist()`.
     #[inline(always)]
@@ -2484,6 +2510,43 @@ impl Board {
             child.unmake_move_perft(mv, undo);
         }
         nodes
+    }
+
+    /// Experimental depth-scoped reusable move buffers.
+    ///
+    /// Unlike perft, which creates one temporary MoveList per node,
+    /// prepare one list per ply. Each child receives only the remaining
+    /// slice, avoiding mutation of its parent's live moves.
+    ///
+    /// Ordinary perft remains the stable reference until both correct
+    /// perft vectors and representative benchmarks are completed.
+    pub fn perft_reuse(&self, depth: u32) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        let mut board = *self;
+        let mut workspace: Vec<crate::movegen::MoveList> =
+            (0..depth).map(|_| crate::movegen::MoveList::new()).collect();
+
+        #[inline]
+        fn visit(board: &mut Board, depth: u32, lists: &mut [crate::movegen::MoveList]) -> u64 {
+            if depth == 1 {
+                return board.count_legal_moves() as u64;
+            }
+            let (moves, remaining) = lists.split_first_mut().expect("depth-scoped perft buffer");
+            moves.len = 0;
+            board.generate_moves_into(moves);
+            let len = moves.len();
+            let mut nodes = 0u64;
+            for i in 0..len {
+                let mv = moves.as_slice()[i];
+                let undo = board.make_move_perft(mv);
+                nodes += visit(board, depth - 1, remaining);
+                board.unmake_move_perft(mv, undo);
+            }
+            nodes
+        }
+        visit(&mut board, depth, &mut workspace)
     }
 
     /// Visitor-pattern perft (D1): leaf `depth==1` counts via

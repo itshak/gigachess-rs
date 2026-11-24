@@ -5,8 +5,8 @@
 <h1 align="center">GigaChess</h1>
 
 <p align="center">
-  <strong>The Fastest Chess Engine & Move Generator in Rust (100% MIT).</strong><br>
-  PEXT / Fancy Magic bitboards, 540M nodes/s perft, 16-bit <code>moves2</code> binary replay engine, zero heap allocations in hot loops, and Shakmaty drop-in compatibility facade.
+  <strong>High-Performance Chess Move Generation in Rust (100% MIT).</strong><br>
+  PEXT / Fancy Magic bitboards, fast perft, 16-bit <code>moves2</code> binary replay engine, zero heap allocations in hot loops, and Shakmaty drop-in compatibility facade.
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 > Designed as the high-performance backend engine for large-scale chess database
 > workstations, master game indexing, and search front-ends.
 >
-> 🌐 **Looking for JavaScript or TypeScript?** Check out [**`gigachess` (JS/TS)**](https://github.com/itshak/gigachess) — the fastest chess library in JavaScript, a 1-line drop-in replacement for `chess.js` and `chessops` with 3.5× faster move validation and 120,000 games/sec PGN parsing for web, mobile, and React frontends. Available on [npm](https://www.npmjs.com/package/gigachess).
+> 🌐 **Looking for JavaScript or TypeScript?** Check out [**`gigachess` (JS/TS)**](https://github.com/itshak/gigachess) — a high-performance chess library in JavaScript, a 1-line drop-in replacement for `chess.js` and `chessops` with 3.5× faster move validation and 120,000 games/sec PGN parsing for web, mobile, and React frontends. Available on [npm](https://www.npmjs.com/package/gigachess).
 
 ## Features
 
@@ -64,7 +64,7 @@
 
 ## Performance
 
-> **GigaChess is the fastest chess move generation and perft library in the Rust ecosystem**, engineered for zero-allocation hot paths, single-cycle register board queries, and high-throughput parallel database workloads.
+> **GigaChess is an optimized chess move generation and perft library in the Rust ecosystem**, engineered for zero-allocation hot paths, single-cycle register board queries, and high-throughput parallel database workloads.
 
 Measured with Criterion 0.5 on an **Apple M1 Max (10 cores, 32 GB, release profile `lto = "fat" codegen-units = 1`, `sample-size 10`, `measurement-time 1s`, `warm-up 1s`)**:
 
@@ -217,3 +217,35 @@ Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) for 
 MIT — see [LICENSE](LICENSE). All table data (Zobrist keys, magic numbers)
 is either generated at runtime with fixed seeds or taken from public format
 specifications.
+
+---
+
+## Shared JavaScript/Rust chess rules contract
+
+`gigachess` (this Rust crate) and the independent pure TypeScript
+[`gigachess`](https://github.com/itshak/gigachess) share the same moves2 word
+layout, promotion codes, canonical king-to-initial-rook-square castling wire,
+null-move sentinel `0xffff`, Polyglot vector keys, and seeded Chess960
+castling-file keys. Neither package depends on the other or on WebAssembly.
+See the identical [mirrored contract](openspec/changes/dual-engine-hardening-20261123/specs/mirrored-core-contract/spec.md)
+and the golden `tests/data/position-keys-v1.tsv` and `tests/data/moves2-v1.tsv`.
+
+**Two different hashes serve different purposes:** `board.zobrist()` returns
+canonical Polyglot and is appropriate for Polyglot opening books and cross-language
+position keys; `board.repetition_key()` excludes en-passant when *no legal*
+en-passant capture exists, which is required for FIDE repetition equivalence.
+In particular, a geometrically capturable but pinned en-passant target may
+contribute to the Polyglot hash and must not affect the repetition key. Both
+hash methods require a state-maintaining move path, not `play_fast()` or slim
+perft makes that explicitly skip hash maintenance.
+
+`fen::parse_fen()` validates legal reachable positions, including the last
+mover not leaving its own king in check. For deliberate synthetic positions
+used to test checker-cache or null-move behavior,
+`fen::parse_fen_allow_illegal()` is an explicit opt-in that skips only that
+opponent-in-check validity check while retaining the FEN syntax and basic
+piece validation.
+
+Re-run the [Rust performance and rules audit](openspec/changes/dual-engine-hardening-20261123/research.md)
+before relying on unqualified fastest claims beyond the documented historical
+hardware and workload.

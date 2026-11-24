@@ -1,10 +1,10 @@
 name: CI
 
+# Runs only when explicitly requested; automated tests and performance
+# benchmarks run on the project AI server to preserve GitHub Actions minutes.
+# The separate release.yml remains tag-triggered and is not disabled.
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always

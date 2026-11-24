@@ -244,7 +244,11 @@ fn a_pass_refreshes_checkers_for_the_new_side_to_move() {
     // Black to move, not in check. After a checkered pass, White is to move and
     // it is White who is in check — so the cache must be set, not merely left
     // alone by accident.
-    let mut b = board("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR b KQkq - 1 3");
+    // This deliberately unreachable FEN has White already in check even
+    // though Black is to move; only the explicitly permissive parser admits it.
+    let mut b = gigachess::fen::parse_fen_allow_illegal(
+        "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR b KQkq - 1 3"
+    ).unwrap();
     assert!(!b.in_check(), "premise: Black is not in check");
     b.make_move_checkered(Move::NULL);
     assert_eq!(b.turn(), Color::White);
