@@ -145,10 +145,15 @@ pub fn move_to_san_body(board: &Board, mv: Move) -> Option<San> {
                     let sq = Square::new(pop_lsb(&mut candidates));
                     let cm = Move::new(sq, to, mv.promotion());
                     let mut tmp = *board;
-                    let undo = tmp.make_move_unchecked(cm);
-                    let legal =
-                        tmp.attackers_to(tmp.king_square(us).0, us.other(), tmp.occupied()) == 0;
-                    tmp.unmake_move(cm, undo);
+                    let legal = if cfg!(feature = "exp-san") {
+                        tmp.make_move_fast(cm);
+                        tmp.attackers_to(tmp.king_square(us).0, us.other(), tmp.occupied()) == 0
+                    } else {
+                        let undo = tmp.make_move_unchecked(cm);
+                        let legal = tmp.attackers_to(tmp.king_square(us).0, us.other(), tmp.occupied()) == 0;
+                        tmp.unmake_move(cm, undo);
+                        legal
+                    };
                     if legal {
                         others.push(sq);
                         if others.len() >= 8 {
@@ -222,6 +227,7 @@ pub fn check_mate_suffix(after: &Board) -> Option<char> {
 #[inline(always)]
 fn check_mate_suffix_after_make(board: &Board, mv: Move) -> Option<char> {
     let mut tmp = *board;
+    if cfg!(feature = "exp-san") { tmp.make_move_perft(mv); return check_mate_suffix(&tmp); }
     let undo = tmp.make_move_unchecked(mv);
     let suffix = check_mate_suffix(&tmp);
     tmp.unmake_move(mv, undo);

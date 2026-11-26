@@ -97,6 +97,8 @@ pub struct Undo {
     ep: u8,
     halfmove: u16,
     captured: u8,
+    #[cfg(feature = "exp-undo-role")]
+    moved: u8,
     /// True when the move was a castling move (king-from → rook-square).
     castled: bool,
 }
@@ -302,6 +304,14 @@ impl Board {
         }
         let col = &self.bbs[color.index()];
         // Unrolled 6 checks — branch predictor friendly, no loop overhead.
+        #[cfg(feature = "exp-role-lookup")]
+        {
+            let r0 = ((col[1] | col[3] | col[5]) & b != 0) as u8;
+            let r1 = ((col[2] | col[3]) & b != 0) as u8;
+            let r2 = ((col[4] | col[5]) & b != 0) as u8;
+            return (color as u8) * 6 + r0 + (r1 << 1) + (r2 << 2);
+        }
+        #[allow(unreachable_code)]
         if col[0] & b != 0 {
             return (color as u8) * 6;
         }
@@ -340,6 +350,7 @@ impl Board {
     /// `rook_sq[4]` scan (rare, `is_chess960==true` only).
     #[inline(always)]
     fn castle_rights_after(&self, role: u8, us: Color, from: u8, to: u8) -> u8 {
+        if cfg!(feature = "exp-standard-castle") && self.castling == 0 { return 0; }
         if !self.is_chess960 {
             // Standard: `E1` clears both white, `A1`/`H1` clear one, same for 8th.
             const CASTLE_CLEAR_STD: [u8; 64] = {
@@ -355,7 +366,7 @@ impl Board {
             let mut keep = 0x0F;
             let mask = CASTLE_CLEAR_STD[from as usize] | CASTLE_CLEAR_STD[to as usize];
             keep &= !mask;
-            if role == Role::King as u8 {
+            if role == Role::King as u8 && (!cfg!(feature = "exp-standard-castle") || from != if us == Color::White {4} else {60}) {
                 let both = (1u8 << crate::types::castle_right_bit(us, true))
                     | (1u8 << crate::types::castle_right_bit(us, false));
                 keep &= !both;
@@ -524,8 +535,22 @@ impl Board {
 
     #[inline(always)]
     fn move_piece(&mut self, from: u8, to: u8, code: u8) {
-        self.remove_piece(from, code);
-        self.put_piece(to, code);
+        #[cfg(feature = "exp-mutation")]
+        {
+            let color = (code / 6) as usize;
+            let role = (code % 6) as usize;
+            let delta = bit(from) ^ bit(to);
+            self.bbs[color][role] ^= delta;
+            self.occ[color] ^= delta;
+            self.hash ^= zobrist::piece_key(Self::color_from_index(color), Self::role_from_index(role), Square(from))
+                ^ zobrist::piece_key(Self::color_from_index(color), Self::role_from_index(role), Square(to));
+            if role == Role::King.index() { self.king_sq[color] = to; }
+        }
+        #[cfg(not(feature = "exp-mutation"))]
+        {
+            self.remove_piece(from, code);
+            self.put_piece(to, code);
+        }
     }
 
     /// True when a pawn of `side` can pseudo-legally capture on the
@@ -549,10 +574,14 @@ impl Board {
         a |= PAWN_ATT[by.other().index()][sq as usize] & self.bbs[bi][Role::Pawn.index()];
         a |= KNIGHT_ATT[sq as usize] & self.bbs[bi][Role::Knight.index()];
         a |= KING_ATT[sq as usize] & self.bbs[bi][Role::King.index()];
-        a |= attacks::bishop_attacks(sq, occ)
-            & (self.bbs[bi][Role::Bishop.index()] | self.bbs[bi][Role::Queen.index()]);
-        a |= attacks::rook_attacks(sq, occ)
-            & (self.bbs[bi][Role::Rook.index()] | self.bbs[bi][Role::Queen.index()]);
+        let bq = self.bbs[bi][Role::Bishop.index()] | self.bbs[bi][Role::Queen.index()];
+        let rq = self.bbs[bi][Role::Rook.index()] | self.bbs[bi][Role::Queen.index()];
+        if !cfg!(feature = "exp-ray-prefilter") || bq & crate::bitboard::EMPTY_BISHOP_RAYS[sq as usize] != 0 {
+            a |= attacks::bishop_attacks(sq, occ) & bq;
+        }
+        if !cfg!(feature = "exp-ray-prefilter") || rq & crate::bitboard::EMPTY_ROOK_RAYS[sq as usize] != 0 {
+            a |= attacks::rook_attacks(sq, occ) & rq;
+        }
         a
     }
 
@@ -678,6 +707,17 @@ impl Board {
         // Enemy attack map with our king removed (x-ray safe king moves).
         let occ_no_king = occ ^ bit(ksq);
         let mut danger = 0u64;
+        let possible_king = KING_ATT[ksq as usize] & !self.occ[ui];
+        let targeted = cfg!(feature = "exp-king-targets")
+            && self.castling & (3 << ((1-ui)*2)) == 0
+            && possible_king.count_ones() <= 3;
+        if targeted {
+            let mut targets = possible_king;
+            while targets != 0 {
+                let to = pop_lsb(&mut targets);
+                if self.attackers_to(to, them, occ_no_king) != 0 { danger |= bit(to); }
+            }
+        } else {
         // Pawns — bulk shifts templated on WHITE (no runtime `them` branch, const-folded).
         {
             let pawns = self.bbs[ti][Role::Pawn.index()];
@@ -708,6 +748,7 @@ impl Board {
             danger |= attacks::rook_attacks(sq, occ_no_king);
         }
 
+        }
         // King steps (castling handled separately) — bulk via push_targets.
         {
             let king_targets = KING_ATT[ksq as usize] & !self.occ[ui] & !danger;
@@ -1327,6 +1368,8 @@ impl Board {
             ep: self.ep,
             halfmove: self.halfmove,
             captured: EMPTY,
+            #[cfg(feature = "exp-undo-role")]
+            moved: EMPTY,
             castled: false,
         };
         let from = mv.from().0;
@@ -1334,6 +1377,8 @@ impl Board {
         let us = self.turn;
         let them = us.other();
         let moved = self.piece_code_at_color(from, us);
+        #[cfg(feature = "exp-undo-role")]
+        { undo.moved = mv.promotion().map_or(moved, |r| Piece::new(us,r).code()); }
         debug_assert_ne!(moved, EMPTY, "make_move on empty square");
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
@@ -1563,6 +1608,8 @@ impl Board {
             ep: self.ep,
             halfmove: self.halfmove,
             captured: EMPTY,
+            #[cfg(feature = "exp-undo-role")]
+            moved: EMPTY,
             castled: false,
         };
         let us = self.turn;
@@ -1657,6 +1704,8 @@ impl Board {
             ep: self.ep,
             halfmove: 0,
             captured: EMPTY,
+            #[cfg(feature = "exp-undo-role")]
+            moved: EMPTY,
             castled: false,
         };
         let from = mv.from().0;
@@ -1664,6 +1713,8 @@ impl Board {
         let us = self.turn;
         let them = us.other();
         let moved = self.piece_code_at_color(from, us);
+        #[cfg(feature = "exp-undo-role")]
+        { undo.moved = mv.promotion().map_or(moved, |r| Piece::new(us,r).code()); }
         debug_assert_ne!(moved, EMPTY, "make_move_perft on empty square");
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
@@ -1767,10 +1818,19 @@ impl Board {
                     let role_idx = (moved % 6) as usize;
                     let b_from = bit(from);
                     let b_to = bit(to);
-                    self.bbs[color][role_idx] &= !b_from;
-                    self.bbs[color][role_idx] |= b_to;
-                    self.occ[color] &= !b_from;
-                    self.occ[color] |= b_to;
+                    #[cfg(feature = "exp-mutation")]
+                    {
+                        let delta = b_from ^ b_to;
+                        self.bbs[color][role_idx] ^= delta;
+                        self.occ[color] ^= delta;
+                    }
+                    #[cfg(not(feature = "exp-mutation"))]
+                    {
+                        self.bbs[color][role_idx] &= !b_from;
+                        self.bbs[color][role_idx] |= b_to;
+                        self.occ[color] &= !b_from;
+                        self.occ[color] |= b_to;
+                    }
                     if role_idx == Role::King.index() {
                         self.king_sq[color] = to;
                     }
@@ -1846,6 +1906,9 @@ impl Board {
             return;
         }
 
+        #[cfg(feature = "exp-undo-role")]
+        let moved = undo.moved;
+        #[cfg(not(feature = "exp-undo-role"))]
         let moved = self.piece_code_at_color(to, us);
         debug_assert_ne!(moved, EMPTY, "unmake_move_perft on empty destination");
         // Remove to without hash.
@@ -1962,6 +2025,9 @@ impl Board {
             return;
         }
 
+        #[cfg(feature = "exp-undo-role")]
+        let moved = undo.moved;
+        #[cfg(not(feature = "exp-undo-role"))]
         let moved = self.piece_code_at_color(to, us);
         debug_assert_ne!(moved, EMPTY, "unmake_move on empty destination");
 
@@ -2048,6 +2114,8 @@ impl Board {
             ep: self.ep,
             halfmove: self.halfmove,
             captured: EMPTY,
+            #[cfg(feature = "exp-undo-role")]
+            moved: EMPTY,
             castled: false,
         };
         let from = mv.from().0;
@@ -2055,6 +2123,8 @@ impl Board {
         let us = self.turn;
         let them = us.other();
         let moved = self.piece_code_at_color(from, us);
+        #[cfg(feature = "exp-undo-role")]
+        { undo.moved = mv.promotion().map_or(moved, |r| Piece::new(us,r).code()); }
         debug_assert_ne!(moved, EMPTY, "make_move_fast on empty square");
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
@@ -2150,10 +2220,19 @@ impl Board {
                     let role_idx = (moved % 6) as usize;
                     let b_from = bit(from);
                     let b_to = bit(to);
-                    self.bbs[color][role_idx] &= !b_from;
-                    self.bbs[color][role_idx] |= b_to;
-                    self.occ[color] &= !b_from;
-                    self.occ[color] |= b_to;
+                    #[cfg(feature = "exp-mutation")]
+                    {
+                        let delta = b_from ^ b_to;
+                        self.bbs[color][role_idx] ^= delta;
+                        self.occ[color] ^= delta;
+                    }
+                    #[cfg(not(feature = "exp-mutation"))]
+                    {
+                        self.bbs[color][role_idx] &= !b_from;
+                        self.bbs[color][role_idx] |= b_to;
+                        self.occ[color] &= !b_from;
+                        self.occ[color] |= b_to;
+                    }
                     if role_idx == Role::King.index() {
                         self.king_sq[color] = to;
                     }
@@ -2233,6 +2312,9 @@ impl Board {
             return;
         }
 
+        #[cfg(feature = "exp-undo-role")]
+        let moved = undo.moved;
+        #[cfg(not(feature = "exp-undo-role"))]
         let moved = self.piece_code_at_color(to, us);
         debug_assert_ne!(moved, EMPTY, "unmake_move_fast on empty destination");
         {
@@ -2397,6 +2479,11 @@ impl Board {
             return false;
         }
         let mut tmp = *self;
+        if cfg!(feature = "exp-san") {
+            tmp.make_move_fast(mv);
+            let mover = tmp.turn.other();
+            return tmp.attackers_to(tmp.king_sq[mover.index()], tmp.turn, tmp.occupied()) == 0;
+        }
         let undo = tmp.make_move_unchecked(mv);
         let mover = tmp.turn.other();
         let safe = tmp.attackers_to(tmp.king_sq[mover.index()], tmp.turn, tmp.occupied()) == 0;
@@ -2520,14 +2607,29 @@ impl Board {
         if depth == 1 {
             return self.count_legal_moves() as u64;
         }
+        #[cfg(feature = "exp-fused-perft")]
+        if depth == 2 {
+            let mut sink = PerftLeafSink { child: *self, nodes: 0 };
+            self.generate_moves_into(&mut sink);
+            return sink.nodes;
+        }
         let mut list = crate::movegen::MoveList::new();
         self.generate_moves_into(&mut list);
         let mut nodes = 0u64;
-        let mut child = *self;
+        #[cfg(feature = "exp-copy-perft")]
         for &mv in list.as_slice() {
-            let undo = child.make_move_perft(mv);
+            let mut child = *self;
+            child.make_move_perft(mv);
             nodes += child.perft(depth - 1);
-            child.unmake_move_perft(mv, undo);
+        }
+        #[cfg(not(feature = "exp-copy-perft"))]
+        {
+            let mut child = *self;
+            for &mv in list.as_slice() {
+                let undo = child.make_move_perft(mv);
+                nodes += child.perft(depth - 1);
+                child.unmake_move_perft(mv, undo);
+            }
         }
         nodes
     }
@@ -2638,5 +2740,34 @@ impl Board {
             }
         }
         self.is_chess960 = is960;
+    }
+}
+
+
+#[cfg(feature = "exp-fused-perft")]
+struct PerftLeafSink { child: Board, nodes:u64 }
+#[cfg(feature = "exp-fused-perft")]
+impl MoveSink for PerftLeafSink {
+    #[inline(always)]
+    fn push_one(&mut self,mv:Move) {
+        let undo=self.child.make_move_perft(mv);
+        self.nodes+=self.child.count_legal_moves() as u64;
+        self.child.unmake_move_perft(mv,undo);
+    }
+    #[inline(always)]
+    fn push_targets(&mut self,from:u8,mut targets:u64) {
+        while targets!=0 {let to=pop_lsb(&mut targets);self.push_one(Move::quiet(Square(from),Square(to)));}
+    }
+    #[inline(always)]
+    fn push_pawn_targets_offset(&mut self,mut targets:u64,offset:i8) {
+        while targets!=0 {let to=pop_lsb(&mut targets);self.push_one(Move::quiet(Square((to as i16-offset as i16) as u8),Square(to)));}
+    }
+    #[inline(always)]
+    fn push_pawn_promotions_offset(&mut self,mut targets:u64,offset:i8) {
+        while targets!=0 {
+            let to=pop_lsb(&mut targets);
+            let base=(to as i16-offset as i16) as u16|((to as u16)<<6);
+            for r in 1..=4 {self.push_one(Move(base|(r<<12)));}
+        }
     }
 }

@@ -1,0 +1,62 @@
+name: Rust optimization bakeoff
+on:
+  push:
+    branches: [perf/rust-optimization-bakeoff-20261126]
+    paths: ['src/**', 'Cargo.toml', 'build.rs', 'scripts/own_magics.rs', 'benchmarks/competitive/src/**', 'benchmarks/competitive/Cargo.toml', '.github/workflows/optimization-bakeoff.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paired:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        candidate: [mutation, undo-role, ray-prefilter, king-targets, copy-perft, fused-perft, san, uci, standard-castle, role-lookup, static-sliders]
+    name: ${{ matrix.os }} / ${{ matrix.candidate }}
+    env:
+      RUSTFLAGS: -C target-cpu=native
+      CANDIDATE: ${{ matrix.candidate }}
+      BENCH_MS: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+      - name: Record machine and compiler
+        run: |
+          mkdir -p evidence
+          lscpu > evidence/environment.txt
+          rustc -vV >> evidence/environment.txt
+          git rev-parse HEAD >> evidence/environment.txt
+          echo "candidate=$CANDIDATE" >> evidence/environment.txt
+      - name: Candidate correctness
+        run: cargo test --locked --release --features "exp-$CANDIDATE" > evidence/tests.txt 2>&1
+      - name: Build matching release binaries
+        run: |
+          cargo build --locked --release --manifest-path benchmarks/competitive/Cargo.toml --bin gigachess-competitive-bench
+          cp benchmarks/competitive/target/release/gigachess-competitive-bench evidence/baseline-bin
+          cargo build --locked --release --manifest-path benchmarks/competitive/Cargo.toml --bin gigachess-competitive-bench --features "exp-$CANDIDATE"
+          cp benchmarks/competitive/target/release/gigachess-competitive-bench evidence/candidate-bin
+      - name: Counterbalanced full benchmark
+        run: |
+          for pair in baseline:1 candidate:1 candidate:2 baseline:2; do
+            side=${pair%:*}
+            rep=${pair#*:}
+            "evidence/$side-bin" > "evidence/$side-$rep.tsv" 2> "evidence/$side-$rep-validation.txt"
+          done
+          for side in baseline candidate; do
+            for n in {1..5}; do "evidence/$side-bin" --cold-giga; done > "evidence/$side-cold-ns.txt"
+          done
+          rm evidence/*-bin
+          python3 benchmarks/competitive/compare_ab.py evidence | tee evidence/ab-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bakeoff-${{ matrix.os }}-${{ matrix.candidate }}
+          path: |
+            evidence/*.tsv
+            evidence/*.txt
+            evidence/*.md

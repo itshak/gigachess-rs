@@ -94,6 +94,13 @@ impl core::fmt::Display for Move {
         }
         let [ff, fr] = self.from().to_alg();
         let [tf, tr] = self.to().to_alg();
+        #[cfg(feature = "exp-uci")]
+        {
+            let mut bytes = [ff, fr, tf, tr, 0];
+            let len = if let Some(p) = self.promotion() { bytes[4] = p.char_upper().to_ascii_lowercase() as u8; 5 } else { 4 };
+            return f.write_str(core::str::from_utf8(&bytes[..len]).expect("UCI is ASCII"));
+        }
+        #[allow(unreachable_code)]
         write!(f, "{}{}{}{}", ff as char, fr as char, tf as char, tr as char)?;
         if let Some(p) = self.promotion() {
             write!(f, "{}", p.char_upper().to_ascii_lowercase())?;
