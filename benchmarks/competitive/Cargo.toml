@@ -14,6 +14,8 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-slider-planes = ["gigachess/exp-slider-planes", "exp-compact-board"]
+exp-slider-planes-kingless = ["gigachess/exp-slider-planes-kingless", "exp-slider-planes"]
 exp-hash-role-scan = ["gigachess/exp-hash-role-scan"]
 exp-fen-byte-copy = ["gigachess/exp-fen-byte-copy"]
 exp-inline-make = ["gigachess/exp-inline-make"]
@@ -35,7 +37,8 @@ exp-color-make = ["gigachess/exp-color-make"]
 exp-checked-known = ["gigachess/exp-checked-known"]
 exp-unmake-xor = ["gigachess/exp-unmake-xor"]
 # For this paired experiment branch only, C is the benchmark baseline.
-default = ["baseline-c"]
+default = ["baseline-e"]
+baseline-e = ["baseline-c", "exp-checker-rays", "exp-full-visitor", "exp-color-make", "exp-checked-known", "exp-unmake-xor", "exp-known-role", "exp-static-unchecked", "exp-uci-sort-key", "exp-compact-attacks", "exp-bool-attacks", "exp-promotion-batch", "exp-perft-xor"]
 baseline-c = ["exp-static-sliders", "exp-ray-prefilter", "exp-san", "exp-uci", "exp-fused-perft", "exp-copy-perft", "exp-mutation", "exp-compact-board", "exp-direct-legal", "exp-early-san", "exp-perft-kernel", "exp-quiet-fast", "exp-fused-geometry", "exp-uci-direct", "exp-ep-candidates"]
 exp-kingless-board = ["gigachess/exp-kingless-board"]
 exp-known-role = ["gigachess/exp-known-role"]

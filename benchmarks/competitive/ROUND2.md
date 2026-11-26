@@ -84,3 +84,19 @@ immutable comparison configurations.
 - fen-byte-copy: isolate final String construction from rank writer changes.
 No legal-state assumptions are added; native replay, hash and checker
 contracts remain unchanged.
+
+## Round 3: alternate slider-plane storage and expanded correctness
+
+Two independent layout candidates are based on E. In the first, diagonal
+(bishop or queen) and orthogonal (rook or queen) planes overlap, so individual
+roles are recovered by intersection/difference. Pawn, knight and king
+retain direct planes; expected Board size 88 bytes. The second derives
+king occupancy from the other planes and color occupancy (80 bytes).
+Movegen and checker paths can access combined sliders directly. Hash,
+clocks, castling rights, checker masks and the public move word stay intact.
+Both variants passed the debug regression suite, including 960 starting
+arrangements and their stripped castling fixtures, exact legal move sets,
+depth-2 perft, checker parity, and reversible state.
+Benchmark-only defaults now select E to isolate layout effects; root
+production defaults remain unchanged. Supplemental per-ply replay hash
+and hash-plus-checkers rows are excluded from the original strict score.

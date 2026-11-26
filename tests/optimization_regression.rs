@@ -153,7 +153,7 @@ fn full_visitor_observes_identical_leaf_states() {
     }
 }
 
-#[cfg(any(feature="exp-nibble-role",feature="exp-role-planes",feature="exp-kingless-board"))]
+#[cfg(any(feature="exp-nibble-role",feature="exp-role-planes",feature="exp-kingless-board",feature="exp-slider-planes"))]
 #[test]
 fn redundant_role_storage_matches_bitboards_and_fen(){
     assert!(parse_fen("4k3/8/8/8/8/8/8/3KK3 w - - 0 1").is_err());
@@ -184,4 +184,60 @@ fn sorted_uci_matches_reference_including_promotions_and_960(){
         let mut expected:Vec<_>=b.legal_moves().iter().map(|&m|if b.is_chess960(){m.to_string()}else{uci(&b,m)}).collect();
         expected.sort_unstable();assert_eq!(b.legal_moves_uci_sorted(),expected);
     }
+}
+
+/// Every legal Chess960 back rank, plus a stripped castling fixture for each.
+/// The reference uses canonical king-to-rook UCI, not standard castling UCI.
+#[test]
+fn all_960_backranks_and_castling_parity(){
+    fn rank_fen(rank:&[u8;8])->String{
+        let mut out=String::new();let mut gap=0;
+        for &p in rank{
+            if p==b' ' {gap+=1;continue;}
+            if gap!=0{out.push(char::from(b'0'+gap));gap=0;}
+            out.push(char::from(p));
+        }
+        if gap!=0{out.push(char::from(b'0'+gap));}
+        out
+    }
+    fn verify(fen:&str){
+        let b=parse_fen(fen).unwrap_or_else(|e|panic!("{fen}: {e}"));
+        let s:Chess=shakmaty::fen::Fen::from_ascii(fen.as_bytes()).unwrap().into_position(CastlingMode::Chess960).unwrap();
+        let gm=b.legal_moves();let sm=s.legal_moves();
+        let expected:HashSet<_>=sm.iter().map(|&m|UciMove::from_move(m,CastlingMode::Chess960).to_string()).collect();
+        let actual:HashSet<_>=gm.iter().map(|m|m.to_string()).collect();
+        assert_eq!(actual,expected,"{fen}");
+        let mut ref_nodes=0;
+        for m in sm{let mut child=s.clone();child.play_unchecked(m);ref_nodes+=child.legal_moves().len() as u64;}
+        assert_eq!(b.perft(2),ref_nodes,"{fen}");
+        for m in gm{
+            let mut child=b;let u=child.make_move_unchecked(m);
+            let mut reference=s.clone();let rm=m.to_string().parse::<UciMove>().unwrap().to_move(&reference).unwrap();reference.play_unchecked(rm);
+            assert_eq!(child.checkers_bb(),reference.checkers().0,"{fen} {m}");
+            assert_eq!(child.zobrist(),child.zobrist_full(),"{fen} {m}");
+            let mut slim=b;let su=slim.make_move_perft(m);same_perft_state(&child,&slim);
+            slim.unmake_move_perft(m,su);assert_eq!(slim,b);
+            child.unmake_move(m,u);assert_eq!(child,b);
+        }
+    }
+    let mut ranks=HashSet::new();
+    for b1 in (0..8).step_by(2){for b2 in (1..8).step_by(2){
+        for q in 0..8{if q==b1||q==b2{continue;}
+            for n1 in 0..8{if [b1,b2,q].contains(&n1){continue;}
+                for n2 in n1+1..8{if [b1,b2,q].contains(&n2){continue;}
+                    let mut rank=[b' ';8];rank[b1]=b'B';rank[b2]=b'B';rank[q]=b'Q';rank[n1]=b'N';rank[n2]=b'N';
+                    let remaining:Vec<_>=(0..8).filter(|&i|rank[i]==b' ').collect();
+                    rank[remaining[0]]=b'R';rank[remaining[1]]=b'K';rank[remaining[2]]=b'R';
+                    assert!(ranks.insert(rank));
+                    let white=rank_fen(&rank);let black=white.to_ascii_lowercase();
+                    let rights:String=[b'A'+remaining[2] as u8,b'A'+remaining[0] as u8,b'a'+remaining[2] as u8,b'a'+remaining[0] as u8].into_iter().map(char::from).collect();
+                    verify(&format!("{black}/pppppppp/8/8/8/8/PPPPPPPP/{white} w {rights} - 0 1"));
+                    let mut stripped=[b' ';8];stripped[remaining[0]]=b'R';stripped[remaining[1]]=b'K';stripped[remaining[2]]=b'R';
+                    let mut bk=[b' ';8];let file=(0..8).find(|i|*i!=remaining[0]&&*i!=remaining[2]).unwrap();bk[file]=b'k';
+                    verify(&format!("{}/8/8/8/8/8/8/{} w {} - 0 1",rank_fen(&bk),rank_fen(&stripped),&rights[..2]));
+                }
+            }
+        }
+    }}
+    assert_eq!(ranks.len(),960);
 }

@@ -12,6 +12,8 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-slider-planes = ["exp-compact-board"]
+exp-slider-planes-kingless = ["exp-slider-planes"]
 exp-hash-role-scan = []
 exp-fen-byte-copy = []
 exp-inline-make = []

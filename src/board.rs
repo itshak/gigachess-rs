@@ -149,10 +149,16 @@ pub struct Board {
     checkers: u64,
     #[cfg(not(feature = "exp-compact-board"))]
     bbs: [[u64; 6]; 2],  // [color_index][role_index]
-    #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board")))]
+    #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board"),not(feature="exp-slider-planes")))]
     roles: [u64; 6], // role bitboards intersected with color occupancy
-    #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+    #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
     roles:[u64;5],
+    // Overlapping diagonal and orthogonal slider planes: a queen is
+    // the intersection, bishop/rook are the respective differences.
+    #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless")))]
+    sliders:[u64;5],
+    #[cfg(feature="exp-slider-planes-kingless")]
+    sliders:[u64;4],
     #[cfg(feature="exp-nibble-role")]
     role_map:[u8;32],
     #[cfg(feature="exp-role-planes")]
@@ -189,10 +195,14 @@ impl Board {
         Board {
             #[cfg(not(feature = "exp-compact-board"))]
             bbs: [[0; 6]; 2],
-            #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board")))]
+            #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board"),not(feature="exp-slider-planes")))]
             roles: [0;6],
-            #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+            #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
             roles:[0;5],
+            #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless")))]
+            sliders:[0;5],
+            #[cfg(feature="exp-slider-planes-kingless")]
+            sliders:[0;4],
             #[cfg(feature="exp-nibble-role")]
             role_map:[0xff;32],
             #[cfg(feature="exp-role-planes")]
@@ -232,10 +242,14 @@ impl Board {
                 [0xff << 48, 0x42 << 56, 0x24 << 56, 0x81 << 56, 0x08 << 56, 0x10 << 56],
                 BACK_RANK,
             ],
-            #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board")))]
+            #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board"),not(feature="exp-slider-planes")))]
             roles: [0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56), 0x10 | (0x10 << 56)],
-            #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+            #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
             roles:[0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56)],
+            #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless")))]
+            sliders:[0xff00|(0xff<<48),0x42|(0x42<<56),0x2c|(0x2c<<56),0x89|(0x89<<56),0x10|(0x10<<56)],
+            #[cfg(feature="exp-slider-planes-kingless")]
+            sliders:[0xff00|(0xff<<48),0x42|(0x42<<56),0x2c|(0x2c<<56),0x89|(0x89<<56)],
             #[cfg(feature="exp-nibble-role")]
             role_map:{
                 let mut m=[0xff;32];let back=[3u8,1,2,4,5,2,1,3];let mut i=0;
@@ -297,7 +311,21 @@ impl Board {
 
     #[inline(always)]
     fn bb(&self,color:usize,role:usize)->u64 {
-        #[cfg(feature = "exp-compact-board")]
+        #[cfg(feature="exp-slider-planes")]
+        {
+            let p=&self.sliders;
+            let raw=match role {
+                0=>p[0],1=>p[1],2=>p[2]&!p[3],3=>p[3]&!p[2],4=>p[2]&p[3],
+                _=>{
+                    #[cfg(feature="exp-slider-planes-kingless")]
+                    {!(p[0]|p[1]|p[2]|p[3])}
+                    #[cfg(not(feature="exp-slider-planes-kingless"))]
+                    {p[4]}
+                }
+            };
+            return raw&self.occ[color];
+        }
+        #[cfg(all(feature = "exp-compact-board",not(feature="exp-slider-planes")))]
         {
             #[cfg(feature="exp-kingless-board")]
             if role==Role::King.index(){
@@ -310,6 +338,31 @@ impl Board {
         #[cfg(not(feature = "exp-compact-board"))]
         { self.bbs[color][role] }
     }
+    #[inline(always)]
+    fn diagonal_sliders(&self,color:usize)->u64{
+        #[cfg(feature="exp-slider-planes")]
+        {self.sliders[2]&self.occ[color]}
+        #[cfg(not(feature="exp-slider-planes"))]
+        {self.bb(color,Role::Bishop.index())|self.bb(color,Role::Queen.index())}
+    }
+    #[inline(always)]
+    fn orthogonal_sliders(&self,color:usize)->u64{
+        #[cfg(feature="exp-slider-planes")]
+        {self.sliders[3]&self.occ[color]}
+        #[cfg(not(feature="exp-slider-planes"))]
+        {self.bb(color,Role::Rook.index())|self.bb(color,Role::Queen.index())}
+    }
+    #[cfg(feature="exp-slider-planes")]
+    #[inline(always)]
+    fn slider_role_at(&self,b:u64)->u8{
+        if self.sliders[0]&b!=0{return 0;}
+        if self.sliders[1]&b!=0{return 1;}
+        // 00 king, 01 bishop, 10 rook, 11 queen.
+        let d=(self.sliders[2]&b!=0) as usize;
+        let r=(self.sliders[3]&b!=0) as usize;
+        [5,2,3,4][d+2*r]
+    }
+    #[cfg(not(feature="exp-slider-planes"))]
     #[inline(always)]
     fn bb_mut(&mut self,color:usize,role:usize)->&mut u64 {
         #[cfg(feature = "exp-compact-board")]
@@ -342,9 +395,21 @@ impl Board {
         for i in 0..3 {if role&(1<<i)!=0{self.role_planes[i]|=mask;}}
         #[cfg(feature = "exp-mailbox")]
         { self.mailbox[mask.trailing_zeros() as usize]=(color*6+role) as u8; }
-        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        *self.bb_mut(color,role)|=mask;
+        #[cfg(feature="exp-slider-planes")]
+        {
+            match role {
+                0..=3=>self.sliders[role]|=mask,
+                4=>{self.sliders[2]|=mask;self.sliders[3]|=mask;},
+                _=>{
+                    #[cfg(not(feature="exp-slider-planes-kingless"))]
+                    {self.sliders[4]|=mask;}
+                }
+            }
+        }
+        #[cfg(not(feature="exp-slider-planes"))]
+        {*self.bb_mut(color,role)|=mask;}
     }
     #[inline(always)]
     fn bb_remove(&mut self,color:usize,role:usize,mask:u64){
@@ -354,9 +419,21 @@ impl Board {
         for i in 0..3 {if role&(1<<i)!=0{self.role_planes[i]&=!mask;}}
         #[cfg(feature = "exp-mailbox")]
         { self.mailbox[mask.trailing_zeros() as usize]=EMPTY; }
-        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        *self.bb_mut(color,role)&=!mask;
+        #[cfg(feature="exp-slider-planes")]
+        {
+            match role {
+                0..=3=>self.sliders[role]&=!mask,
+                4=>{self.sliders[2]&=!mask;self.sliders[3]&=!mask;},
+                _=>{
+                    #[cfg(not(feature="exp-slider-planes-kingless"))]
+                    {self.sliders[4]&=!mask;}
+                }
+            }
+        }
+        #[cfg(not(feature="exp-slider-planes"))]
+        {*self.bb_mut(color,role)&=!mask;}
     }
     #[cfg(feature = "exp-mutation")]
     #[inline(always)]
@@ -375,9 +452,21 @@ impl Board {
             let to=(!self.occ[color]&mask).trailing_zeros() as usize;
             if mask!=0 { self.mailbox[from]=EMPTY;self.mailbox[to]=(color*6+role) as u8; }
         }
-        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        *self.bb_mut(color,role)^=mask;
+        #[cfg(feature="exp-slider-planes")]
+        {
+            match role {
+                0..=3=>self.sliders[role]^=mask,
+                4=>{self.sliders[2]^=mask;self.sliders[3]^=mask;},
+                _=>{
+                    #[cfg(not(feature="exp-slider-planes-kingless"))]
+                    {self.sliders[4]^=mask;}
+                }
+            }
+        }
+        #[cfg(not(feature="exp-slider-planes"))]
+        {*self.bb_mut(color,role)^=mask;}
     }
 
     /// Piece standing on `sq`, if any.
@@ -404,6 +493,10 @@ impl Board {
         {return self.get_role_nibble(sq)+(occ1!=0) as u8*6;}
         #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
         {return self.get_role_planes(sq)+(occ1!=0) as u8*6;}
+        #[cfg(feature="exp-slider-planes")]
+        {return self.slider_role_at(b)+(occ1!=0) as u8*6;}
+        #[cfg(not(feature="exp-slider-planes"))]
+        {
         #[allow(unreachable_code)]
         if occ0 != 0 {
             // Black piece — scan Black's 6 bitboards (unrolled).
@@ -452,7 +545,9 @@ impl Board {
             debug_assert!(self.bb(1,5) & b != 0);
             11
         }
+        }
     }
+
 
     #[cfg(feature="exp-known-role")]
     #[inline(always)]
@@ -463,6 +558,10 @@ impl Board {
         {return self.get_role_nibble(sq);}
         #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
         {return self.get_role_planes(sq);}
+        #[cfg(feature="exp-slider-planes")]
+        {return self.slider_role_at(b);}
+        #[cfg(not(feature="exp-slider-planes"))]
+        {
         #[allow(unreachable_code)]
         #[cfg(feature="exp-compact-board")]
         let col=&self.roles;
@@ -478,7 +577,9 @@ impl Board {
         }
         #[cfg(not(feature="exp-role-select"))]
         if col[0]&b!=0{0}else if col[1]&b!=0{1}else if col[2]&b!=0{2}else if col[3]&b!=0{3}else if col[4]&b!=0{4}else{5}
+        }
     }
+
 
     /// Fast piece lookup for a square known to hold `color`'s piece (or empty).
     /// Scans only 6 bitboards of that color — 2× faster than `piece_code_at`
@@ -499,6 +600,10 @@ impl Board {
         {return self.get_role_nibble(sq)+color as u8*6;}
         #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
         {return self.get_role_planes(sq)+color as u8*6;}
+        #[cfg(feature="exp-slider-planes")]
+        {return self.slider_role_at(b)+color as u8*6;}
+        #[cfg(not(feature="exp-slider-planes"))]
+        {
         #[allow(unreachable_code)]
         #[cfg(not(feature = "exp-compact-board"))]
             let col = &self.bbs[color.index()];
@@ -539,7 +644,9 @@ impl Board {
         }
         debug_assert!(self.bb(color.index(),5) & b != 0);
         (color as u8) * 6 + 5
+        }
     }
+
 
     /// Captured pawn on `sq` is always an opponent pawn — single bit test
     /// (avoids 6-way scan). Returns pawn code or EMPTY.
@@ -777,10 +884,14 @@ impl Board {
         {
             let allowed=self.occ[by.index()];
             let k=sq as usize;
-            let mut result=(PAWN_ATT[by.other().index()][k]&self.roles[0])|
-                (KNIGHT_ATT[k]&self.roles[1])|(KING_ATT[k]&self.bb(by.index(),5));
-            let bishops=(self.roles[2]|self.roles[4])&crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed;
-            let rooks=(self.roles[3]|self.roles[4])&crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed;
+            #[cfg(feature="exp-slider-planes")]
+            let p=&self.sliders;
+            #[cfg(not(feature="exp-slider-planes"))]
+            let p=&self.roles;
+            let mut result=(PAWN_ATT[by.other().index()][k]&p[0])|
+                (KNIGHT_ATT[k]&p[1])|(KING_ATT[k]&self.bb(by.index(),5));
+            let bishops=self.diagonal_sliders(by.index())&crate::bitboard::EMPTY_BISHOP_RAYS[k];
+            let rooks=self.orthogonal_sliders(by.index())&crate::bitboard::EMPTY_ROOK_RAYS[k];
             result&=allowed;
             #[cfg(feature="exp-checker-rays")]
             {
@@ -810,8 +921,7 @@ impl Board {
             };
             let k=sq as usize;let d=&DESCS[k];let ci=by.index();
             let mut a=(d[by.other().index()]&self.bb(ci,0))|(d[2]&self.bb(ci,1))|(d[3]&self.bb(ci,5));
-            let queens=self.bb(ci,4);
-            let b=(self.bb(ci,2)|queens)&d[4];let r=(self.bb(ci,3)|queens)&d[5];
+            let b=self.diagonal_sliders(ci)&d[4];let r=self.orthogonal_sliders(ci)&d[5];
             #[cfg(feature="exp-checker-rays")]
             {
                 let mut candidates=b|r;
@@ -835,8 +945,8 @@ impl Board {
         a |= PAWN_ATT[by.other().index()][sq as usize] & self.bb(bi, Role::Pawn.index());
         a |= KNIGHT_ATT[sq as usize] & self.bb(bi, Role::Knight.index());
         a |= KING_ATT[sq as usize] & self.bb(bi, Role::King.index());
-        let bq = self.bb(bi, Role::Bishop.index()) | self.bb(bi, Role::Queen.index());
-        let rq = self.bb(bi, Role::Rook.index()) | self.bb(bi, Role::Queen.index());
+        let bq = self.diagonal_sliders(bi);
+        let rq = self.orthogonal_sliders(bi);
         #[cfg(feature="exp-checker-rays")]
         {
             let mut candidates=(bq&crate::bitboard::EMPTY_BISHOP_RAYS[sq as usize])|
@@ -863,8 +973,8 @@ impl Board {
         let ci=by.index();let k=sq as usize;let allowed=!removed;
         if ((PAWN_ATT[by.other().index()][k]&self.bb(ci,0))|
             (KNIGHT_ATT[k]&self.bb(ci,1))|(KING_ATT[k]&self.bb(ci,5)))&allowed!=0{return true;}
-        let b=(self.bb(ci,2)|self.bb(ci,4))&crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed;
-        let r=(self.bb(ci,3)|self.bb(ci,4))&crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed;
+        let b=self.diagonal_sliders(ci)&crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed;
+        let r=self.orthogonal_sliders(ci)&crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed;
         #[cfg(feature="exp-checker-rays")]
         {
             let mut candidates=b|r;
@@ -1088,8 +1198,8 @@ impl Board {
         let ti = them.index();
         let ksq = self.king_sq[ui];
         let occ = self.occupied();
-        let their_bq = self.bb(ti, Role::Bishop.index()) | self.bb(ti, Role::Queen.index());
-        let their_rq = self.bb(ti, Role::Rook.index()) | self.bb(ti, Role::Queen.index());
+        let their_bq = self.diagonal_sliders(ti);
+        let their_rq = self.orthogonal_sliders(ti);
 
         // Enemy attack map with our king removed (x-ray safe king moves).
         let occ_no_king = occ ^ bit(ksq);
@@ -1201,7 +1311,7 @@ impl Board {
                 }
             }
             {
-                let mut p = self.bb(ui, Role::Bishop.index()) | self.bb(ui, Role::Queen.index());
+                let mut p = self.diagonal_sliders(ui);
                 while p != 0 {
                     let from = pop_lsb(&mut p);
                     let t = attacks::bishop_attacks(from, occ) & !self.occ[ui] & allowed;
@@ -1209,7 +1319,7 @@ impl Board {
                 }
             }
             {
-                let mut p = self.bb(ui, Role::Rook.index()) | self.bb(ui, Role::Queen.index());
+                let mut p = self.orthogonal_sliders(ui);
                 while p != 0 {
                     let from = pop_lsb(&mut p);
                     let t = attacks::rook_attacks(from, occ) & !self.occ[ui] & allowed;
@@ -1230,7 +1340,7 @@ impl Board {
 
             // Bishops and queens (diagonal moves) — unpinned bulk, pinned_diag via LINE.
             {
-                let bq = self.bb(ui, Role::Bishop.index()) | self.bb(ui, Role::Queen.index());
+                let bq = self.diagonal_sliders(ui);
                 // Unpinned (and hv-pinned bishops are stuck — skip).
                 let bq_unpinned = bq & !pinned_hv & !pinned_diag;
                 let mut p = bq_unpinned;
@@ -1250,7 +1360,7 @@ impl Board {
 
             // Rooks and queens (straight moves) — unpinned bulk, pinned_hv via LINE.
             {
-                let rq = self.bb(ui, Role::Rook.index()) | self.bb(ui, Role::Queen.index());
+                let rq = self.orthogonal_sliders(ui);
                 let rq_unpinned = rq & !pinned_hv & !pinned_diag;
                 let mut p = rq_unpinned;
                 while p != 0 {
@@ -1443,9 +1553,9 @@ impl Board {
                 let ksq_after = self.king_sq[ui];
                 // Use the occupancy after EP for sliding attacks.
                 let mut attackers = attacks::bishop_attacks(ksq_after, occ_after)
-                    & (self.bb(ti, Role::Bishop.index()) | self.bb(ti, Role::Queen.index()));
+                    & (self.diagonal_sliders(ti));
                 attackers |= attacks::rook_attacks(ksq_after, occ_after)
-                    & (self.bb(ti, Role::Rook.index()) | self.bb(ti, Role::Queen.index()));
+                    & (self.orthogonal_sliders(ti));
                 attackers |= KNIGHT_ATT[ksq_after as usize] & self.bb(ti, Role::Knight.index());
                 attackers |= PAWN_ATT[ui][ksq_after as usize] & their_pawns;
                 attackers |= KING_ATT[ksq_after as usize] & self.bb(ti, Role::King.index());
@@ -1577,9 +1687,9 @@ impl Board {
                 let ksq = self.king_sq[ui];
                 let mut attackers =
                     attacks::bishop_attacks(ksq, occ_after)
-                        & (self.bb(ti, Role::Bishop.index()) | self.bb(ti, Role::Queen.index()));
+                        & (self.diagonal_sliders(ti));
                 attackers |= attacks::rook_attacks(ksq, occ_after)
-                    & (self.bb(ti, Role::Rook.index()) | self.bb(ti, Role::Queen.index()));
+                    & (self.orthogonal_sliders(ti));
                 attackers |= KNIGHT_ATT[ksq as usize] & self.bb(ti, Role::Knight.index());
                 attackers |= PAWN_ATT[ui][ksq as usize] & their_pawns;
                 attackers |= KING_ATT[ksq as usize] & self.bb(ti, Role::King.index());
@@ -1718,7 +1828,7 @@ impl Board {
         }
 
         // Bishops and queens (diagonals).
-        let mut p = self.bb(ui, Role::Bishop.index()) | self.bb(ui, Role::Queen.index());
+        let mut p = self.diagonal_sliders(ui);
         while p != 0 {
             let from = pop_lsb(&mut p);
             let mut t = attacks::bishop_attacks(from, occ) & !self.occ[ui];
@@ -1729,7 +1839,7 @@ impl Board {
         }
 
         // Rooks and queens (straights).
-        let mut p = self.bb(ui, Role::Rook.index()) | self.bb(ui, Role::Queen.index());
+        let mut p = self.orthogonal_sliders(ui);
         while p != 0 {
             let from = pop_lsb(&mut p);
             let mut t = attacks::rook_attacks(from, occ) & !self.occ[ui];
