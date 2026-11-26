@@ -141,6 +141,10 @@ pub struct Board {
     roles: [u64; 6], // role bitboards intersected with color occupancy
     #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
     roles:[u64;5],
+    #[cfg(feature="exp-nibble-role")]
+    role_map:[u8;32],
+    #[cfg(feature="exp-role-planes")]
+    role_planes:[u64;3],
     #[cfg(feature = "exp-mailbox")]
     mailbox: [u8; 64],
     occ: [u64; 2],       // occupancy per color
@@ -177,6 +181,10 @@ impl Board {
             roles: [0;6],
             #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
             roles:[0;5],
+            #[cfg(feature="exp-nibble-role")]
+            role_map:[0xff;32],
+            #[cfg(feature="exp-role-planes")]
+            role_planes:[0;3],
             #[cfg(feature = "exp-mailbox")]
             mailbox: [EMPTY;64],
             occ: [0; 2],
@@ -216,6 +224,18 @@ impl Board {
             roles: [0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56), 0x10 | (0x10 << 56)],
             #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
             roles:[0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56)],
+            #[cfg(feature="exp-nibble-role")]
+            role_map:{
+                let mut m=[0xff;32];let back=[3u8,1,2,4,5,2,1,3];let mut i=0;
+                while i<8{
+                    let v=back[i];let shift=(i&1)*4;
+                    m[i/2]=(m[i/2]&!(15<<shift))|(v<<shift);
+                    m[(56+i)/2]=(m[(56+i)/2]&!(15<<shift))|(v<<shift);
+                    m[(8+i)/2]&=!(15<<shift);m[(48+i)/2]&=!(15<<shift);i+=1;
+                }m
+            },
+            #[cfg(feature="exp-role-planes")]
+            role_planes:[(0x42|0x81|0x10)|((0x42|0x81|0x10)<<56),(0x24|0x81)|((0x24|0x81)<<56),(0x08|0x10)|((0x08|0x10)<<56)],
             #[cfg(feature = "exp-mailbox")]
             mailbox: {
                 let mut a = [EMPTY;64];
@@ -285,8 +305,29 @@ impl Board {
         #[cfg(not(feature = "exp-compact-board"))]
         { &mut self.bbs[color][role] }
     }
+    #[cfg(feature="exp-nibble-role")]
+    #[inline(always)]
+    fn set_role_nibble(&mut self,sq:u8,role:u8){
+        let shift=(sq&1)*4;let entry=&mut self.role_map[(sq>>1) as usize];
+        *entry=(*entry&!(15<<shift))|(role<<shift);
+    }
+    #[cfg(feature="exp-nibble-role")]
+    #[inline(always)]
+    fn get_role_nibble(&self,sq:u8)->u8{
+        (self.role_map[(sq>>1) as usize]>>((sq&1)*4))&15
+    }
+    #[cfg(feature="exp-role-planes")]
+    #[inline(always)]
+    fn get_role_planes(&self,sq:u8)->u8{
+        (((self.role_planes[0]>>sq)&1)|(((self.role_planes[1]>>sq)&1)<<1)|(((self.role_planes[2]>>sq)&1)<<2)) as u8
+    }
+
     #[inline(always)]
     fn bb_add(&mut self,color:usize,role:usize,mask:u64){
+        #[cfg(feature="exp-nibble-role")]
+        self.set_role_nibble(mask.trailing_zeros() as u8,role as u8);
+        #[cfg(feature="exp-role-planes")]
+        for i in 0..3 {if role&(1<<i)!=0{self.role_planes[i]|=mask;}}
         #[cfg(feature = "exp-mailbox")]
         { self.mailbox[mask.trailing_zeros() as usize]=(color*6+role) as u8; }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
@@ -295,6 +336,10 @@ impl Board {
     }
     #[inline(always)]
     fn bb_remove(&mut self,color:usize,role:usize,mask:u64){
+        #[cfg(feature="exp-nibble-role")]
+        self.set_role_nibble(mask.trailing_zeros() as u8,15);
+        #[cfg(feature="exp-role-planes")]
+        for i in 0..3 {if role&(1<<i)!=0{self.role_planes[i]&=!mask;}}
         #[cfg(feature = "exp-mailbox")]
         { self.mailbox[mask.trailing_zeros() as usize]=EMPTY; }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
@@ -304,6 +349,14 @@ impl Board {
     #[cfg(feature = "exp-mutation")]
     #[inline(always)]
     fn bb_toggle(&mut self,color:usize,role:usize,mask:u64){
+        #[cfg(feature="exp-nibble-role")]
+        if mask!=0{
+            let from=(self.occ[color]&mask).trailing_zeros() as u8;
+            let to=(!self.occ[color]&mask).trailing_zeros() as u8;
+            self.set_role_nibble(from,15);self.set_role_nibble(to,role as u8);
+        }
+        #[cfg(feature="exp-role-planes")]
+        for i in 0..3 {if role&(1<<i)!=0{self.role_planes[i]^=mask;}}
         #[cfg(feature = "exp-mailbox")]
         {
             let from=(self.occ[color]&mask).trailing_zeros() as usize;
@@ -335,6 +388,11 @@ impl Board {
         if occ0 == 0 && occ1 == 0 {
             return EMPTY;
         }
+        #[cfg(feature="exp-nibble-role")]
+        {return self.get_role_nibble(sq)+(occ1!=0) as u8*6;}
+        #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
+        {return self.get_role_planes(sq)+(occ1!=0) as u8*6;}
+        #[allow(unreachable_code)]
         if occ0 != 0 {
             // Black piece — scan Black's 6 bitboards (unrolled).
             #[cfg(not(feature = "exp-compact-board"))]
@@ -389,6 +447,11 @@ impl Board {
     fn role_at_occupied(&self,sq:u8,color:Color)->u8{
         let b=bit(sq);
         debug_assert_ne!(self.occ[color.index()]&b,0);
+        #[cfg(feature="exp-nibble-role")]
+        {return self.get_role_nibble(sq);}
+        #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
+        {return self.get_role_planes(sq);}
+        #[allow(unreachable_code)]
         #[cfg(feature="exp-compact-board")]
         let col=&self.roles;
         #[cfg(not(feature="exp-compact-board"))]
@@ -411,6 +474,11 @@ impl Board {
         if self.occ[color.index()] & b == 0 {
             return EMPTY;
         }
+        #[cfg(feature="exp-nibble-role")]
+        {return self.get_role_nibble(sq)+color as u8*6;}
+        #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
+        {return self.get_role_planes(sq)+color as u8*6;}
+        #[allow(unreachable_code)]
         #[cfg(not(feature = "exp-compact-board"))]
             let col = &self.bbs[color.index()];
             #[cfg(feature = "exp-compact-board")]
@@ -793,6 +861,35 @@ impl Board {
         let mut out = ArrayVec::new();
         self.generate_moves_cached(&mut out);
         out
+    }
+
+    /// Legal UCI moves in lexical order. Standard castling uses king
+    /// destinations, Chess960 uses the canonical king-to-rook encoding.
+    /// Sort compact numeric keys before allocating output strings.
+    #[cfg(feature="exp-uci-sort-key")]
+    pub fn legal_moves_uci_sorted(&self)->Vec<String>{
+        #[inline(always)]
+        fn coordinate(s:u8)->u16{(((s&7)<<3)|(s>>3)) as u16}
+        let mut keys:ArrayVec<u16,MAX_MOVES>=ArrayVec::new();
+        let k=self.king_sq[self.turn.index()];
+        for mv in self.legal_moves(){
+            let f=mv.from().0;let mut t=mv.to().0;
+            if !self.is_chess960 && f==k && self.occ[self.turn.index()]&bit(t)!=0{
+                t=(f&56)|if t>f{6}else{2};
+            }
+            let p=match mv.promotion(){Some(Role::Bishop)=>1,Some(Role::Knight)=>2,Some(Role::Queen)=>3,Some(Role::Rook)=>4,_=>0};
+            keys.push((coordinate(f)<<9)|(coordinate(t)<<3)|p);
+        }
+        keys.sort_unstable();
+        let mut result=Vec::with_capacity(keys.len());
+        for key in keys{
+            let f=(key>>9) as u8;let t=((key>>3)&63) as u8;let p=(key&7) as usize;
+            let bytes=[b'a'+(f>>3),b'1'+(f&7),b'a'+(t>>3),b'1'+(t&7),b" bnqr"[p]];
+            let len=if p==0{4}else{5};
+            // SAFETY: coordinates and promotion bytes are always ASCII.
+            result.push(unsafe{String::from_utf8_unchecked(bytes[..len].to_vec())});
+        }
+        result
     }
 
     /// Generic move generation into any [`MoveVisitor`](crate::movegen::MoveVisitor)

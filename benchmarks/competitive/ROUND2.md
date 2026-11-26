@@ -40,3 +40,13 @@ Benchmark-only default features select C; root production defaults unchanged.
   hypothetical king safety and the eventual make; retain castle fallback.
 - unmake-xor: restore normal-move piece and occupancy via XOR, restore
   captured piece without recomputing a discarded hash; exact Undo retained.
+
+## Role lookup and output
+- nibble-role: 32-byte packed role cache, occupancy provides color/presence.
+- role-planes: three redundant bit planes (24 bytes) for branchless role
+  decoding, independent of nibble cache.
+- uci-sort-key: sort compact 15-bit lexical keys before allocating the
+  same vector of UCI strings; assert identical normalized output on all
+  21,002 benchmark positions and dedicated promotion/Chess960 fixtures.
+- fen-rank: write occupied rank squares and gaps from bit scans, retain
+  exact native FEN semantics; direct final byte copy.

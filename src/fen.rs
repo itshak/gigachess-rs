@@ -318,6 +318,20 @@ impl Board {
                 code += 1;
             }
         }
+        #[cfg(feature="exp-fen-rank")]
+        for rank in (0..8).rev(){
+            let mut rank_bits=((self.occupied()>>(rank*8))&255) as u8;
+            let mut next=0u8;
+            while rank_bits!=0{
+                let f=rank_bits.trailing_zeros() as u8;rank_bits&=rank_bits-1;
+                if f>next{out.push(b'0'+f-next);}
+                out.push(PIECE_CHAR[mailbox[rank*8+f as usize] as usize]);
+                next=f+1;
+            }
+            if next<8{out.push(b'0'+8-next);}
+            if rank>0{out.push(b'/');}
+        }
+        #[cfg(not(feature="exp-fen-rank"))]
         for rank in (0..8).rev() {
             let mut empty = 0u8;
             for file in 0..8 {
@@ -400,6 +414,9 @@ impl Board {
         out.push(b' ');
         push_u16(&mut out, self.fullmove_number());
         // SAFETY: we only pushed ASCII FEN bytes.
+        #[cfg(feature="exp-fen-rank")]
+        return unsafe{String::from_utf8_unchecked(out.as_slice().to_vec())};
+        #[cfg(not(feature="exp-fen-rank"))]
         unsafe { String::from_utf8_unchecked(out.into_iter().collect::<Vec<u8>>()) }
     }
 }

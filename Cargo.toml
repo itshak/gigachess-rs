@@ -12,6 +12,10 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-uci-sort-key = []
+exp-fen-rank = []
+exp-nibble-role = []
+exp-role-planes = []
 exp-color-make = []
 exp-checked-known = []
 exp-unmake-xor = []
