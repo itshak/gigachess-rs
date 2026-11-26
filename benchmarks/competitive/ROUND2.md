@@ -185,3 +185,14 @@ blocked-sliders returns the adjacent attack mask when every adjacent ray
 square is occupied; no-danger-needed skips enemy attack-map construction
 when no king target or standard castle can consume it. Nonstandard castle
 checks remain independent. Expanded debug regression passed.
+
+### Round 4 evidence checkpoint
+F (E + rank FEN writer, run 45783634997): four Linux jobs available at
+this snapshot, 303/348 wins, 294 >=1.03x, 39 >=2x. Same-platform E 288/348,
+D 276/348. FEN writer 1.489x vs paired E, 1.674x vs fastest peer, 24/24.
+All remaining jobs pending at this evidence checkpoint. Local G combined
+eight experimental flags passed complete release tests and all six ignored
+deep perft tests; no timing claim until ABBA completes.
+Strict gate now has --require-complete, --cold, --require-wins. It refuses
+to treat partial 3/4-platform artifacts as a completed universal result;
+cold medians are tracked separately. The release gate is not satisfied.

@@ -4,11 +4,15 @@ import csv
 import gzip
 import math
 import pathlib
+from statistics import median
 from collections import defaultdict
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("run", type=pathlib.Path)
 p.add_argument("--losses", action="store_true")
+p.add_argument("--cold", action="store_true", help="Report cold first-use separately")
+p.add_argument("--require-complete", action="store_true", help="Require all six platforms and 87 native cases each")
+p.add_argument("--require-wins", action="store_true", help="Release gate: require all native cases and cold medians to win")
 a = p.parse_args()
 
 def read(folder, name):
@@ -42,6 +46,14 @@ for folder in sorted(a.run.glob("combined-*")):
         fastest, peer = min(peers)
         results.append((platform, op, case, fastest / c[op, case, lib], b[op, case, lib] / c[op, case, lib], peer))
 assert results, "No comparable results"
+expected_platforms={"macos-15-native","ubuntu-24.04-arm-native","ubuntu-24.04-native","ubuntu-24.04-pext","ubuntu-24.04-portable","windows-2025-native"}
+if a.require_complete or a.require_wins:
+    assert {r[0] for r in results}==expected_platforms, "Incomplete platform set"
+    for platform in expected_platforms:
+        rows=[r for r in results if r[0]==platform]
+        assert len(rows)==87, f"Incomplete native case set: {platform}: {len(rows)}"
+        assert len({(r[1],r[2]) for r in rows})==87, f"Duplicate native cases: {platform}"
+
 print("| Platform | Wins | >=1.03x | >=2x | Total |")
 print("|---|---:|---:|---:|---:|")
 for platform in sorted({r[0] for r in results}) + ["ALL"]:
@@ -60,3 +72,25 @@ if a.losses:
     for platform, op, case, ratio, own, peer in sorted(results, key=lambda r:r[3]):
         if ratio <= 1:
             print(f"| {platform} | {op} | {case} | {peer} | {ratio:.3f}x |")
+
+cold_rows=[]
+if a.cold or a.require_wins:
+    print("\n| Platform | Giga median (ns) | Fastest peer | Peer median (ns) | Ratio |")
+    print("|---|---:|---|---:|---:|")
+    for platform in sorted({r[0] for r in results}):
+        folder=a.run/("combined-"+platform)
+        def samples(name):
+            path=folder/name
+            values=list(map(int,path.read_text().split()))
+            assert len(values)==7 and all(v>0 for v in values), path
+            return median(values)
+        giga=samples("candidate-cold-ns.txt")
+        peers=[(samples(f"candidate-{lib}-cold-ns.txt"),lib) for lib in ("shakmaty","cozy","ultra","chess","ferrum")]
+        fast,peer=min(peers)
+        ratio=fast/giga
+        cold_rows.append(ratio)
+        print(f"| {platform} | {giga} | {peer} | {fast} | {ratio:.3f}x |")
+    print(f"\nCold wins: {sum(v>1 for v in cold_rows)}/{len(cold_rows)} (separate from native cases).")
+if a.require_wins:
+    import sys
+    sys.exit(0 if all(r[3]>1 for r in results) and all(v>1 for v in cold_rows) else 1)
