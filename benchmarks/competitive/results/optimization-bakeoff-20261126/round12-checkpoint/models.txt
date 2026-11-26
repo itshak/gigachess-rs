@@ -1,0 +1,4 @@
+exp-pawn-transition
+exp-pawn-key-delta
+exp-single-color-transition
+exp-equal-capture
