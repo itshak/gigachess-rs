@@ -153,7 +153,7 @@ fn full_visitor_observes_identical_leaf_states() {
     }
 }
 
-#[cfg(any(feature="exp-nibble-role",feature="exp-role-planes",feature="exp-kingless-board"))]
+#[cfg(any(feature="exp-nibble-role",feature="exp-role-planes",feature="exp-kingless-board",feature="exp-slider-planes"))]
 #[test]
 fn redundant_role_storage_matches_bitboards_and_fen(){
     assert!(parse_fen("4k3/8/8/8/8/8/8/3KK3 w - - 0 1").is_err());
