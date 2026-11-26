@@ -294,3 +294,25 @@ mod tests {
         assert_eq!(LINE[a1][Square(3).index()], RANK_BB[0]);
     }
 }
+
+
+// Empty-board rays for geometric slider rejection (independent of magic tables).
+const fn empty_rays(diagonal: bool) -> [u64;64] {
+    let mut out = [0;64];
+    let mut a = 0;
+    while a < 64 {
+        let mut b = 0;
+        while b < 64 {
+            let df = (a as i32 % 8 - b as i32 % 8).abs();
+            let dr = (a as i32 / 8 - b as i32 / 8).abs();
+            if a != b && ((diagonal && df == dr) || (!diagonal && (df == 0 || dr == 0))) {
+                out[a] |= 1u64 << b;
+            }
+            b += 1;
+        }
+        a += 1;
+    }
+    out
+}
+pub(crate) const EMPTY_BISHOP_RAYS: [u64;64] = empty_rays(true);
+pub(crate) const EMPTY_ROOK_RAYS: [u64;64] = empty_rays(false);

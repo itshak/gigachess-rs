@@ -42,6 +42,17 @@ pub struct Tables {
 }
 
 static TABLES: OnceLock<Tables> = OnceLock::new();
+#[cfg(feature = "exp-static-sliders")]
+mod static_sliders { include!(concat!(env!("OUT_DIR"), "/static_sliders.rs")); }
+#[cfg(feature = "exp-static-sliders")]
+#[inline(always)]
+fn static_index(sq:u8,occ:u64,desc:&[(u64,u64,u32,usize);64])->usize {
+    let (mask,magic,shift,base)=desc[sq as usize];
+    #[cfg(all(target_arch="x86_64",target_feature="bmi2",feature="pext"))]
+    { let _=(magic,shift); base+unsafe{pext(occ,mask)} as usize }
+    #[cfg(not(all(target_arch="x86_64",target_feature="bmi2",feature="pext")))]
+    { base+((occ&mask).wrapping_mul(magic)>>shift) as usize }
+}
 
 /// Returns the process-wide attack tables, initializing them on first use.
 #[inline]
@@ -69,6 +80,12 @@ fn pext_available() -> bool {
 
 #[inline(always)]
 pub fn rook_attacks(sq: u8, occ: u64) -> u64 {
+    #[cfg(feature = "exp-static-sliders")]
+    {
+        let idx = static_index(sq,occ,&static_sliders::ROOK_DESC);
+        return static_sliders::ROOK_DATA[idx];
+    }
+    #[allow(unreachable_code)]
     let t = tables();
     let s = sq as usize;
     #[cfg(all(target_arch = "x86_64", feature = "pext"))]
@@ -85,6 +102,12 @@ pub fn rook_attacks(sq: u8, occ: u64) -> u64 {
 
 #[inline(always)]
 pub fn bishop_attacks(sq: u8, occ: u64) -> u64 {
+    #[cfg(feature = "exp-static-sliders")]
+    {
+        let idx = static_index(sq,occ,&static_sliders::BISHOP_DESC);
+        return static_sliders::BISHOP_DATA[idx];
+    }
+    #[allow(unreachable_code)]
     let t = tables();
     let s = sq as usize;
     #[cfg(all(target_arch = "x86_64", feature = "pext"))]

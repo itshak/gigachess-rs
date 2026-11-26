@@ -12,6 +12,17 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-static-sliders = []
+exp-mutation = []
+exp-undo-role = []
+exp-ray-prefilter = []
+exp-king-targets = []
+exp-copy-perft = []
+exp-fused-perft = []
+exp-san = []
+exp-uci = []
+exp-standard-castle = []
+exp-role-lookup = []
 default = ["std"]
 std = []
 pext = [] # Enables hardware PEXT (BMI2) 1-cycle bitboards

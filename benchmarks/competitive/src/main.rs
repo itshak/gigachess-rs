@@ -74,22 +74,33 @@ fn jordan_list(b: &J) -> arrayvec::ArrayVec<chess::ChessMove, 256> {
 }
 fn pg(b: &Board, d: u32, bulk: bool) -> u64 {
     if d == 0 {
+        if !bulk { bb(b); }
         return 1;
     }
     if bulk {
         return b.perft(d);
     }
     let mut n = 0;
-    let mut c = *b;
+    #[cfg(feature = "exp-copy-perft")]
     for m in b.legal_moves() {
-        let u = c.make_move_perft(m);
+        let mut c = *b;
+        c.make_move_perft(m);
         n += pg(&c, d - 1, false);
-        c.unmake_move_perft(m, u);
+    }
+    #[cfg(not(feature = "exp-copy-perft"))]
+    {
+        let mut c = *b;
+        for m in b.legal_moves() {
+            let u = c.make_move_perft(m);
+            n += pg(&c, d - 1, false);
+            c.unmake_move_perft(m, u);
+        }
     }
     n
 }
 fn pc(b: &C, d: u32, bulk: bool) -> u64 {
     if d == 0 {
+        if !bulk { bb(b); }
         return 1;
     }
     if d == 1 && bulk {
@@ -108,6 +119,7 @@ fn pc(b: &C, d: u32, bulk: bool) -> u64 {
 }
 fn ps(b: &S, d: u32, bulk: bool) -> u64 {
     if d == 0 {
+        if !bulk { bb(b); }
         return 1;
     }
     let ms = b.legal_moves();
@@ -124,6 +136,7 @@ fn ps(b: &S, d: u32, bulk: bool) -> u64 {
 }
 fn pj(b: &J, d: u32, bulk: bool) -> u64 {
     if d == 0 {
+        if !bulk { bb(b); }
         return 1;
     }
     let ms = chess::MoveGen::new_legal(b);
@@ -134,6 +147,7 @@ fn pj(b: &J, d: u32, bulk: bool) -> u64 {
 }
 fn pu(b: &mut U, d: u32, bulk: bool) -> u64 {
     if d == 0 {
+        if !bulk { bb(&*b); }
         return 1;
     }
     if bulk {
@@ -149,6 +163,7 @@ fn pu(b: &mut U, d: u32, bulk: bool) -> u64 {
 }
 fn pf(b: &F, d: u32, bulk: bool) -> u64 {
     if d == 0 {
+        if !bulk { bb(b); }
         return 1;
     }
     if bulk {
@@ -188,6 +203,14 @@ fn bench<T>(name: &str, case: &str, lib: &str, units: u64, mut f: impl FnMut() -
 }
 macro_rules! row {($op:expr,$case:expr,$units:expr,$($lib:literal=>$f:expr),+ $(,)?) => {$(bench($op,$case,$lib,$units,$f);)+};}
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--cold-giga") {
+        let t = Instant::now();
+        let board = bb(Board::startpos());
+        let n = bb(board.legal_moves()).len();
+        assert_eq!(n,20);
+        println!("{}", t.elapsed().as_nanos());
+        return;
+    }
     // Corpus runs after fixed cases, with its own parity gate.
     println!("operation\tcase\tlibrary\tunits_per_call\titerations\tmedian_ns\tmin_ns\tmax_ns\tp25_ns\tp75_ns");
     for (name, fen, expected) in POS {
