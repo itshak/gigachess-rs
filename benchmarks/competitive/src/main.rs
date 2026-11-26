@@ -80,6 +80,9 @@ fn pg(b: &Board, d: u32, bulk: bool) -> u64 {
     if bulk {
         return b.perft(d);
     }
+    #[cfg(feature="exp-full-visitor")]
+    {return b.visit_perft_leaves(d,&mut |leaf|{bb(leaf);});}
+    #[allow(unreachable_code)]
     let mut n = 0;
     #[cfg(feature = "exp-copy-perft")]
     for m in b.legal_moves() {
@@ -175,6 +178,12 @@ fn pf(b: &F, d: u32, bulk: bool) -> u64 {
         .sum()
 }
 fn bench<T>(name: &str, case: &str, lib: &str, units: u64, mut f: impl FnMut() -> T) {
+    if let Ok(filter)=std::env::var("BENCH_FILTER"){
+        if !filter.split(',').any(|x|x==name){return;}
+    }
+    if let Ok(filter)=std::env::var("BENCH_LIB"){
+        if !filter.split(',').any(|x|x==lib){return;}
+    }
     let target = std::env::var("BENCH_MS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())

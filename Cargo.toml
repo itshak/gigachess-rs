@@ -12,6 +12,12 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-normal-kernel = []
+exp-checker-rays = []
+exp-checked-direct = []
+exp-uci-bytes = []
+exp-hash-unroll = []
+exp-full-visitor = []
 exp-king-local = []
 exp-pin-rays = []
 exp-fused-geometry = []

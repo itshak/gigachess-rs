@@ -32,4 +32,4 @@ for op,rows in g.items():
     print(f"| {op} | {geo(a):.3f}x | {min(a):.3f}x | {peer} |")
 b=statistics.median(map(int,(root/"baseline-cold-ns.txt").read_text().split()))
 c=statistics.median(map(int,(root/"candidate-cold-ns.txt").read_text().split()))
-print(f"\nCold first legal move list: {b/1e6:.3f} ms → {c/1e6:.3f} ms ({b/c:.2f}x).")
+print(f"\nCold first legal move list: {b/1e6:.3f} ms -> {c/1e6:.3f} ms ({b/c:.2f}x).")

@@ -59,6 +59,14 @@ fn real_games_exact_san_legal_and_undo() {
                 rng^=rng<<13;rng^=rng>>7;rng^=rng<<17;
                 let m=Move::quiet(Square((rng&63) as u8),Square(((rng>>6)&63) as u8));
                 assert_eq!(g.is_legal(m),legal.contains(&m.word()),"illegal/valid disagreement at {}",g.to_fen());
+                #[cfg(feature="exp-checked-direct")]
+                {
+                    let mut checked=g;
+                    let result=checked.play(m);
+                    assert_eq!(result.is_ok(),legal.contains(&m.word()));
+                    if let Ok(u)=result{checked.unmake_move(m,u);}
+                    assert_eq!(checked,g);
+                }
             }
             let (m,reference)=actual.expect("corpus move must exist");
             g.play(m).unwrap();s.play_unchecked(reference);
@@ -118,4 +126,21 @@ fn chess960_reversible_special_moves(){
 #[test]
 fn direct_uci_matches_display_for_every_word(){
     for word in 0..=u16::MAX{let m=Move::from_word(word);assert_eq!(m.to_uci_string(),m.to_string());}
+}
+
+#[cfg(feature="exp-full-visitor")]
+#[test]
+fn full_visitor_observes_identical_leaf_states() {
+    fn reference(b:&Board,d:u32,out:&mut Vec<Board>){
+        if d==0{out.push(*b);return;}
+        for m in b.legal_moves(){let mut c=*b;c.make_move_perft(m);reference(&c,d-1,out);}
+    }
+    for b in [Board::startpos(),parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),parse_fen("4k3/P7/8/3pP3/8/8/8/4K3 w - d6 0 1").unwrap()]{
+        for d in 0..=2{
+            let mut expected=Vec::new();reference(&b,d,&mut expected);
+            let mut actual=Vec::new();let n=b.visit_perft_leaves(d,&mut |leaf|actual.push(*leaf));
+            assert_eq!(n,expected.len() as u64);
+            assert_eq!(actual,expected);
+        }
+    }
 }

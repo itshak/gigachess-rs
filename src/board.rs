@@ -652,6 +652,17 @@ impl Board {
         a |= KING_ATT[sq as usize] & self.bb(bi, Role::King.index());
         let bq = self.bb(bi, Role::Bishop.index()) | self.bb(bi, Role::Queen.index());
         let rq = self.bb(bi, Role::Rook.index()) | self.bb(bi, Role::Queen.index());
+        #[cfg(feature="exp-checker-rays")]
+        {
+            let mut candidates=(bq&crate::bitboard::EMPTY_BISHOP_RAYS[sq as usize])|
+                (rq&crate::bitboard::EMPTY_ROOK_RAYS[sq as usize]);
+            while candidates!=0 {
+                let attacker=pop_lsb(&mut candidates);
+                if crate::bitboard::BETWEEN[sq as usize][attacker as usize]&occ==0 {a|=bit(attacker);}
+            }
+            return a;
+        }
+        #[allow(unreachable_code)]
         if !cfg!(feature = "exp-ray-prefilter") || bq & crate::bitboard::EMPTY_BISHOP_RAYS[sq as usize] != 0 {
             a |= attacks::bishop_attacks(sq, occ) & bq;
         }
@@ -688,6 +699,19 @@ impl Board {
     /// the incremental hash in `self.hash` must always agree with this).
     pub fn zobrist_full(&self) -> u64 {
         let mut h = 0u64;
+        #[cfg(feature="exp-hash-unroll")]
+        {
+            #[inline(always)]
+            fn fold<const C:usize,const R:usize>(b:&Board)->u64{
+                let mut bits=b.bb(C,R);
+                let mut value=0;
+                while bits!=0 {value^=zobrist::piece_key_indices(C,R,pop_lsb(&mut bits));}
+                value
+            }
+            h=fold::<0,0>(self)^fold::<0,1>(self)^fold::<0,2>(self)^fold::<0,3>(self)^fold::<0,4>(self)^fold::<0,5>(self)^
+              fold::<1,0>(self)^fold::<1,1>(self)^fold::<1,2>(self)^fold::<1,3>(self)^fold::<1,4>(self)^fold::<1,5>(self);
+        }
+        #[cfg(not(feature="exp-hash-unroll"))]
         for ci in 0..2 {
             for r in 0..6 {
                 let mut b = self.bb(ci, r);
@@ -1511,7 +1535,44 @@ impl Board {
             self.hash ^= zobrist::ep_key(Square(self.ep));
         }
 
-        #[cfg(feature = "exp-quiet-fast")]
+        // Independent normal-move kernel: avoid decoding color/role a second
+        // time, keep a single XOR for the moved role and color occupancy.
+        #[cfg(feature = "exp-normal-kernel")]
+        if mv.promotion().is_none() && self.occ[us.index()] & bit(to) == 0
+            && !(is_pawn && diag && self.occ[them.index()] & bit(to) == 0)
+        {
+            let ui=us.index(); let ti=them.index(); let target=bit(to);
+            if self.occ[ti]&target!=0 {
+                let cap=self.piece_code_at_color(to,them);
+                undo.captured=cap;
+                self.bb_remove(ti,(cap%6) as usize,target);
+                self.occ[ti]&=!target;
+                self.hash^=zobrist::piece_key_indices(ti,(cap%6) as usize,to);
+            }
+            let delta=bit(from)^target;
+            #[cfg(feature="exp-mutation")]
+            self.bb_toggle(ui,role as usize,delta);
+            #[cfg(not(feature="exp-mutation"))]
+            {self.bb_remove(ui,role as usize,bit(from));self.bb_add(ui,role as usize,target);}
+            self.occ[ui]^=delta;
+            self.hash^=zobrist::piece_key_indices(ui,role as usize,from)^zobrist::piece_key_indices(ui,role as usize,to);
+            if role==Role::King as u8 {self.king_sq[ui]=to;}
+            if self.castling!=0 {
+                let next=self.castling&self.castle_rights_after(role,us,from,to);
+                if HASH && next!=self.castling {self.hash^=self.castle_rights_hash(self.castling^next);}
+                self.castling=next;
+            }
+            self.ep=if is_pawn&&to.abs_diff(from)==16 {(from+to)/2}else{NO_EP};
+            if HASH&&self.ep_relevant(self.ep,them){self.hash^=zobrist::ep_key(Square(self.ep));}
+            self.halfmove=if is_pawn||undo.captured!=EMPTY {0}else{self.halfmove+1};
+            self.fullmove+= (us==Color::Black) as u16;
+            self.turn=them;
+            if HASH{self.hash^=zobrist::turn_key();}
+            if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+            return undo;
+        }
+
+        #[cfg(all(feature = "exp-quiet-fast", not(feature = "exp-normal-kernel")))]
         if mv.promotion().is_none() && self.occupied()&bit(to)==0 && !(is_pawn&&diag) {
             let ui=us.index();let ti=them.index();
             self.bb_remove(ui,role as usize,bit(from));
@@ -2260,6 +2321,10 @@ impl Board {
         if !self.is_pseudo_legal(mv) {
             return Err(IllegalMove);
         }
+        #[cfg(all(feature="exp-checked-direct",feature="exp-direct-legal"))]
+        if let Some(safe)=self.king_safe_hypothetical(mv) {
+            return if safe {Ok(self.make_move_unchecked(mv))}else{Err(IllegalMove)};
+        }
         let undo = self.make_move_unchecked(mv);
         let mover = self.turn.other();
         if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
@@ -2872,6 +2937,27 @@ impl Board {
         nodes
     }
 
+    /// Full traversal with an observable slim leaf (same state as repeated
+    /// make_move_perft). No bulk counting; callback runs for every leaf.
+    #[cfg(feature="exp-full-visitor")]
+    pub fn visit_perft_leaves<F:FnMut(&Board)>(&self,depth:u32,visitor:&mut F)->u64{
+        if depth==0 {visitor(self);return 1;}
+        if depth==1 {
+            let mut sink=FullLeafSink{parent:self,visitor,nodes:0};
+            self.generate_moves_into(&mut sink);
+            return sink.nodes;
+        }
+        let mut list=crate::movegen::MoveList::new();
+        self.generate_moves_into(&mut list);
+        let mut nodes=0;
+        for &mv in list.as_slice(){
+            let mut child=*self;
+            child.make_perft_internal(mv);
+            nodes+=child.visit_perft_leaves(depth-1,visitor);
+        }
+        nodes
+    }
+
     /// Experimental depth-scoped reusable move buffers.
     ///
     /// Unlike perft, which creates one temporary MoveList per node,
@@ -3035,5 +3121,45 @@ impl MoveSink for TaggedPerftList<'_>{
     fn push_one(&mut self,mv:Move){
         let code=self.board.piece_code_at_color(mv.from().0,self.board.turn);
         self.moves.push((mv,code));
+    }
+}
+
+#[cfg(feature="exp-full-visitor")]
+struct FullLeafSink<'a,F>{parent:&'a Board,visitor:&'a mut F,nodes:u64}
+#[cfg(feature="exp-full-visitor")]
+impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
+    #[inline(always)]
+    fn push_one(&mut self,mv:Move){
+        let mut child=*self.parent;
+        child.make_move_perft(mv);
+        (self.visitor)(&child);
+        self.nodes+=1;
+    }
+    #[inline(always)]
+    fn push_targets(&mut self,from:u8,mut targets:u64){
+        if targets==0{return;}
+        let moved=self.parent.piece_code_at_color(from,self.parent.turn);
+        while targets!=0 {
+            let to=pop_lsb(&mut targets);
+            let mut child=*self.parent;
+            child.make_move_perft_known::<true>(Move::quiet(Square(from),Square(to)),moved);
+            (self.visitor)(&child);
+            self.nodes+=1;
+        }
+    }
+    #[inline(always)]
+    fn push_pawn_targets_offset(&mut self,mut targets:u64,offset:i8){
+        let moved=self.parent.turn as u8*6;
+        while targets!=0{
+            let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;
+            let mut child=*self.parent;
+            child.make_move_perft_known::<true>(Move::quiet(Square(from),Square(to)),moved);
+            (self.visitor)(&child);
+            self.nodes+=1;
+        }
+    }
+    #[inline(always)]
+    fn push_pawn_promotions_offset(&mut self,mut targets:u64,offset:i8){
+        while targets!=0 {let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;for r in 1..=4{self.push_one(Move(from as u16|((to as u16)<<6)|(r<<12)));}}
     }
 }
