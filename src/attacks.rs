@@ -82,7 +82,18 @@ fn pext_available() -> bool {
 pub fn rook_attacks(sq: u8, occ: u64) -> u64 {
     #[cfg(feature = "exp-static-sliders")]
     {
+        #[cfg(all(target_arch="x86_64",not(target_feature="bmi2"),feature="pext"))]
+        if pext_available(){
+            let (mask,_,_,base)=static_sliders::ROOK_PEXT_DESC[sq as usize];
+            let idx=base+unsafe{pext(occ,mask)} as usize;
+            return static_sliders::ROOK_PEXT_DATA[idx];
+        }
         let idx = static_index(sq,occ,&static_sliders::ROOK_DESC);
+        #[cfg(feature="exp-static-unchecked")]
+        // SAFETY: generated descriptor offsets are validated by exhaustive
+        // blocker enumeration; the mask/magic shift bounds the index.
+        return unsafe{*static_sliders::ROOK_DATA.get_unchecked(idx)};
+        #[cfg(not(feature="exp-static-unchecked"))]
         return static_sliders::ROOK_DATA[idx];
     }
     #[allow(unreachable_code)]
@@ -104,7 +115,18 @@ pub fn rook_attacks(sq: u8, occ: u64) -> u64 {
 pub fn bishop_attacks(sq: u8, occ: u64) -> u64 {
     #[cfg(feature = "exp-static-sliders")]
     {
+        #[cfg(all(target_arch="x86_64",not(target_feature="bmi2"),feature="pext"))]
+        if pext_available(){
+            let (mask,_,_,base)=static_sliders::BISHOP_PEXT_DESC[sq as usize];
+            let idx=base+unsafe{pext(occ,mask)} as usize;
+            return static_sliders::BISHOP_PEXT_DATA[idx];
+        }
         let idx = static_index(sq,occ,&static_sliders::BISHOP_DESC);
+        #[cfg(feature="exp-static-unchecked")]
+        // SAFETY: generated descriptor offsets are validated by exhaustive
+        // blocker enumeration; the mask/magic shift bounds the index.
+        return unsafe{*static_sliders::BISHOP_DATA.get_unchecked(idx)};
+        #[cfg(not(feature="exp-static-unchecked"))]
         return static_sliders::BISHOP_DATA[idx];
     }
     #[allow(unreachable_code)]
