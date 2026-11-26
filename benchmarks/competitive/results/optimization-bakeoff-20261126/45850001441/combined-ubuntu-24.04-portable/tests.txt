@@ -1,0 +1,433 @@
+[1m[92m    Updating[0m crates.io index
+[1m[92m Downloading[0m crates ...
+[1m[92m  Downloaded[0m anes v0.1.6
+[1m[92m  Downloaded[0m anstyle v1.0.14
+[1m[92m  Downloaded[0m autocfg v1.5.1
+[1m[92m  Downloaded[0m arrayvec v0.7.8
+[1m[92m  Downloaded[0m aho-corasick v1.1.5
+[1m[92m  Downloaded[0m ciborium-ll v0.2.2
+[1m[92m  Downloaded[0m clap_lex v1.1.0
+[1m[92m  Downloaded[0m cast v0.3.0
+[1m[92m  Downloaded[0m cozy-chess-types v0.2.2
+[1m[92m  Downloaded[0m is-terminal v0.4.17
+[1m[92m  Downloaded[0m tinytemplate v1.2.1
+[1m[92m  Downloaded[0m cfg-if v1.0.4
+[1m[92m  Downloaded[0m same-file v1.0.6
+[1m[92m  Downloaded[0m plotters-svg v0.3.7
+[1m[92m  Downloaded[0m nohash-hasher v0.2.0
+[1m[92m  Downloaded[0m itoa v1.0.18
+[1m[92m  Downloaded[0m plotters-backend v0.3.7
+[1m[92m  Downloaded[0m btoi v0.5.0
+[1m[92m  Downloaded[0m walkdir v2.5.0
+[1m[92m  Downloaded[0m ciborium-io v0.2.2
+[1m[92m  Downloaded[0m crossbeam-deque v0.8.7
+[1m[92m  Downloaded[0m oorandom v11.1.5
+[1m[92m  Downloaded[0m zmij v1.0.23
+[1m[92m  Downloaded[0m either v1.18.0
+[1m[92m  Downloaded[0m quote v1.0.47
+[1m[92m  Downloaded[0m criterion-plot v0.5.0
+[1m[92m  Downloaded[0m num-traits v0.2.19
+[1m[92m  Downloaded[0m ciborium v0.2.2
+[1m[92m  Downloaded[0m crossbeam-utils v0.8.22
+[1m[92m  Downloaded[0m once_cell v1.21.4
+[1m[92m  Downloaded[0m serde_derive v1.0.229
+[1m[92m  Downloaded[0m half v2.7.1
+[1m[92m  Downloaded[0m crossbeam-epoch v0.9.20
+[1m[92m  Downloaded[0m clap v4.6.6
+[1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m serde_core v1.0.229
+[1m[92m  Downloaded[0m bitflags v2.13.1
+[1m[92m  Downloaded[0m proc-macro2 v1.0.107
+[1m[92m  Downloaded[0m rayon-core v1.13.0
+[1m[92m  Downloaded[0m serde v1.0.229
+[1m[92m  Downloaded[0m memchr v2.8.3
+[1m[92m  Downloaded[0m criterion v0.5.1
+[1m[92m  Downloaded[0m itertools v0.10.5
+[1m[92m  Downloaded[0m zerocopy-derive v0.8.56
+[1m[92m  Downloaded[0m plotters v0.3.7
+[1m[92m  Downloaded[0m clap_builder v4.6.6
+[1m[92m  Downloaded[0m serde_json v1.0.151
+[1m[92m  Downloaded[0m regex v1.13.1
+[1m[92m  Downloaded[0m rayon v1.12.0
+[1m[92m  Downloaded[0m zerocopy v0.8.56
+[1m[92m  Downloaded[0m syn v3.0.4
+[1m[92m  Downloaded[0m syn v2.0.119
+[1m[92m  Downloaded[0m regex-syntax v0.8.11
+[1m[92m  Downloaded[0m cozy-chess v0.3.4
+[1m[92m  Downloaded[0m regex-automata v0.4.18
+[1m[92m  Downloaded[0m shakmaty v0.30.1
+[1m[92m  Downloaded[0m libc v0.2.189
+[1m[92m   Compiling[0m proc-macro2 v1.0.107
+[1m[92m   Compiling[0m quote v1.0.47
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m   Compiling[0m crossbeam-utils v0.8.22
+[1m[92m   Compiling[0m crossbeam-epoch v0.9.20
+[1m[92m   Compiling[0m serde_core v1.0.229
+[1m[92m   Compiling[0m autocfg v1.5.1
+[1m[92m   Compiling[0m crossbeam-deque v0.8.7
+[1m[92m   Compiling[0m zerocopy v0.8.56
+[1m[92m   Compiling[0m num-traits v0.2.19
+[1m[92m   Compiling[0m syn v2.0.119
+[1m[92m   Compiling[0m syn v3.0.4
+[1m[92m   Compiling[0m zmij v1.0.23
+[1m[92m   Compiling[0m either v1.18.0
+[1m[92m   Compiling[0m rayon-core v1.13.0
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m   Compiling[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m   Compiling[0m libc v0.2.189
+[1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m   Compiling[0m regex-syntax v0.8.11
+[1m[92m   Compiling[0m plotters-backend v0.3.7
+[1m[92m   Compiling[0m itoa v1.0.18
+[1m[92m   Compiling[0m ciborium-io v0.2.2
+[1m[92m   Compiling[0m anstyle v1.0.14
+[1m[92m   Compiling[0m zerocopy-derive v0.8.56
+[1m[92m   Compiling[0m clap_lex v1.1.0
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m cozy-chess-types v0.2.2
+[1m[92m   Compiling[0m cozy-chess v0.3.4
+[1m[92m   Compiling[0m regex-automata v0.4.18
+[1m[92m   Compiling[0m clap_builder v4.6.6
+[1m[92m   Compiling[0m plotters-svg v0.3.7
+[1m[92m   Compiling[0m rayon v1.12.0
+[1m[92m   Compiling[0m half v2.7.1
+[1m[92m   Compiling[0m ciborium-ll v0.2.2
+[1m[92m   Compiling[0m itertools v0.10.5
+[1m[92m   Compiling[0m arrayvec v0.7.8
+[1m[92m   Compiling[0m same-file v1.0.6
+[1m[92m   Compiling[0m gigachess v0.1.11 (/home/runner/work/gigachess-rs/gigachess-rs)
+[1m[92m   Compiling[0m cast v0.3.0
+[1m[92m   Compiling[0m walkdir v2.5.0
+[1m[92m   Compiling[0m is-terminal v0.4.17
+[1m[92m   Compiling[0m ciborium v0.2.2
+[1m[92m   Compiling[0m clap v4.6.6
+[1m[92m   Compiling[0m regex v1.13.1
+[1m[92m   Compiling[0m criterion-plot v0.5.0
+[1m[92m   Compiling[0m plotters v0.3.7
+[1m[92m   Compiling[0m tinytemplate v1.2.1
+[1m[92m   Compiling[0m btoi v0.5.0
+[1m[92m   Compiling[0m anes v0.1.6
+[1m[92m   Compiling[0m oorandom v11.1.5
+[1m[92m   Compiling[0m once_cell v1.21.4
+[1m[92m   Compiling[0m bitflags v2.13.1
+[1m[92m   Compiling[0m shakmaty v0.30.1
+[1m[92m   Compiling[0m criterion v0.5.1
+[1m[33mwarning[0m[1m: unused variable: `capture_hint`[0m
+    [1m[94m--> [0msrc/board.rs:2634:35
+     [1m[94m|[0m
+[1m[94m2634[0m [1m[94m|[0m         &mut self,mv:Move,hint:u8,capture_hint:u8
+     [1m[94m|[0m                                   [1m[33m^^^^^^^^^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_capture_hint`[0m
+     [1m[94m|[0m
+     [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m: `gigachess` (lib) generated 1 warning (run `cargo fix --lib -p gigachess` to apply 1 suggestion)
+[1m[33mwarning[0m: `gigachess` (lib test) generated 1 warning (1 duplicate)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 1m 53s
+[1m[92m     Running[0m unittests src/lib.rs (target/release/deps/gigachess-06a85c8717276216)
+
+running 55 tests
+test attacks::tests::relevant_masks_exclude_ray_edges ... ok
+test bitboard::tests::between_table ... ok
+test bitboard::tests::knight_and_king_tables ... ok
+test bitboard::tests::line_table ... ok
+test bitboard::tests::pawn_attack_table ... ok
+test bitboard::tests::popcount_and_lsb ... ok
+test database::tests::black_to_move_start_renders_ellipsis ... ok
+test bitboard::tests::shifts_do_not_wrap ... ok
+test database::tests::hash_replay_rejects_illegal_moves ... ok
+test attacks::tests::slider_tables_match_ray_walk_reference ... ok
+test database::tests::hash_replay_matches_from_scratch_recompute ... ok
+test database::tests::illegal_san_is_an_error ... ok
+test database::tests::movetext_parse_and_render_round_trip ... ok
+test database::tests::tokenizer_tolerates_comments_nags_and_variations ... ok
+test movegen::tests::movecounter_popcount ... ok
+test movegen::tests::movelist_push_targets_roundtrip ... ok
+test movegen::tests::pinned_split_no_pinned_startpos ... ok
+test moves::tests::display_uci ... ok
+test moves::tests::piece_code_layout_matches_color_index ... ok
+test moves::tests::quiet_and_capture_constructors ... ok
+test moves::tests::round_trip_packing ... ok
+test reach::tests::reachable_positions_not_pruned ... ok
+test reach::tests::rule_a_home_pawn_missing ... ok
+test reach::tests::rule_b_fewer_men_or_pawns ... ok
+test reach::tests::rule_c_piece_type_promotion_budget ... ok
+test replay::tests::replay_illegal_move_detected ... ok
+test replay::tests::replay_legal_stream ... ok
+test replay::tests::replay_moves2_trusted_early_break ... ok
+test replay::tests::replay_moves2_trusted_parity_with_play ... ok
+test replay::tests::batch_preserves_order ... ok
+test san::tests::a_check_with_a_reply_is_a_plus ... ok
+test san::tests::a_quiet_move_has_no_suffix ... ok
+test san::tests::a_stale_checkers_cache_would_be_a_stale_suffix ... ok
+test san::tests::castling_san ... ok
+test san::tests::check_and_mate_suffixes ... ok
+test san::tests::disambiguation_file_hint ... ok
+test san::tests::disambiguation_rook_file ... ok
+test san::tests::en_passant_san ... ok
+test san::tests::promotion_san ... ok
+test san::tests::opera_game_plays_legally ... ok
+test san::tests::san_body_carries_no_suffix_and_the_suffix_seam_agrees ... ok
+test san::tests::san_roundtrip_startpos_openings ... ok
+test san::tests::the_split_composition_holds_for_every_notation_shape ... ok
+test types::tests::file_rank_masks ... ok
+test types::tests::piece_code_roundtrip ... ok
+test types::tests::promo_bit_mapping ... ok
+test types::tests::square_coord_roundtrip ... ok
+test zobrist::tests::castle_file_keys_distinct ... ok
+test zobrist::tests::castle_file_keys_match_polyglot_on_a_and_h ... ok
+test zobrist::tests::castle_file_keys_standard_fold_parity ... ok
+test zobrist::tests::castle_keys_order ... ok
+test zobrist::tests::ep_contribution_rules ... ok
+test zobrist::tests::polyglot_key_layout ... ok
+test database::tests::position_stats_parallel_matches_sequential ... ok
+test attacks::tests::table_sizes_are_cache_compact ... ok
+
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+[1m[92m     Running[0m tests/cbh_corpus.rs (target/release/deps/cbh_corpus-36bb857dabff28cf)
+
+running 4 tests
+test a_real_pass_unmakes_exactly ... ignored, needs a dump from a licensed database; set GIGACHESS_CBH_NULL_GAMES and pass --include-ignored
+test every_real_null_bearing_game_replays_through_play ... ignored, needs a dump from a licensed database; set GIGACHESS_CBH_NULL_GAMES and pass --include-ignored
+test every_real_pass_renders_as_dashes_and_round_trips ... ignored, needs a dump from a licensed database; set GIGACHESS_CBH_NULL_GAMES and pass --include-ignored
+test the_dump_is_real_pass_bearing_varied_data ... ignored, needs a dump from a licensed database; set GIGACHESS_CBH_NULL_GAMES and pass --include-ignored
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/chess960.rs (target/release/deps/chess960-13a158c56943b742)
+
+running 13 tests
+test adjacent_king_rook_castling_swaps_pieces ... ok
+test board_copy_is_bit_for_bit_snapshot ... ok
+test castling_rights_cleared_when_rook_moves ... ok
+test chess960_shredder_fen_round_trip ... ok
+test chess960_100_position_fen_round_trip_byte_equal ... ok
+test chess960_perft_reference_positions ... ok
+test moves2_castling_round_trip_standard_and_960 ... ok
+test pinned_ep_hash_included_pseudo_condition ... ok
+test shredder_and_xfen_notations_yield_identical_rights ... ok
+test standard_chess_polyglot_vectors ... ok
+test standard_rights_map_to_files_a_and_h ... ok
+test xfen_side_letters_for_unambiguous_960_rights ... ok
+test pseudo_legal_filter_equivalence ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/fen.rs (target/release/deps/fen-337139b2f80fbd14)
+
+running 4 tests
+test error_type_is_structured ... ok
+test rejected_fens ... ok
+test known_fens_round_trip ... ok
+test samplefen1000_round_trip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/fuzz-differential.rs (target/release/deps/fuzz_differential-03dad0038a7df312)
+
+running 2 tests
+test fen_roundtrip_1k_random_vs_shakmaty ... ok
+test fuzz_differential_1k_games_shakmaty_lockstep ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+[1m[92m     Running[0m tests/make_variants.rs (target/release/deps/make_variants-25c8d4a1b334dcd6)
+
+running 10 tests
+test a_null_move_agrees_with_the_caching_variants_about_the_position ... ok
+test a_null_move_in_check_is_refused_by_every_variant ... ok
+test a_null_move_never_trusts_a_stale_checkers_cache ... ok
+test checkered_make_keeps_the_checkers_cache_exact ... ok
+test hashed_make_keeps_the_polyglot_hash_exact ... ok
+test illegal_moves_are_rejected_by_the_validating_variants ... ok
+test every_make_is_paired_with_its_own_unmake ... ok
+test every_variant_produces_the_same_position ... ok
+test the_polyglot_keys_are_the_ones_the_index_depends_on ... ok
+test the_role_of_a_promoted_piece_survives_the_hashed_variant ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/make_variants_property.rs (target/release/deps/make_variants_property-72956550ec07efc5)
+
+running 1 test
+test every_variant_keeps_its_promise_across_200k_moves ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+[1m[92m     Running[0m tests/null_move.rs (target/release/deps/null_move-abb704c0c495ddfb)
+
+running 33 tests
+test a_fresh_cache_does_not_change_the_verdict ... ok
+test a_null_is_never_offered_as_a_legal_move ... ok
+test a_null_is_legal_exactly_when_not_in_check ... ok
+test a_null_is_pseudo_legal ... ok
+test a_null_never_takes_a_check_or_mate_suffix ... ok
+test a_null_renders_as_two_dashes ... ok
+test a_null_word_round_trips_through_movetext ... ok
+test a_pass_after_a_cache_free_make_is_refused_while_in_check ... ok
+test a_pass_bearing_game_keeps_hash_parity_at_every_ply ... ok
+test a_pass_clears_a_pending_en_passant_square ... ok
+test a_pass_encoded_from_a_compact_word_round_trips ... ok
+test a_pass_flips_the_turn_and_advances_the_clocks ... ok
+test a_pass_is_refused_while_in_check ... ok
+test a_pass_keeps_the_incremental_hash_equal_to_a_full_recompute ... ok
+test a_pass_leaves_castling_rights_untouched ... ok
+test a_pass_pairs_with_unmake_null_move ... ok
+test a_pass_refreshes_checkers_for_the_new_side_to_move ... ok
+test a_pass_renders_as_dashes_and_is_not_dropped ... ok
+test a_pass_undo_restores_the_fullmove_number ... ok
+test all_eight_entry_points_dispatch_a_null ... ok
+test all_four_validating_entry_points_refuse_a_pass_in_check ... ok
+test a_pass_produces_its_own_indexed_position ... ok
+test no_ordinary_move_collides_with_the_null_word ... ok
+test rendering_a_null_is_cache_neutral ... ok
+test null_legality_is_decided_for_the_mover_not_the_opponent ... ok
+test replaying_a_game_with_a_pass_yields_hashes ... ok
+test passes_nest_and_restore_exactly ... ok
+test san_parses_both_chessbase_spellings_of_a_pass ... ok
+test san_refuses_a_pass_while_in_check ... ok
+test san_rejects_invented_spellings_of_a_pass ... ok
+test san_round_trips_a_pass ... ok
+test the_null_word_is_ffff ... ok
+test the_null_word_renders_as_uci_0000 ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/null_move_property.rs (target/release/deps/null_move_property-28a2d6f16525f8d8)
+
+running 1 test
+test a_pass_behaves_like_a_first_class_move_across_200k_moves ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
+
+[1m[92m     Running[0m tests/optimization_regression.rs (target/release/deps/optimization_regression-0b4f0d6977fe9675)
+
+running 8 tests
+test chess960_reversible_special_moves ... ok
+test full_visitor_observes_identical_leaf_states ... ok
+test direct_uci_matches_display_for_every_word ... ok
+test sorted_uci_matches_reference_including_promotions_and_960 ... ok
+test all_960_backranks_and_castling_parity ... ok
+test grouped_leaf_checkers_match_independent_transitions ... ok
+test static_slider_exhaustive_relevant_blockers ... ok
+test real_games_exact_san_legal_and_undo ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+[1m[92m     Running[0m tests/perft.rs (target/release/deps/perft-3ded64b618f250b2)
+
+running 17 tests
+test kiwipete_d5 ... ignored
+test legal_moves_roundtrip_consistency ... ok
+test mirrored_pos4_d1_to_d4 ... ok
+test perft_visitor_matches_perft_d3 ... ok
+test pos3_d1_to_d5 ... ok
+test pos3_d6 ... ignored
+test pos4_d1_to_d4 ... ok
+test pos4_d5 ... ignored
+test kiwipete_d1_to_d4 ... ok
+test pos5_d5 ... ignored
+test pos5_d1_to_d4 ... ok
+test pos6_d5 ... ignored
+test perft_visitor_leaf_parity_along_line ... ok
+test startpos_d6 ... ignored
+test pos6_d1_to_d4 ... ok
+test depth_scoped_workspace_perft_parity ... ok
+test startpos_d1_to_d5 ... ok
+
+test result: ok. 11 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+[1m[92m     Running[0m tests/play_fast_property.rs (target/release/deps/play_fast_property-84df244ec3d86b2c)
+
+running 1 test
+test play_fast_produces_identical_state_across_100k_positions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+[1m[92m     Running[0m tests/reach_property.rs (target/release/deps/reach_property-5914f4e53aca3947)
+
+running 1 test
+test reach_signature_soundness_across_random_games ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[1m[92m     Running[0m tests/repetition_parity.rs (target/release/deps/repetition_parity-e699403ed2a99045)
+
+running 4 tests
+test fen_rejects_extra_fields_bad_side_and_opposite_check ... ok
+test packed_move_castling_and_polyglot_start_are_preserved ... ok
+test polyglot_hash_stays_unchanged_but_ep_repetition_is_legal_only ... ok
+test js_rust_shared_golden_position_keys_and_packed_moves ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/replay.rs (target/release/deps/replay-37f7b884a013fe78)
+
+running 6 tests
+test batch_replay_100k_games ... ignored
+test single_stream_and_batch_agree ... ok
+test replay_rejects_corrupted_streams ... ok
+test zero_alloc_movegen_buffer_size ... ok
+test batch_replay_matches_self_play ... ok
+test batch_replay_scales_across_cores ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+[1m[92m     Running[0m tests/san_disambiguation.rs (target/release/deps/san_disambiguation-80e74be291cdd0db)
+
+running 4 tests
+test a_defender_is_not_an_attacker ... ok
+test a_promotion_carries_only_its_file ... ok
+test pinned_twin_needs_no_qualifier ... ok
+test two_rooks_to_one_square_disambiguate ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/san_disambiguation_property.rs (target/release/deps/san_disambiguation_property-3b2e58a957cb9972)
+
+running 1 test
+test the_direct_query_matches_the_movegen_filter_across_200k_moves ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+[1m[92m     Running[0m tests/san_parity.rs (target/release/deps/san_parity-1f5230ca6ab8ba4f)
+
+running 2 tests
+test san_parsing_accepts_shakmaty_rendered_san ... ok
+test san_rendering_matches_shakmaty_on_random_games ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[1m[92m     Running[0m tests/san_split_property.rs (target/release/deps/san_split_property-5bd794a8acd8a119)
+
+running 1 test
+test the_split_matches_the_monolith_across_100k_positions ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+[1m[92m     Running[0m tests/startpos_template.rs (target/release/deps/startpos_template-c3651882d7aefd32)
+
+running 1 test
+test template_is_identical_to_full_fen_parse_and_independently_owned ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m tests/zobrist.rs (target/release/deps/zobrist-8d2a5cd0765d5069)
+
+running 6 tests
+test hash_is_path_independent ... ok
+test kiwipete_hash_matches_full_recompute ... ok
+test js_turbochess_parity_after_e4 ... ok
+test startpos_polyglot_vector ... ok
+test incremental_hash_parity_tactical_positions ... ok
+test incremental_hash_parity_random_playouts ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m   Doc-tests[0m gigachess
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,8 @@
+hash-two-lanes exp-hash-two-lanes
+checker-near exp-checker-near
+castle-standard-clear exp-castle-standard-clear
+role-test-bit exp-role-test-bit
+O1 exp-leaf-check-delta
+O2 exp-pawn-transition
+O3 exp-leaf-check-delta,exp-direct-key,exp-castle-compact
+O4 exp-leaf-check-delta,exp-pawn-transition,exp-equal-capture
