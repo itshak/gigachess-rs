@@ -4,6 +4,9 @@
 - [x] Validate initial suite on all six CI runners (45763305461).
 - [x] Add real-game, two Chess960 cases, Polyglot and repetition lanes; pass local parity.
 - [x] Implement startpos template, paired A/B and release tests.
-- [ ] Validate expanded suite on all CI runners.
+- [x] Validate expanded suite on all CI runners (45764176187).
 - [ ] Add memory/allocation, cold-start, deeper and broader Chess960 cases.
-- [ ] Run counterbalanced experiments and independent A/B gates on remaining optimizations.
+- [x] Run 26 independent counterbalanced experiments (52 successful CI jobs).
+- [x] Preserve raw repeated results, run metadata and candidate report.
+- [ ] Select combined winner after all three six-platform matrices; resolve regressions and remaining competitive deficits.
+- [ ] Verify generic x86 runtime PEXT dispatch and allocation counts before release.

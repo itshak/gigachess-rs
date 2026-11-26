@@ -1,0 +1,12 @@
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+binary: rustc
+commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
+commit-date: 2026-07-14
+host: aarch64-apple-darwin
+release: 1.97.1
+LLVM version: 22.1.6
+cargo 1.97.1 (c980f4866 2026-06-30)
+c8a6cc5dcfa9053663bdd6b5d9f46127976d21bb
+mode=native features=exp-static-sliders,exp-ray-prefilter,exp-san,exp-uci,exp-fused-perft,exp-copy-perft,exp-mutation
+Apple M1 (Virtual)
+RUSTFLAGS=-C target-cpu=native
