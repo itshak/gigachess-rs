@@ -47,6 +47,8 @@ fn real_games_exact_san_legal_and_undo() {
                 // Test exact reversible state for every legal move, including
                 // promotions, en passant, captures, and canonical castling.
                 let mut full=g;let undo=full.make_move_unchecked(m);
+                #[cfg(feature="exp-child-copy")]
+                assert_eq!(g.child_after_unchecked(m),full);
                 #[cfg(feature="exp-prepared-move")]
                 {
                     let mut prepared=g;
@@ -212,6 +214,8 @@ fn all_960_backranks_and_castling_parity(){
         assert_eq!(b.perft(2),ref_nodes,"{fen}");
         for m in gm{
             let mut child=b;let u=child.make_move_unchecked(m);
+            #[cfg(feature="exp-child-copy")]
+            assert_eq!(b.child_after_unchecked(m),child);
             let mut reference=s.clone();let rm=m.to_string().parse::<UciMove>().unwrap().to_move(&reference).unwrap();reference.play_unchecked(rm);
             assert_eq!(child.checkers_bb(),reference.checkers().0,"{fen} {m}");
             assert_eq!(child.zobrist(),child.zobrist_full(),"{fen} {m}");
