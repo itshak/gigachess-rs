@@ -66,3 +66,15 @@ Benchmark-only default features select C; root production defaults unchanged.
 - promotion-batch: construct first promotion child once and vary role,
   refresh exact checker cache for each observed leaf.
 - leaf-reuse: test make/unmake versus copy-per-child in grouped visitor.
+
+## Completed CI evidence
+
+Configuration D: run 45775093059, all six jobs successful. Strict case/platform gate: 414/522 wins (79.31%), 395/522 >=1.03x, 62/522 >=2x. C: 378/522. Full perft 34/36, remaining ARM64 promotion and tactical cases. Native trusted replay is still the biggest gap; D geometric mean 0.56x fastest peer. Native benchmark measures different state maintenance contracts and does not equate predecoded moves to the original 16-bit wire format.
+
+Direct C-paired isolated runs:
+- 45775457175 normal kernel: 372/522. Trusted replay 0.948x and checked replay 0.965x versus C. Exclude from E.
+- 45775460545 checker rays: 388/522. Trusted replay 1.081x, checked replay 1.116x, child creation 1.065x and make/unmake 1.089x versus C. Retain for E, subject to combined verification.
+
+Raw paired TSVs, validation logs, environments and job status are archived under results/optimization-bakeoff-20261126. Reproduce exact case/platform wins and all losses using strict_gate.py with --losses. The 3% threshold is a practical margin, not a confidence interval. No claims of statistical significance or universal superiority.
+
+E (45776626381) is dispatched; its result is not yet established. The remaining isolated CI runs and local combined/prepared replay tests are pending. Keep all changes experimental until correctness and performance are demonstrated. No main or release changes.
