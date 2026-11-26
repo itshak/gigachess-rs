@@ -866,6 +866,15 @@ impl Board {
                 t
             };
             let mut keep = 0x0F;
+            #[cfg(feature="exp-castle-pair")]
+            let mask={
+                static PAIR:[u8;4096]={
+                    let mut t=[0;4096];let mut i=0;
+                    while i<4096{t[i]=CASTLE_CLEAR_STD[i>>6]|CASTLE_CLEAR_STD[i&63];i+=1;}t
+                };
+                PAIR[((from as usize)<<6)|to as usize]
+            };
+            #[cfg(not(feature="exp-castle-pair"))]
             let mask = CASTLE_CLEAR_STD[from as usize] | CASTLE_CLEAR_STD[to as usize];
             keep &= !mask;
             if role == Role::King as u8 && (!cfg!(feature = "exp-standard-castle") || from != if us == Color::White {4} else {60}) {
@@ -1073,6 +1082,7 @@ impl Board {
     }
 
     /// Squares occupied by pieces of `by` that attack `sq` under occupancy `occ`.
+    #[cfg_attr(feature="exp-refresh-inline",inline(always))]
     pub fn attackers_to(&self, sq: u8, by: Color, occ: u64) -> u64 {
         #[cfg(all(feature="exp-compact-attacks",feature="exp-compact-board"))]
         {
@@ -1103,7 +1113,18 @@ impl Board {
             #[cfg(feature="exp-checker-rays")]
             {
                 let mut candidates=bishops|rooks;
-                #[cfg(feature="exp-checker-first")]
+                #[cfg(feature="exp-checker-sentinel")]
+                {
+                    static BETWEEN65:[[u64;65];64]={
+                        let mut a=[[0;65];64];let mut i=0;
+                        while i<64{let mut j=0;while j<64{a[i][j]=crate::bitboard::BETWEEN[i][j];j+=1;}i+=1;}a
+                    };
+                    let first=candidates.trailing_zeros() as usize;
+                    let low=candidates&candidates.wrapping_neg();
+                    candidates&=candidates.wrapping_sub(1);
+                    result|=low&0u64.wrapping_sub((BETWEEN65[k][first]&occ==0) as u64);
+                }
+                #[cfg(all(feature="exp-checker-first",not(feature="exp-checker-sentinel")))]
                 if candidates!=0{
                     let first=pop_lsb(&mut candidates);
                     let clear=crate::bitboard::BETWEEN[k][first as usize]&occ==0;
@@ -1195,10 +1216,20 @@ impl Board {
     #[inline(always)]
     fn attacked_except(&self,sq:u8,by:Color,occ:u64,removed:u64)->bool{
         let ci=by.index();let k=sq as usize;let allowed=!removed;
-        if ((PAWN_ATT[by.other().index()][k]&self.bb(ci,0))|
-            (KNIGHT_ATT[k]&self.bb(ci,1))|(KING_ATT[k]&self.bb(ci,5)))&allowed!=0{return true;}
-        let b=self.diagonal_sliders(ci)&crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed;
-        let r=self.orthogonal_sliders(ci)&crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed;
+        #[cfg(all(feature="exp-attack-mask",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board")))]
+        let (b,r)={
+            let p=&self.roles;let mask=self.occ[ci]&allowed;
+            if ((PAWN_ATT[by.other().index()][k]&p[0])|(KNIGHT_ATT[k]&p[1])|(KING_ATT[k]&p[5]))&mask!=0{return true;}
+            ((p[2]|p[4])&crate::bitboard::EMPTY_BISHOP_RAYS[k]&mask,
+             (p[3]|p[4])&crate::bitboard::EMPTY_ROOK_RAYS[k]&mask)
+        };
+        #[cfg(not(all(feature="exp-attack-mask",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"))))]
+        let (b,r)={
+            if ((PAWN_ATT[by.other().index()][k]&self.bb(ci,0))|
+                (KNIGHT_ATT[k]&self.bb(ci,1))|(KING_ATT[k]&self.bb(ci,5)))&allowed!=0{return true;}
+            (self.diagonal_sliders(ci)&crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed,
+             self.orthogonal_sliders(ci)&crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed)
+        };
         #[cfg(feature="exp-checker-rays")]
         {
             let mut candidates=b|r;
@@ -2274,8 +2305,20 @@ impl Board {
                     let old=self.castling;self.castling=old&self.castle_rights_after(role,us,from,to);
                     if HASH&&old!=self.castling{hash^=self.castle_rights_hash(old^self.castling);}
                 }
-                self.ep=if role==0&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
-                if HASH&&self.ep_relevant(self.ep,us.other()){hash^=zobrist::ep_key(Square(self.ep));}
+                #[cfg(feature="exp-quiet-ep-gate")]
+                {
+                    self.ep=NO_EP;
+                    if role==0&&from.abs_diff(to)==16{
+                        let ep=(from+to)/2;
+                        self.ep=ep;
+                        if HASH&&self.ep_relevant(ep,us.other()){hash^=zobrist::ep_key(Square(ep));}
+                    }
+                }
+                #[cfg(not(feature="exp-quiet-ep-gate"))]
+                {
+                    self.ep=if role==0&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
+                    if HASH&&self.ep_relevant(self.ep,us.other()){hash^=zobrist::ep_key(Square(self.ep));}
+                }
                 self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
                 self.fullmove+=(us==Color::Black) as u16;
                 self.hash=hash;self.turn=us.other();
@@ -4240,9 +4283,20 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
                 let mv=Move::new(Square(from),Square(to),Some(Role::Knight));
                 child.make_move_perft_known::<true>(mv,us as u8*6);
                 (self.visitor)(&child);self.nodes+=1;
+                #[cfg(feature="exp-promo-checkers")]
+                let (base,diagonal,orthogonal)={
+                    let king=child.king_sq[ti] as usize;let target=bit(to);let occ=child.occupied();
+                    let d=crate::bitboard::EMPTY_BISHOP_RAYS[king]&target!=0;
+                    let r=crate::bitboard::EMPTY_ROOK_RAYS[king]&target!=0;
+                    let clear=(d||r)&&crate::bitboard::BETWEEN[king][to as usize]&occ==0;
+                    (child.checkers&!target,if d&&clear{target}else{0},if r&&clear{target}else{0})
+                };
                 for role in 2..=4{
                     child.bb_remove(ui,role-1,bit(to));child.bb_add(ui,role,bit(to));
-                    child.checkers=child.attackers_to(child.king_sq[ti],us,child.occupied());
+                    #[cfg(feature="exp-promo-checkers")]
+                    {child.checkers=base|match role{2=>diagonal,3=>orthogonal,_=>diagonal|orthogonal};}
+                    #[cfg(not(feature="exp-promo-checkers"))]
+                    {child.checkers=child.attackers_to(child.king_sq[ti],us,child.occupied());}
                     (self.visitor)(&child);self.nodes+=1;
                 }
             }

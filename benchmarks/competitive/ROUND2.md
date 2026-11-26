@@ -277,3 +277,28 @@ New variants:
 All four passed combined debug regression (nine tests including size,
 960 and stripped castle fixtures, real games, exhaustive blocker tests).
 F+undo-outside is the new benchmark-only paired baseline.
+
+## Round 7: exact checker and common transition refinements
+Round6 all 10 passed. Best combined cold sweep I5 473/522 + 6/6 cold,
+I4 462/522 + 6/6 cold and all 36/36 child creation. I3 12/12 hash
+recomputation, I4 native trusted replay 0.787x fastest peer (1.127x I).
+Special-cold 470/522, 1.077x trusted and 1.117x checked vs I; local
+1.105x and 1.127x. Pawnless4 regresses mutations despite snapshot wins.
+Both cancelled macOS jobs retried successfully; checker-first and
+hash-pair not retained. Keep previous I 477/522 record separate.
+New common combination J = I+special-cold+align32+blocked-sliders.
+Compare J against I, plus variants with inline and danger filtering;
+use paired J baseline on separate feature experiments for attribution.
+New experiments:
+- checker-sentinel: first candidate ray uses zero-safe sentinel at 64,
+  exact lowbit mask; fallback scans arbitrary additional candidates.
+- refresh-inline: inline exact full checker refresh.
+- attack-mask: apply color/removal occupancy once across role masks
+  in boolean legality checks, fallback on encoded layouts.
+- castle-pair: compile-time from/to clear mask in one lookup.
+- hash-turn-fold: pre-XOR turn key into first piece key in full delta.
+- quiet-ep-gate: only query new EP relevance for actual double pawn push.
+- promo-checkers: four promotion leaves have identical occupancy and
+  non-promoted attackers; reuse exact base checkers and evaluate only
+  promoted destination's bishop/rook rays. Knight child is unchanged.
+Expanded regression passed including promotion leaf equality.

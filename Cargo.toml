@@ -12,6 +12,13 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-checker-sentinel = []
+exp-refresh-inline = []
+exp-attack-mask = []
+exp-castle-pair = []
+exp-hash-turn-fold = []
+exp-quiet-ep-gate = []
+exp-promo-checkers = []
 exp-pawnless4 = ["exp-sparse-role3"]
 exp-zone-sliders = []
 exp-ep-mask = []
