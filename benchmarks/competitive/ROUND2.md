@@ -236,3 +236,16 @@ passed for sparse and branchless configurations. Keep raw native rows.
 - quiet-common: simple raw-word test for normal nonpromotion moves;
   fallback preserves invalid/reserved promotion-word behavior.
 Combined expanded debug regression passed. Five F-paired CI experiments.
+
+### Round 5 evidence and combined configurations
+Six complete round4 runs archived. F 446/522; E+align16 465/522;
+E+align32 460/522; E+ordinary-kernel 452/522; F+color-gen 463/522;
+F+blocked-sliders 449/522 and all six cold first-use wins
+(1.085–1.632x against fastest peer). No claim of universal win.
+Three further combinations dispatched on role branch: F+align16+blocked,
+F+align32+blocked, F+align16+blocked+color-gen. All three flags together
+passed expanded local regression. 16 total new CI runs submitted in round 5.
+Sparse layout is exactly 72 bytes unaligned, 80 aligned to 16, 96 aligned
+to 32. Native SIMD needs actual cross-platform execution; scalar fallback
+tested, AVX2 compile checked. Existing F baseline is unchanged apart from
+initial hash computation order (after Chess960 detection).
