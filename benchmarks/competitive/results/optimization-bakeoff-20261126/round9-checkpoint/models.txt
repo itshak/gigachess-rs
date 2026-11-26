@@ -1,0 +1,10 @@
+packed-meta exp-packed-meta,exp-unalign
+packed-meta-aligned exp-packed-meta
+checker-hybrid exp-checker-hybrid
+checker-color exp-checker-color
+direct-key exp-direct-key
+castle-file-gate exp-castle-file-gate
+L1 exp-no-danger-needed,exp-zone-sliders
+L2 exp-castle-compact,exp-promo-checkers,exp-attack-mask
+L3 exp-quiet-ep-gate,exp-promotion-direct
+L4 exp-refresh-inline,exp-quiet-ep-gate,exp-no-danger-needed
