@@ -69,6 +69,18 @@ pub(crate) fn piece_key_indices(color:usize,role:usize,sq:u8)->u64 {
 /// for one larger lookup, keeping the exact Polyglot contract.
 #[inline(always)]
 pub(crate) fn piece_move_delta<const TURN:bool>(color:usize,role:usize,from:u8,to:u8)->u64 {
+    #[cfg(feature="exp-role-key-fold")]
+    {
+        static ROWS:[[[u64;2];64];12]={
+            let mut t=[[[0;2];64];12];let mut i=0;
+            while i<768{
+                t[i>>6][i&63]=[POLYGLOT_RANDOM_ARRAY[i],POLYGLOT_RANDOM_ARRAY[i]^POLYGLOT_RANDOM_ARRAY[TURN_KEY]];
+                i+=1;
+            }t
+        };
+        let row=&ROWS[role*2+color];
+        return row[from as usize][TURN as usize]^row[to as usize][0];
+    }
     #[cfg(feature="exp-hash-delta")]
     {
         static DELTAS:[u64;49152]={
