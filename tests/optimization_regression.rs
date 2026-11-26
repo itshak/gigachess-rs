@@ -324,3 +324,26 @@ fn grouped_leaf_checkers_match_independent_transitions(){
 fn queen_implicit_layout_is_88_bytes(){
     assert_eq!(core::mem::size_of::<Board>(),88);
 }
+
+#[cfg(feature="exp-checker-predict")]
+#[test]
+fn predicted_checkers_match_fresh_attacks_on_permissive_positions(){
+    for fen in [
+        "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1",
+        "4k3/8/8/8/1B6/8/4R3/4K3 w - - 0 1",
+        "4k3/8/8/3p4/4P3/8/4R3/4K3 w - - 0 1",
+        "4k3/8/8/8/3n4/2N5/4R3/4K3 w - - 0 1",
+        "r2k3r/8/8/8/8/8/8/R2K3R w HAha - 0 1",
+        "4k3/P7/8/3pP3/8/8/8/4K3 w - d6 0 1",
+    ]{
+        let b=gigachess::fen::parse_fen_allow_illegal(fen).unwrap();
+        for m in b.legal_moves(){
+            // King captures are not valid unchecked transitions.
+            if m.to()==b.king_square(b.turn().other()){continue;}
+            let mut c=b;let undo=c.make_move_unchecked(m);
+            assert_eq!(c.checkers_bb(),c.attackers_to(c.king_square(c.turn()).0,c.turn().other(),c.occupied()),"{fen} {m}");
+            assert_eq!(c.zobrist(),c.zobrist_full(),"{fen} {m}");
+            c.unmake_move(m,undo);assert_eq!(c,b);
+        }
+    }
+}

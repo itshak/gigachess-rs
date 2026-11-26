@@ -456,3 +456,23 @@ Combined exact regression passed including 2708-position differential.
 Additional combinations O+leaf-check-delta, O+pawn-transition,
 O+leaf-check-delta+direct-key+castle-compact, and combined perft/replay
 variant; compare actual measurements rather than count alone.
+
+## Round 14: pre-mutation checkers and filtered geometry
+Round13 all 8 CI, full local release, six deep perft and local
+ABBA screens passed. Round11 portable retry passed. New score record
+492/522 (480 >=1.03, 67 >=2, cold 6/6) O+checker-near 45872840899.
+However its paired trusted ratio is 0.966 and local 0.822, so keep O
+as paired baseline rather than selecting by peer score alone.
+O+castle-standard-clear 489/522, trusted 0.932; O+leaf-check-delta
+480/522, full perft 1.220x O; O+leaf-check-delta+direct-key+
+castle-compact 484/522, full 36/36, recompute 1.108x O. Two-lane
+hash rejected (recompute 0.850 CI / 0.732 local).
+New techniques: checker-predict calculates exact future checkers
+from unchanged role planes, known source/destination and future
+occupancy before mutation. Does not assume legal reachability.
+geometry-union scans merged sniper candidates, assigns pinned
+pieces to orthogonal/diagonal classes. zone-knights filters enemy
+knights by the reverse attacks of every relevant king/castle step.
+Combined regression and permissive-position checker-cache comparison
+passed. Repeat O+checker-near as control; combine the new geometry
+flags and the successful full leaf delta. O remains paired baseline.

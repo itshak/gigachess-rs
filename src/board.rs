@@ -1331,6 +1331,31 @@ impl Board {
         #[cfg(not(all(feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"))))]
         self.attackers_to(king,us,self.occupied())
     }
+    // Compute the exact post-move attack mask from the old role planes.
+    // Ordinary captures keep destination occupied, so only source
+    // removal and destination insertion can change slider visibility.
+    // No assumption that the opposing king was previously unchecked.
+    #[cfg(feature="exp-checker-predict")]
+    #[inline(always)]
+    fn ordinary_checkers_before(&self,us:Color,role:u8,from:u8,to:u8)->u64{
+        let ui=us.index();let ti=ui^1;let k=self.king_index(ti) as usize;
+        let f=bit(from);let t=bit(to);
+        let occ=(self.occupied()&!f)|t;
+        let pawn=PAWN_ATT[ti][k];let knight=KNIGHT_ATT[k];let king=KING_ATT[k];
+        let diagonal=crate::bitboard::EMPTY_BISHOP_RAYS[k];
+        let orthogonal=crate::bitboard::EMPTY_ROOK_RAYS[k];
+        let mut result=((pawn&self.bb(ui,0))|(knight&self.bb(ui,1))|(king&self.bb(ui,5)))&!f;
+        let mut sliders=((diagonal&self.diagonal_sliders(ui))|(orthogonal&self.orthogonal_sliders(ui)))&!f;
+        match role{
+            0=>result|=t&pawn,1=>result|=t&knight,5=>result|=t&king,
+            2=>sliders|=t&diagonal,3=>sliders|=t&orthogonal,_=>sliders|=t&(diagonal|orthogonal),
+        }
+        while sliders!=0{
+            let a=pop_lsb(&mut sliders);
+            if crate::bitboard::BETWEEN[k][a as usize]&occ==0{result|=bit(a);}
+        }
+        result
+    }
     #[cfg_attr(feature="exp-refresh-inline",inline(always))]
     pub fn attackers_to(&self, sq: u8, by: Color, occ: u64) -> u64 {
         #[cfg(all(feature="exp-compact-attacks",feature="exp-compact-board"))]
@@ -1840,6 +1865,21 @@ impl Board {
             }
         }
         let mut p = self.bb(ti, Role::Knight.index());
+        #[cfg(feature="exp-zone-knights")]
+        {
+            const ZONES:[u64;64]={
+                let mut t=[0;64];let mut i=0;
+                while i<64{
+                    let mut squares=KING_ATT[i];
+                    if i&7==4{squares|=1u64<<(i-2)|1u64<<(i+2);}
+                    while squares!=0{
+                        let sq=squares.trailing_zeros() as usize;squares&=squares-1;
+                        t[i]|=KNIGHT_ATT[sq];
+                    }i+=1;
+                }t
+            };
+            p&=ZONES[ksq as usize];
+        }
         while p != 0 {
             let sq = pop_lsb(&mut p);
             danger |= KNIGHT_ATT[sq as usize];
@@ -2643,6 +2683,8 @@ impl Board {
                 }
                     return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};
                 }
+                #[cfg(feature="exp-checker-predict")]
+                let predicted=if CHECKERS{self.ordinary_checkers_before(us,role,from,to)}else{0};
                 let mut hash=self.hash;
                 if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
                 let mut captured=EMPTY;
@@ -2691,9 +2733,11 @@ impl Board {
                 self.fullmove+=(us==Color::Black) as u16;
                 self.hash=hash;self.set_turn(us.other());
                 if CHECKERS{
-                    #[cfg(feature="exp-checker-color")]
+                    #[cfg(feature="exp-checker-predict")]
+                    {self.checkers=predicted;}
+                    #[cfg(all(feature="exp-checker-color",not(feature="exp-checker-predict")))]
                     {self.checkers=self.refresh_color::<SIDE>(self.king_index(ti),us);}
-                    #[cfg(not(feature="exp-checker-color"))]
+                    #[cfg(not(any(feature="exp-checker-color",feature="exp-checker-predict")))]
                     {self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
                 }
                 return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};
