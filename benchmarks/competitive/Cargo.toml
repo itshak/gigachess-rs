@@ -14,6 +14,10 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-pawn-transition = ["gigachess/exp-pawn-transition"]
+exp-pawn-key-delta = ["gigachess/exp-pawn-key-delta"]
+exp-single-color-transition = ["gigachess/exp-single-color-transition"]
+exp-equal-capture = ["gigachess/exp-equal-capture"]
 exp-leaf-base = ["gigachess/exp-leaf-base"]
 exp-leaf-check-delta = ["gigachess/exp-leaf-check-delta"]
 exp-implicit-queen = ["gigachess/exp-implicit-queen"]

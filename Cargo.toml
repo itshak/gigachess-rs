@@ -12,6 +12,10 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-pawn-transition = []
+exp-pawn-key-delta = []
+exp-single-color-transition = []
+exp-equal-capture = []
 exp-leaf-base = ["exp-leaf-direct"]
 exp-leaf-check-delta = ["exp-leaf-base"]
 exp-implicit-queen = ["exp-kingless-board"]
