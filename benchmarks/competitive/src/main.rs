@@ -518,6 +518,14 @@ fn corpus(label: &str, real: Option<&str>) {
         bb(sorted(b.legal_moves(),|m|gu(b,m)));
     }},"shakmaty"=>||{for b in &sb{bb(sorted(b.legal_moves(),su));}},"cozy"=>||{for b in &cb{bb(sorted(cozy_list(b),|m|cu(b,m)));}},"chess"=>||{for b in &jb{bb(sorted(jordan_list(b),|m|m.to_string()));}},"ultra"=>||{for b in &ub{bb(sorted(ultra_list(b).iter().copied(),|m|m.to_string()));}},"ferrum"=>||{for b in &fb{bb(sorted(b.generate_moves().iter(),|m|m.to_uci()));}});
     row!("replay_trusted_native",label,plies,"giga"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_unchecked(m);}bb(b);}},"shakmaty"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b.play_unchecked(m);}bb(b);}},"cozy"=>||{for x in &games{let mut b=C::default();for &m in &x.2{b.play_unchecked(m);}bb(b);}},"chess"=>||{for x in &games{let mut b=J::default();for &m in &x.3{b=b.make_move_new(m);}bb(b);}},"ultra"=>||{for x in &games{let mut b=U::startpos();for &m in &x.4{b.make_move(m);}bb(b);}},"ferrum"=>||{for x in &games{let mut b=F::startpos();for &m in &x.5{b=b.make_move_new(m);}bb(b);}});
+    // Supplemental matched-output lanes. Do not replace native replay or
+    // fold these into the original strict 522-case score.
+    row!("replay_polyglot_each_ply",label,plies,
+        "giga_hashed"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_hashed(m);bb(b.zobrist());}bb(b);}},
+        "shakmaty_hash"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b.play_unchecked(m);bb(b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal));}bb(b);}});
+    row!("replay_polyglot_and_checkers_each_ply",label,plies,
+        "giga_full"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_unchecked(m);bb((b.zobrist(),b.checkers_bb()));}bb(b);}},
+        "shakmaty_full"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b.play_unchecked(m);bb((b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal),b.checkers()));}bb(b);}});
     row!("replay_checked_native",label,plies,"giga"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.play(m).unwrap();}bb(b);}},"shakmaty"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b=b.play(m).unwrap();}bb(b);}},"cozy"=>||{for x in &games{let mut b=C::default();for &m in &x.2{b.play(m);}bb(b);}},"chess"=>||{for x in &games{let mut b=J::default();for &m in &x.3{assert!(b.legal(m));b=b.make_move_new(m);}bb(b);}},"ultra"=>||{for x in &games{let mut b=U::startpos();for &m in &x.4{assert!(ultra_list(&b).as_slice().contains(&m));b.make_move(m);}bb(b);}},"ferrum"=>||{for x in &games{let mut b=F::startpos();for &m in &x.5{assert!(b.generate_moves().iter().any(|n|n==m));b=b.make_move_new(m);}bb(b);}});
 }
 
