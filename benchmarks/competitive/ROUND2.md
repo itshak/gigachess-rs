@@ -496,3 +496,21 @@ for <=2 relevant standard king/castling destinations.
 Combined targeted tests pass, including 80-byte layout, clock extremes,
 all 960 starts, exact perft leaf state and real-game replay.
 Keep O paired baseline; test separate flags and selected combinations.
+
+## Round 16: 80-byte snapshot win, preserve execution performance
+Round15 all five CI and full local release/six deep perft/ABBA passed.
+Compact80 45889555294: 474/522, snapshots 36/36, min1.051x fastest
+peer, but child creation 0.885x O and full perft 0.850x O.
+Hash-small-role 482/522, recompute 1.013x O, local 1.141x;
+combined zone-knights/leaf-check-delta/hash-small-role 484/522,
+full perft 1.201x O, 36/36, recompute 1.095x O. Targeted danger
+477/522, corpus count 0.884x O; reject. All cold 6/6.
+New 80-byte layout compact80-sliders: direct P,N,K plus overlapping
+diagonal/orthogonal planes, packed metadata, no stored king-square
+redundancy. King-square lookup scans a single direct role plane,
+rather than complement of five. compact-slider-xor uses constant
+plane indices and extra XOR for queens. king-pair tests split
+complement with CTZ sentinel mapped to zero. hash-king-single
+avoids second sentinel load for king, retains extra pieces fallback.
+Both compact layouts pass targeted regression incl exact sizes,
+960 and full leaf/undo state. O remains paired baseline.
