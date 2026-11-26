@@ -411,3 +411,25 @@ Combined debug gate passed including real corpus, all 960 and full
 leaf parity. Extra checker-delta differential test covers 2708
 sampled positions from 18,954 real-game plies, plus permissive FEN,
 castling, promotion and EP. Explicit 88-byte assertion passed.
+
+## Round 12: targeted trusted replay
+Round11 local full release + all six deep perft + four ABBA screens
+passed. First complete CI variant N+leaf-base 45849996242:
+477/522, 463 >=1.03, 71 >=2, cold 6/6, full perft 36/36 and
+1.076x paired N (local 1.183x). Nine other round11 runs were still
+pending at checkpoint. Keep N as paired baseline until their results
+are complete. No selection based solely on local gains.
+Four new isolated techniques:
+- pawn-transition: specialize ordinary pawn state transition with
+  known role, exact capture, hash, rights, EP, clocks and checkers;
+  promotions and EP captures retain existing fallback.
+- pawn-key-delta: 4 KiB table of valid pawn displacement key XORs;
+  retains fallback for other moves and original Polyglot constants.
+- single-color-transition: compare dynamic mover-side transition
+  against two color-specialized instantiations; no semantic change.
+- equal-capture: compact six-plane storage only, same-role capture
+  removes source from shared role plane and leaves destination set,
+  while both color occupancies and capture/hash remain exact.
+Combined targeted regression (real games, SAN/undo, all 960, full
+leaf and slider parity) passed. Full release and deep perft pending.
+Limit CI to four isolated runs while round11 queue is outstanding.

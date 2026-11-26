@@ -69,6 +69,27 @@ pub(crate) fn piece_key_indices(color:usize,role:usize,sq:u8)->u64 {
 /// for one larger lookup, keeping the exact Polyglot contract.
 #[inline(always)]
 pub(crate) fn piece_move_delta<const TURN:bool>(color:usize,role:usize,from:u8,to:u8)->u64 {
+    #[cfg(feature="exp-pawn-key-delta")]
+    if role==0&&color<2{
+        // Four pawn displacements per source/color, 4 KiB total.
+        // Verify direction, then fall back for all nonstandard deltas.
+        const STEPS:[i16;4]=[7,8,9,16];
+        static KEYS:[[[u64;4];64];2]={
+            let mut t=[[[0;4];64];2];let mut c=0;
+            while c<2{let mut f=0;while f<64{let mut i=0;while i<4{
+                let step=STEPS[i];let dest=f as i16+if c==1{step}else{-step};
+                if dest>=0&&dest<64{t[c][f][i]=POLYGLOT_RANDOM_ARRAY[c*64+f]^POLYGLOT_RANDOM_ARRAY[c*64+dest as usize];}
+                i+=1;
+            }f+=1;}c+=1;}t
+        };
+        let step=if color==1{to as i16-from as i16}else{from as i16-to as i16};
+        let slot=match step{7=>0,8=>1,9=>2,16=>3,_=>4};
+        if slot<4{
+            let value=KEYS[color][from as usize][slot];
+            return if TURN{value^turn_key()}else{value};
+        }
+    }
+
     #[cfg(feature="exp-role-key-fold")]
     {
         static ROWS:[[[u64;2];64];12]={

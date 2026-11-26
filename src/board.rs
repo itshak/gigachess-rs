@@ -2517,12 +2517,12 @@ impl Board {
 
     #[inline(always)]
     fn make_move_hinted<const HASH:bool,const CHECKERS:bool,const HINT:bool>(&mut self,mv:Move,code:u8)->Undo{
-        #[cfg(feature="exp-color-make")]
+        #[cfg(all(feature="exp-color-make",not(feature="exp-single-color-transition")))]
         {
             if self.turn()==Color::White{return self.make_move_impl::<HASH,CHECKERS,HINT,1,false>(mv,code,EMPTY);}
             return self.make_move_impl::<HASH,CHECKERS,HINT,0,false>(mv,code,EMPTY);
         }
-        #[cfg(not(feature="exp-color-make"))]
+        #[cfg(any(not(feature="exp-color-make"),feature="exp-single-color-transition"))]
         self.make_move_impl::<HASH,CHECKERS,HINT,2,false>(mv,code,EMPTY)
     }
 
@@ -2553,8 +2553,36 @@ impl Board {
             let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn()};
             let ui=us.index();let ti=us.other().index();
             let from=mv.from().0;let to=mv.to().0;let f=bit(from);let t=bit(to);
-            let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
             let enemy=self.occ[ti]&t;
+            #[cfg(feature="exp-pawn-transition")]
+            if !PREPARED && (if HINT{hint%6==0}else{self.bb(ui,0)&f!=0})
+                && mv.promotion().is_none() && self.occ[ui]&t==0 && (from&7==to&7||enemy!=0){
+                let mut hash=self.hash^zobrist::piece_move_delta::<HASH>(ui,0,from,to);
+                if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
+                let mut captured=EMPTY;
+                if enemy!=0{
+                    let cap=self.role_at_occupied(to,us.other()) as usize;
+                    captured=(ti*6+cap) as u8;
+                    self.bb_remove(ti,cap,t);self.occ[ti]^=t;
+                    hash^=zobrist::piece_key_indices(ti,cap,to);
+                }
+                self.bb_toggle(ui,0,f^t);self.occ[ui]^=f^t;
+                if self.rights_raw()!=0{
+                    let old=self.rights_raw();
+                    self.set_castling(old&self.castle_rights_after(0,us,from,to));
+                    if HASH&&old!=self.rights_raw(){hash^=self.castle_rights_hash(old^self.rights_raw());}
+                }
+                self.ep=NO_EP;
+                if from.abs_diff(to)==16{
+                    let ep=(from+to)/2;self.ep=ep;
+                    if HASH&&self.ep_relevant(ep,us.other()){hash^=zobrist::ep_key(Square(ep));}
+                }
+                self.halfmove=0;self.fullmove+=(us==Color::Black) as u16;
+                self.hash=hash;self.set_turn(us.other());
+                if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
+                return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:us as u8*6};
+            }
+            let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
             if !PREPARED&&mv.promotion().is_none()&&self.occ[ui]&t==0&&!(role==0&&from&7!=to&7&&enemy==0){
                 #[cfg(feature="exp-no-rights-kernel")]
                 if self.rights_raw()==0&&self.ep==NO_EP{
@@ -2586,13 +2614,23 @@ impl Board {
                 let mut hash=self.hash;
                 if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
                 let mut captured=EMPTY;
+                #[cfg(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox")))]
+                let mut delta=f^t;
                 if enemy!=0{
                     let cap=self.role_at_occupied(to,us.other()) as usize;
                     captured=(ti*6+cap) as u8;
-                    self.bb_remove(ti,cap,t);self.occ[ti]^=t;
+                    #[cfg(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox")))]
+                    if cap==role as usize{delta=f;}else{self.bb_remove(ti,cap,t);}
+                    #[cfg(not(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox"))))]
+                    self.bb_remove(ti,cap,t);
+                    self.occ[ti]^=t;
                     hash^=zobrist::piece_key_indices(ti,cap,to);
                 }
-                self.bb_toggle(ui,role as usize,f^t);self.occ[ui]^=f^t;
+                #[cfg(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox")))]
+                self.bb_toggle(ui,role as usize,delta);
+                #[cfg(not(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox"))))]
+                self.bb_toggle(ui,role as usize,f^t);
+                self.occ[ui]^=f^t;
                 hash^=zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
                 if role==5{self.set_king_index(ui,to);}
                 if self.rights_raw()!=0{
