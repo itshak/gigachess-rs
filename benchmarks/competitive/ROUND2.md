@@ -100,3 +100,25 @@ depth-2 perft, checker parity, and reversible state.
 Benchmark-only defaults now select E to isolate layout effects; root
 production defaults remain unchanged. Supplemental per-ply replay hash
 and hash-plus-checkers rows are excluded from the original strict score.
+
+## Round 3 progress (2026-11-26)
+E: run 45776626381. Three available jobs (native ARM64, Linux x64,
+Windows x64) succeeded: 216/261 strict wins, 207 >=1.03x, 30 >=2x.
+Remaining jobs are pending at this snapshot. E vs D on aiserver paired
+ABBA targeted screen (same f6e0115 source): sorted UCI 1.590x,
+checked replay 1.389x, child creation 1.364x, trusted replay 1.345x,
+make/unmake 1.329x, full perft 1.313x; local host shared/noisy.
+Prepared replay local first measurement: 36.8ns wire vs 19.0ns
+prepared (preparation included 27.8ns); Shakmaty native 16.0ns.
+Matched per-ply hash+checkers Giga 2.15x Shakmaty. Treat as preliminary
+because timing variation is evident; not a substitute for native replay.
+The full expanded E plus optional layout/prepared feature release suite
+passed locally. All 960 start and 960 castling fixtures passed in debug
+on E and both new slider layouts. Seven more independent hot-path
+experiments are being screened locally. The first split-quiet and
+branchless role-select results are not compelling; do not adopt yet.
+The direct pre-mutation check alone (45775463989) finished with 368/522
+wins; 0.882x checked replay vs C. The reused-role variant (45775774803)
+finished with 377/522 wins and 1.034x checked replay vs C.
+New E-paired layout runs 45778344181 and 45778347701 were dispatched;
+no result claimed. Neither production defaults nor main changed.
