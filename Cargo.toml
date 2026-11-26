@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-pawn-count-union = ["exp-pawn-batch-count"]
+exp-pawn-count-promo-gate = ["exp-pawn-batch-count"]
+exp-between-compact = []
 exp-cached-packed-king = ["exp-packed-meta", "exp-kingless-board", "exp-unalign"]
 exp-pawn-double-reuse = []
 exp-pawn-batch-count = []

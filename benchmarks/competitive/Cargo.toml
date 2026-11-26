@@ -14,6 +14,9 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-pawn-count-union = ["gigachess/exp-pawn-count-union"]
+exp-pawn-count-promo-gate = ["gigachess/exp-pawn-count-promo-gate"]
+exp-between-compact = ["gigachess/exp-between-compact"]
 exp-cached-packed-king = ["gigachess/exp-cached-packed-king"]
 exp-pawn-double-reuse = ["gigachess/exp-pawn-double-reuse"]
 exp-pawn-batch-count = ["gigachess/exp-pawn-batch-count"]

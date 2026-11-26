@@ -182,6 +182,41 @@ pub static BETWEEN: [[u64; 64]; 64] = {
     t
 };
 
+// Compact per-source rows retain a zero sentinel for adjacent or
+// unaligned pairs. All original 4096 queries remain exact. Compared
+// with the dense 32 KiB table this trades one indexed load for a
+// smaller working set in the checker/pin hot path.
+#[cfg(feature="exp-between-compact")]
+static COMPACT_BETWEEN:([[u8;64];64],[[u64;28];64])={
+    let mut index=[[0u8;64];64];let mut masks=[[0u64;28];64];
+    let mut a=0;
+    while a<64{
+        let mut slot=1;let mut b=0;
+        while b<64{
+            let mask=BETWEEN[a][b];
+            if mask!=0{index[a][b]=slot as u8;masks[a][slot]=mask;slot+=1;}
+            b+=1;
+        }
+        a+=1;
+    }
+    (index,masks)
+};
+#[inline(always)]
+pub(crate) fn between_for_geometry(a:usize,b:usize)->u64{
+    #[cfg(feature="exp-between-compact")]
+    {return COMPACT_BETWEEN.1[a][COMPACT_BETWEEN.0[a][b] as usize];}
+    #[cfg(not(feature="exp-between-compact"))]
+    {BETWEEN[a][b]}
+}
+
+#[cfg(all(test,feature="exp-between-compact"))]
+#[test]
+fn compact_between_matches_every_dense_entry(){
+    for a in 0..64{for b in 0..64{
+        assert_eq!(between_for_geometry(a,b),BETWEEN[a][b],"{a} {b}");
+    }}
+}
+
 /// `LINE[a][b]`: every square on the rank/file/diagonal through aligned
 /// squares a and b (zero when not aligned). Includes both endpoints.
 pub static LINE: [[u64; 64]; 64] = {

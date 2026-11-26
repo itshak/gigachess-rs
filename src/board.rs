@@ -1343,7 +1343,7 @@ impl Board {
                 ((p[3]|p[4])&crate::bitboard::EMPTY_ROOK_RAYS[k]))&own;
             while candidates!=0{
                 let a=pop_lsb(&mut candidates);
-                if crate::bitboard::BETWEEN[k][a as usize]&occ==0{result|=bit(a);}
+                if crate::bitboard::between_for_geometry(k,a as usize)&occ==0{result|=bit(a);}
             }
             return result;
         }
@@ -1371,7 +1371,7 @@ impl Board {
         }
         while sliders!=0{
             let a=pop_lsb(&mut sliders);
-            if crate::bitboard::BETWEEN[k][a as usize]&occ==0{result|=bit(a);}
+            if crate::bitboard::between_for_geometry(k,a as usize)&occ==0{result|=bit(a);}
         }
         result
     }
@@ -1459,7 +1459,7 @@ impl Board {
                 }
                 while candidates!=0{
                     let a=pop_lsb(&mut candidates);
-                    if crate::bitboard::BETWEEN[k][a as usize]&occ==0{result|=bit(a);}
+                    if crate::bitboard::between_for_geometry(k,a as usize)&occ==0{result|=bit(a);}
                 }
             }
             #[cfg(not(feature="exp-checker-rays"))]
@@ -1551,7 +1551,7 @@ impl Board {
             let mut candidates=b|r;
             while candidates!=0{
                 let a=pop_lsb(&mut candidates);
-                if crate::bitboard::BETWEEN[k][a as usize]&occ==0{return true;}
+                if crate::bitboard::between_for_geometry(k,a as usize)&occ==0{return true;}
             }
             false
         }

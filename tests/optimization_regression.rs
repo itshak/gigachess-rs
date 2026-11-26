@@ -389,3 +389,22 @@ fn compact_cached_king_is_88_bytes(){
     assert_eq!(b.zobrist(),b.zobrist_full());
     assert_eq!(Board::empty().king_square(Color::White),Square(0));
 }
+
+#[cfg(feature="exp-pawn-count-union")]
+#[test]
+fn pawn_count_union_matches_materialization(){
+    for fen in [
+        "1r1r3k/2P5/8/8/8/8/8/K7 w - - 0 1",
+        "7k/8/8/3n4/2P1P3/8/PP6/K7 w - - 0 1",
+        "7k/8/8/8/8/8/1P6/K7 w - - 0 1",
+        "k7/8/8/2p1p3/3N4/8/8/7K b - - 0 1",
+        "k7/8/8/8/8/8/2p5/1R1R3K b - - 0 1",
+    ]{
+        let b=parse_fen(fen).unwrap();
+        assert_eq!(b.count_legal_moves() as usize,b.legal_moves().len(),"{fen}");
+        for m in b.legal_moves(){
+            let mut c=b;c.make_move_unchecked(m);
+            assert_eq!(c.count_legal_moves() as usize,c.legal_moves().len(),"{fen} {m}");
+        }
+    }
+}
