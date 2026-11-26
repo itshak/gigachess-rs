@@ -276,3 +276,16 @@ fn promotion_checker_reuse_exact_children(){
 fn kingless_unaligned_layout_is_88_bytes(){
     assert_eq!(core::mem::size_of::<Board>(),88);
 }
+
+#[cfg(all(feature="exp-packed-meta",feature="exp-unalign",feature="exp-compact-board",not(feature="exp-kingless-board"),not(feature="exp-slider-planes"),not(feature="exp-mailbox"),not(feature="exp-nibble-role"),not(feature="exp-role-planes")))]
+#[test]
+fn packed_metadata_board_is_88_bytes(){
+    assert_eq!(core::mem::size_of::<Board>(),88);
+    let b=Board::startpos();
+    assert_eq!(b.king_square(Color::White),Square(4));
+    assert_eq!(b.king_square(Color::Black),Square(60));
+    assert_eq!(b.zobrist(),b.zobrist_full());
+    assert_eq!(b.to_fen(),"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    assert_eq!(Board::empty().king_square(Color::White),Square(0));
+    assert_eq!(Board::empty().king_square(Color::Black),Square(0));
+}

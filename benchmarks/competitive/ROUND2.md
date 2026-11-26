@@ -329,3 +329,32 @@ New benchmark paired baseline K = J-inline. New experiments:
   candidates are empty; malformed FEN validation unchanged.
 Combined debug regression passed for kernel/layout-hot/hash/rays, and
 separately for layout-roles/kingless/unalign, plus explicit size test.
+
+## Round 9: 88-byte board with six direct role bitboards
+Round8 eight complete runs retrieved so far. New best K+layout-roles
+(45824543156) 479/522, 457 >=1.03, 71 >=2, cold 6/6. K+zone-sliders
++no-danger-needed 477/522, cold 6/6 and 12/12 checked replay; K+castle
+compact+promo-checkers+attack-mask also 12/12 checked replay.
+K+layout-hot 471/522, trusted replay 5/12 and 0.841x fastest peer.
+Rights-free kernel 464/522; local 1.126x trusted replay but CI 0.982x
+against paired K, so not selected solely on local measurements.
+K+role-order 459/522, recompute 0.954x K despite local 1.259x;
+defer. Remaining three round8 runs not yet complete at this checkpoint.
+Round8 full local release, six deep-perft and all four focused ABBA
+screens completed. New paired baseline L=K+layout-roles.
+- packed-meta: six ordinary role planes, derive king square from actual
+  king bitboard, retain four exact castle backing squares including
+  absent black-square sentinel as four nibbles; rights/turn/variant
+  share one byte, preserve EP and two u16 clocks. Natural alignment gives
+  verified 88 bytes. Malformed FEN still rejected; duplicate king
+  diagnostics may differ before final validation. No new unsafe code.
+- checker-hybrid: switch to attack tables when >2 ray candidates;
+  fallback exact between-ray scan for sparse candidates.
+- checker-color: exact full checker refresh specialized by mover color,
+  independent of prior reachability and stale caches.
+- direct-key: safe 12x64 Polyglot key rows, same numerical values.
+- castle-file-gate: early return if no king move or standard corner/home
+  square touched; Chess960 retains exact existing path.
+Combined local regression passed, 88-byte size/startpos/empty verified,
+default library 55 tests passed. Additional local full release tests
+and six-platform comparisons required before selecting.

@@ -160,16 +160,20 @@ impl std::error::Error for IllegalMove {}
 pub struct Board {
     #[cfg(feature="exp-layout-hot")]
     occ: [u64; 2],       // occupancy per color
-    #[cfg(feature="exp-layout-hot")]
+    #[cfg(all(feature="exp-layout-hot",not(feature="exp-packed-meta")))]
     king_sq: [u8; 2],
     /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
     /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
-    #[cfg(feature="exp-layout-hot")]
+    #[cfg(all(feature="exp-layout-hot",not(feature="exp-packed-meta")))]
     castle_rook_sq: [u8; 4],
-    #[cfg(feature="exp-layout-hot")]
+    #[cfg(all(feature="exp-layout-hot",not(feature="exp-packed-meta")))]
     turn: Color,
-    #[cfg(feature="exp-layout-hot")]
+    #[cfg(all(feature="exp-layout-hot",not(feature="exp-packed-meta")))]
     castling: u8,
+    #[cfg(all(feature="exp-layout-hot",feature="exp-packed-meta"))]
+    castle_packed:u16,
+    #[cfg(all(feature="exp-layout-hot",feature="exp-packed-meta"))]
+    state:u8,
     #[cfg(feature="exp-layout-hot")]
     ep: u8,
     #[cfg(feature="exp-layout-hot")]
@@ -178,7 +182,7 @@ pub struct Board {
     fullmove: u16,
     /// `true` if Chess960 (king not e1/e8 or rook not a/h) — early gate
     /// for `standard` `ultrachess` parity (`25ns` vs `78ns`).
-    #[cfg(feature="exp-layout-hot")]
+    #[cfg(all(feature="exp-layout-hot",not(feature="exp-packed-meta")))]
     is_chess960: bool,
     #[cfg(not(feature="exp-layout-roles"))]
     hash: u64,
@@ -213,16 +217,20 @@ pub struct Board {
     mailbox: [u8; 64],
     #[cfg(not(feature="exp-layout-hot"))]
     occ: [u64; 2],       // occupancy per color
-    #[cfg(not(feature="exp-layout-hot"))]
+    #[cfg(all(not(feature="exp-layout-hot"),not(feature="exp-packed-meta")))]
     king_sq: [u8; 2],
     /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
     /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
-    #[cfg(not(feature="exp-layout-hot"))]
+    #[cfg(all(not(feature="exp-layout-hot"),not(feature="exp-packed-meta")))]
     castle_rook_sq: [u8; 4],
-    #[cfg(not(feature="exp-layout-hot"))]
+    #[cfg(all(not(feature="exp-layout-hot"),not(feature="exp-packed-meta")))]
     turn: Color,
-    #[cfg(not(feature="exp-layout-hot"))]
+    #[cfg(all(not(feature="exp-layout-hot"),not(feature="exp-packed-meta")))]
     castling: u8,
+    #[cfg(all(not(feature="exp-layout-hot"),feature="exp-packed-meta"))]
+    castle_packed:u16,
+    #[cfg(all(not(feature="exp-layout-hot"),feature="exp-packed-meta"))]
+    state:u8,
     #[cfg(not(feature="exp-layout-hot"))]
     ep: u8,
     #[cfg(not(feature="exp-layout-hot"))]
@@ -231,7 +239,7 @@ pub struct Board {
     fullmove: u16,
     /// `true` if Chess960 (king not e1/e8 or rook not a/h) — early gate
     /// for `standard` `ultrachess` parity (`25ns` vs `78ns`).
-    #[cfg(not(feature="exp-layout-hot"))]
+    #[cfg(all(not(feature="exp-layout-hot"),not(feature="exp-packed-meta")))]
     is_chess960: bool,
     #[cfg(feature="exp-layout-roles")]
     hash: u64,
@@ -275,21 +283,35 @@ impl Board {
             #[cfg(feature = "exp-mailbox")]
             mailbox: [EMPTY;64],
             occ: [0; 2],
+            #[cfg(not(feature="exp-packed-meta"))]
             turn: Color::White,
+            #[cfg(not(feature="exp-packed-meta"))]
             castling: 0,
+            #[cfg(not(feature="exp-packed-meta"))]
             castle_rook_sq: [0; 4],
+            #[cfg(feature="exp-packed-meta")]
+            castle_packed:0,
+            #[cfg(feature="exp-packed-meta")]
+            state:1,
             ep: NO_EP,
             halfmove: 0,
             fullmove: 1,
             hash: 0,
             checkers: 0,
+            #[cfg(not(feature="exp-packed-meta"))]
             king_sq: [0; 2],
+            #[cfg(not(feature="exp-packed-meta"))]
             is_chess960: false,
         }
     }
 
     #[inline(always)]
-    pub fn is_chess960(&self) -> bool { self.is_chess960 }
+    pub fn is_chess960(&self) -> bool {
+        #[cfg(feature="exp-packed-meta")]
+        {self.state&32!=0}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.is_chess960}
+    }
 
     /// The standard chess starting position.
     ///
@@ -340,23 +362,109 @@ impl Board {
                 a
             },
             occ: [0xffff << 48, 0xffff],
+            #[cfg(not(feature="exp-packed-meta"))]
             king_sq: [60, 4],
+            #[cfg(not(feature="exp-packed-meta"))]
             castle_rook_sq: [7, 0, 63, 56],
+            #[cfg(not(feature="exp-packed-meta"))]
             turn: Color::White,
+            #[cfg(not(feature="exp-packed-meta"))]
             castling: 0b1111,
+            #[cfg(feature="exp-packed-meta")]
+            castle_packed:0x1807,
+            #[cfg(feature="exp-packed-meta")]
+            state:31,
             ep: NO_EP,
             halfmove: 0,
             fullmove: 1,
+            #[cfg(not(feature="exp-packed-meta"))]
             is_chess960: false,
         }
     }
 
+    #[inline(always)]
+    fn rights_raw(&self)->u8{
+        #[cfg(feature="exp-packed-meta")]
+        {self.state>>1&15}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.castling}
+    }
+    #[inline(always)]
+    fn set_castling(&mut self,rights:u8){
+        #[cfg(feature="exp-packed-meta")]
+        {self.state=(self.state&!30)|((rights&15)<<1);}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.castling=rights;}
+    }
+    #[inline(always)]
+    fn set_turn(&mut self,side:Color){
+        #[cfg(feature="exp-packed-meta")]
+        {self.state=(self.state&!1)|side as u8;}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.turn=side;}
+    }
+    #[inline(always)]
+    fn set_960(&mut self,variant:bool){
+        #[cfg(feature="exp-packed-meta")]
+        {self.state=(self.state&!32)|((variant as u8)<<5);}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.is_chess960=variant;}
+    }
+    #[inline(always)]
+    fn rook_index(&self,i:usize)->u8{
+        #[cfg(feature="exp-packed-meta")]
+        {
+            let n=((self.castle_packed>>(i*4))&15) as u8;
+            if i<2||n==0{n}else{n+55}
+        }
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.castle_rook_sq[i]}
+    }
+    #[inline(always)]
+    fn rook_squares(&self)->[u8;4]{
+        #[cfg(feature="exp-packed-meta")]
+        {[self.rook_index(0),self.rook_index(1),self.rook_index(2),self.rook_index(3)]}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.castle_rook_sq}
+    }
+    #[inline(always)]
+    fn set_rook_squares(&mut self,squares:[u8;4]){
+        #[cfg(feature="exp-packed-meta")]
+        {
+            let mut packed=0u16;
+            for (i,sq) in squares.into_iter().enumerate(){
+                debug_assert!(sq==0||(i<2&&sq<8)||(i>=2&&sq>=56&&sq<64));
+                let n=if i<2||sq==0{sq}else{sq-55};
+                packed|=(n as u16)<<(i*4);
+            }
+            self.castle_packed=packed;
+        }
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.castle_rook_sq=squares;}
+    }
+    #[inline(always)]
+    fn king_index(&self,i:usize)->u8{
+        #[cfg(feature="exp-packed-meta")]
+        {let bits=self.bb(i,5);if bits==0{0}else{bits.trailing_zeros() as u8}}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.king_sq[i]}
+    }
+    #[inline(always)]
+    fn set_king_index(&mut self,i:usize,sq:u8){
+        #[cfg(feature="exp-packed-meta")]
+        {let _=(i,sq);}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.king_sq[i]=sq;}
+    }
     // -- accessors ----------------------------------------------------------
 
     /// Side to move.
     #[inline(always)]
     pub fn turn(&self) -> Color {
-        self.turn
+        #[cfg(feature="exp-packed-meta")]
+        {if self.state&1!=0{Color::White}else{Color::Black}}
+        #[cfg(not(feature="exp-packed-meta"))]
+        {self.turn}
     }
 
     /// Bitboard of all squares occupied by `color`.
@@ -888,11 +996,13 @@ impl Board {
     #[inline(always)]
     fn castle_rights_after(&self, role: u8, us: Color, from: u8, to: u8) -> u8 {
         #[cfg(feature="exp-castle-compact")]
-        if self.castling==0{return 0;}
+        if self.rights_raw()==0{return 0;}
         #[cfg(feature="exp-castle-compact")]
-        if !self.is_chess960 && role!=Role::King as u8 && (bit(from)|bit(to))&0xff000000000000ff==0{return 15;}
-        if cfg!(feature = "exp-standard-castle") && self.castling == 0 { return 0; }
-        if !self.is_chess960 {
+        if !self.is_chess960() && role!=Role::King as u8 && (bit(from)|bit(to))&0xff000000000000ff==0{return 15;}
+        if cfg!(feature = "exp-standard-castle") && self.rights_raw() == 0 { return 0; }
+        if !self.is_chess960() {
+            #[cfg(feature="exp-castle-file-gate")]
+            if role!=Role::King as u8 && ((bit(from)|bit(to))&0x9100000000000091)==0{return 15;}
             // Standard: `E1` clears both white, `A1`/`H1` clear one, same for 8th.
             const CASTLE_CLEAR_STD: [u8; 64] = {
                 let mut t = [0u8; 64];
@@ -930,7 +1040,7 @@ impl Board {
             keep &= !both;
         }
         for rb in 0..4usize {
-            if self.castle_rook_sq[rb] == from || self.castle_rook_sq[rb] == to {
+            if self.rook_index(rb) == from || self.rook_index(rb) == to {
                 keep &= !(1u8 << rb);
             }
         }
@@ -940,20 +1050,20 @@ impl Board {
     /// King square of `color`.
     #[inline(always)]
     pub fn king_square(&self, color: Color) -> Square {
-        Square(self.king_sq[color.index()])
+        Square(self.king_index(color.index()))
     }
 
     /// Castling rights bitmask (bits 0..3 = WK, WQ, BK, BQ).
     #[inline(always)]
     pub fn castling_rights(&self) -> u8 {
-        self.castling
+        self.rights_raw()
     }
 
     /// The rook square backing castling right `right_bit` (0..3 = WK, WQ, BK,
     /// BQ). Chess960-aware: standard rights map to files a/h.
     #[inline(always)]
     pub fn castling_rook_square(&self, right_bit: u8) -> Square {
-        Square(self.castle_rook_sq[right_bit as usize])
+        Square(self.rook_index(right_bit as usize))
     }
 
     /// En-passant target square, if any.
@@ -994,11 +1104,11 @@ impl Board {
     /// Hashing for Polyglot opening books remains intentionally unchanged.
     #[inline]
     pub fn repetition_key(&self) -> u64 {
-        if !self.ep_relevant(self.ep, self.turn) {
+        if !self.ep_relevant(self.ep, self.turn()) {
             return self.hash;
         }
-        let mut candidate_pawns = PAWN_ATT[self.turn.other().index()][self.ep as usize]
-            & self.piece_bb(self.turn, Role::Pawn);
+        let mut candidate_pawns = PAWN_ATT[self.turn().other().index()][self.ep as usize]
+            & self.piece_bb(self.turn(), Role::Pawn);
         while candidate_pawns != 0 {
             let from = pop_lsb(&mut candidate_pawns);
             if self.is_legal(Move::quiet(Square(from), Square(self.ep))) {
@@ -1048,7 +1158,7 @@ impl Board {
         self.bb_add(color, role, b);
         self.occ[color] |= b;
         if role == Role::King.index() {
-            self.king_sq[color] = sq;
+            self.set_king_index(color,sq);
         }
     }
 
@@ -1063,7 +1173,7 @@ impl Board {
             crate::zobrist::piece_key_indices(color,role,sq)
         } else { zobrist::piece_key(Self::color_from_index(color),Self::role_from_index(role),Square(sq)) };
         if role == Role::King.index() {
-            self.king_sq[color] = sq;
+            self.set_king_index(color,sq);
         }
     }
 
@@ -1090,7 +1200,7 @@ impl Board {
             self.occ[color] ^= delta;
             self.hash ^= zobrist::piece_key(Self::color_from_index(color), Self::role_from_index(role), Square(from))
                 ^ zobrist::piece_key(Self::color_from_index(color), Self::role_from_index(role), Square(to));
-            if role == Role::King.index() { self.king_sq[color] = to; }
+            if role == Role::King.index() { self.set_king_index(color,to); }
         }
         #[cfg(not(feature = "exp-mutation"))]
         {
@@ -1121,6 +1231,26 @@ impl Board {
     }
 
     /// Squares occupied by pieces of `by` that attack `sq` under occupancy `occ`.
+    #[cfg(feature="exp-checker-color")]
+    #[inline(always)]
+    fn refresh_color<const SIDE:u8>(&self,king:u8,us:Color)->u64{
+        #[cfg(all(feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board")))]
+        {
+            let k=king as usize;
+            let ci=if SIDE<2{SIDE as usize}else{us.index()};
+            let p=&self.roles;let own=self.occ[ci];let occ=self.occupied();
+            let mut result=((PAWN_ATT[ci^1][k]&p[0])|(KNIGHT_ATT[k]&p[1])|(KING_ATT[k]&p[5]))&own;
+            let mut candidates=(((p[2]|p[4])&crate::bitboard::EMPTY_BISHOP_RAYS[k])|
+                ((p[3]|p[4])&crate::bitboard::EMPTY_ROOK_RAYS[k]))&own;
+            while candidates!=0{
+                let a=pop_lsb(&mut candidates);
+                if crate::bitboard::BETWEEN[k][a as usize]&occ==0{result|=bit(a);}
+            }
+            return result;
+        }
+        #[cfg(not(all(feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"))))]
+        self.attackers_to(king,us,self.occupied())
+    }
     #[cfg_attr(feature="exp-refresh-inline",inline(always))]
     pub fn attackers_to(&self, sq: u8, by: Color, occ: u64) -> u64 {
         #[cfg(all(feature="exp-compact-attacks",feature="exp-compact-board"))]
@@ -1164,6 +1294,12 @@ impl Board {
                 let mut candidates=((p[2]|p[4])&bishop_ray|(p[3]|p[4])&rook_ray)&allowed;
                 #[cfg(not(all(feature="exp-ray-combined",not(feature="exp-slider-planes"))))]
                 let mut candidates=bishops|rooks;
+                #[cfg(feature="exp-checker-hybrid")]
+                if candidates.count_ones()>2{
+                    if bishops!=0{result|=attacks::bishop_attacks(sq,occ)&bishops;}
+                    if rooks!=0{result|=attacks::rook_attacks(sq,occ)&rooks;}
+                    candidates=0;
+                }
                 #[cfg(feature="exp-checker-sentinel")]
                 {
                     static BETWEEN65:[[u64;65];64]={
@@ -1299,7 +1435,7 @@ impl Board {
     /// legality after `make_move_unchecked` for the mover).
     #[inline(always)]
     pub fn king_attacked(&self, color: Color) -> bool {
-        self.attackers_to(self.king_sq[color.index()], color.other(), self.occupied()) != 0
+        self.attackers_to(self.king_index(color.index()), color.other(), self.occupied()) != 0
     }
 
     /// True when the side to move is in check — branch-free `checkers != 0`
@@ -1315,7 +1451,7 @@ impl Board {
     #[inline(always)]
     fn castle_rights_hash(&self, rights: u8) -> u64 {
         #[cfg(feature="exp-castle-compact")]
-        if !self.is_chess960 {
+        if !self.is_chess960() {
             // set_state must set is_chess960 before computing the hash.
             const KEYS:[u64;16]={
                 let mut t=[0;16];let mut i=1;
@@ -1336,7 +1472,7 @@ impl Board {
             // affected rights, even during FEN parsing before is_chess960 is set.
             const FILES:[u8;4]=[7,0,7,0];
             let mut bad=0u8;
-            for i in 0..4 {bad|=((self.castle_rook_sq[i]&7!=FILES[i]) as u8)<<i;}
+            for i in 0..4 {bad|=((self.rook_index(i)&7!=FILES[i]) as u8)<<i;}
             if rights&bad==0{return HASHES[rights as usize];}
         }
 
@@ -1349,13 +1485,13 @@ impl Board {
             // Rook squares for absent rights can be unspecified. Check only
             // active rights, including initial FEN state before is_chess960.
             let mut valid=0u8;
-            if self.castle_rook_sq[0]&7==7 {valid|=1;}
-            if self.castle_rook_sq[1]&7==0 {valid|=2;}
-            if self.castle_rook_sq[2]&7==7 {valid|=4;}
-            if self.castle_rook_sq[3]&7==0 {valid|=8;}
+            if self.rook_index(0)&7==7 {valid|=1;}
+            if self.rook_index(1)&7==0 {valid|=2;}
+            if self.rook_index(2)&7==7 {valid|=4;}
+            if self.rook_index(3)&7==0 {valid|=8;}
             if rights&!valid==0{return STANDARD[rights as usize];}
         }
-        zobrist::castle_file_keys_xor(rights, &self.castle_rook_sq)
+        zobrist::castle_file_keys_xor(rights, &self.rook_squares())
     }
 
     /// Recomputes the Polyglot zobrist hash from scratch (verification aid;
@@ -1418,13 +1554,13 @@ impl Board {
                 }
             }
         }
-        h ^= self.castle_rights_hash(self.castling);
+        h ^= self.castle_rights_hash(self.rights_raw());
         h ^= zobrist::ep_contribution(
             self.ep,
-            self.bb(self.turn.index(), Role::Pawn.index()),
-            PAWN_ATT[self.turn.other().index()][self.ep as usize & 63],
+            self.bb(self.turn().index(), Role::Pawn.index()),
+            PAWN_ATT[self.turn().other().index()][self.ep as usize & 63],
         );
-        if self.turn == Color::White {
+        if self.turn() == Color::White {
             h ^= zobrist::turn_key();
         }
         h
@@ -1449,10 +1585,10 @@ impl Board {
         #[inline(always)]
         fn coordinate(s:u8)->u16{(((s&7)<<3)|(s>>3)) as u16}
         let mut keys:ArrayVec<u16,MAX_MOVES>=ArrayVec::new();
-        let k=self.king_sq[self.turn.index()];
+        let k=self.king_index(self.turn().index());
         for mv in self.legal_moves(){
             let f=mv.from().0;let mut t=mv.to().0;
-            if !self.is_chess960 && f==k && self.occ[self.turn.index()]&bit(t)!=0{
+            if !self.is_chess960() && f==k && self.occ[self.turn().index()]&bit(t)!=0{
                 t=(f&56)|if t>f{6}else{2};
             }
             let p=match mv.promotion(){Some(Role::Bishop)=>1,Some(Role::Knight)=>2,Some(Role::Queen)=>3,Some(Role::Rook)=>4,_=>0};
@@ -1495,10 +1631,10 @@ impl Board {
     /// const-folded so every `if white` pawn branch/shift specialises at
     /// compile time (Gigantua's colour template expansion, clean-room).
     pub fn generate_moves_into<S: MoveSink>(&self, sink: &mut S) {
-        if cfg!(feature = "exp-standard-no-special") && !self.is_chess960 && self.castling==0 && self.ep==NO_EP {
-            if self.turn==Color::White {self.generate_moves_templated::<true,false,S>(sink);}
+        if cfg!(feature = "exp-standard-no-special") && !self.is_chess960() && self.rights_raw()==0 && self.ep==NO_EP {
+            if self.turn()==Color::White {self.generate_moves_templated::<true,false,S>(sink);}
             else {self.generate_moves_templated::<false,false,S>(sink);}
-        } else if self.turn == Color::White {
+        } else if self.turn() == Color::White {
             self.generate_moves_templated::<true,true,S>(sink);
         } else {
             self.generate_moves_templated::<false,true,S>(sink);
@@ -1507,10 +1643,10 @@ impl Board {
 
     #[inline(always)]
     fn generate_moves_cached<S: MoveSink>(&self, sink: &mut S) {
-        if cfg!(feature = "exp-standard-no-special") && !self.is_chess960 && self.castling==0 && self.ep==NO_EP {
-            if self.turn==Color::White {self.generate_moves_templated::<true,false,S>(sink);}
+        if cfg!(feature = "exp-standard-no-special") && !self.is_chess960() && self.rights_raw()==0 && self.ep==NO_EP {
+            if self.turn()==Color::White {self.generate_moves_templated::<true,false,S>(sink);}
             else {self.generate_moves_templated::<false,false,S>(sink);}
-        } else if self.turn == Color::White {
+        } else if self.turn() == Color::White {
             self.generate_moves_templated::<true,true,S>(sink);
         } else {
             self.generate_moves_templated::<false,true,S>(sink);
@@ -1526,11 +1662,11 @@ impl Board {
         #[cfg(feature="exp-color-gen")]
         let us=if WHITE{Color::White}else{Color::Black};
         #[cfg(not(feature="exp-color-gen"))]
-        let us=self.turn;
+        let us=self.turn();
         let them=us.other();
         let ui = us.index();
         let ti = them.index();
-        let ksq = self.king_sq[ui];
+        let ksq = self.king_index(ui);
         let occ = self.occupied();
         let their_bq = self.diagonal_sliders(ti);
         let their_rq = self.orthogonal_sliders(ti);
@@ -1541,8 +1677,8 @@ impl Board {
         let possible_king = KING_ATT[ksq as usize] & !self.occ[ui];
         let mut needed = possible_king;
         let mut local = false;
-        if cfg!(feature = "exp-king-local") && !self.is_chess960 {
-            let rights=(self.castling >> ((1-ui)*2))&3;
+        if cfg!(feature = "exp-king-local") && !self.is_chess960() {
+            let rights=(self.rights_raw() >> ((1-ui)*2))&3;
             let shift=if WHITE{0}else{56};
             if rights==0 || ksq==shift+4 {
                 local=true;
@@ -1554,19 +1690,19 @@ impl Board {
         }
         let targeted = (local && needed.count_ones()<=3)
             || (cfg!(feature = "exp-king-targets")
-            && self.castling & (3 << ((1-ui)*2)) == 0
+            && self.rights_raw() & (3 << ((1-ui)*2)) == 0
             && possible_king.count_ones() <= 3);
         // If no king destination is available and no standard-geometry
         // castle can use the danger map, there is no consumer of that map.
         // Nonstandard castles use their own exact path/occupancy probes.
         #[cfg(feature="exp-no-danger-needed")]
-        let skip_danger=if possible_king!=0{false}else if !SPECIAL||self.castling==0||ksq&7!=4{true}else{
+        let skip_danger=if possible_king!=0{false}else if !SPECIAL||self.rights_raw()==0||ksq&7!=4{true}else{
             let mut need=false;
             let rank_shift=ksq&56;
             for kingside in [true,false]{
                 let rb=crate::types::castle_right_bit(us,kingside) as usize;
-                if self.castling&(1<<rb)==0{continue;}
-                if self.castle_rook_sq[rb]&7!=if kingside{7}else{0}{continue;}
+                if self.rights_raw()&(1<<rb)==0{continue;}
+                if self.rook_index(rb)&7!=if kingside{7}else{0}{continue;}
                 let between=if kingside{0x60u64}else{0x0e};
                 if occ&(between<<rank_shift)==0{need=true;}
             }
@@ -1607,7 +1743,7 @@ impl Board {
             let sq = pop_lsb(&mut p);
             danger |= KNIGHT_ATT[sq as usize];
         }
-        danger |= KING_ATT[self.king_sq[ti] as usize];
+        danger |= KING_ATT[self.king_index(ti) as usize];
         #[cfg(feature="exp-zone-sliders")]
         let (bzone,rzone)={
             const ZONES:[[u64;2];64]={
@@ -1768,7 +1904,7 @@ impl Board {
         pinned_diag: u64,
         ksq: u8,
     ) {
-        let us = self.turn;
+        let us = self.turn();
         let ui = us.index();
         let occ = self.occupied();
         let them_occ = self.occ[us.other().index()];
@@ -1922,7 +2058,7 @@ impl Board {
                 let occ_after = (occ ^ bit(from) ^ bit(cap_sq)) | bit(ep);
                 let ti = us.other().index();
                 let their_pawns = self.bb(ti, Role::Pawn.index()) & !bit(cap_sq);
-                let ksq_after = self.king_sq[ui];
+                let ksq_after = self.king_index(ui);
                 // Use the occupancy after EP for sliding attacks.
                 let mut attackers = attacks::bishop_attacks(ksq_after, occ_after)
                     & (self.diagonal_sliders(ti));
@@ -1940,13 +2076,13 @@ impl Board {
 
     /// Castling generation via `MoveSink` (never while in check; caller gates).
     fn gen_castling_sink<S: MoveSink>(&self, sink: &mut S, danger: u64) {
-        let us = self.turn;
+        let us = self.turn();
         let ui = us.index();
-        let ksq = self.king_sq[ui];
+        let ksq = self.king_index(ui);
         #[cfg(feature = "exp-standard-movegen")]
-        if !self.is_chess960 && ksq==if us==Color::White {4}else{60} {
+        if !self.is_chess960() && ksq==if us==Color::White {4}else{60} {
             let shift=if us==Color::White {0}else{56};
-            let rights=(self.castling>>if us==Color::White {0}else{2})&3;
+            let rights=(self.rights_raw()>>if us==Color::White {0}else{2})&3;
             let occ=self.occupied()>>shift;let safe=danger>>shift;
             if rights&1!=0 && occ&0x60==0 && safe&0x60==0 {sink.push_one(Move::quiet(Square(ksq),Square(shift+7)));}
             if rights&2!=0 && occ&0x0e==0 && safe&0x0c==0 {sink.push_one(Move::quiet(Square(ksq),Square(shift)));}
@@ -1956,10 +2092,10 @@ impl Board {
             crate::types::castle_right_bit(us, true) as usize,
             crate::types::castle_right_bit(us, false) as usize,
         ] {
-            if self.castling & (1 << rb) == 0 {
+            if self.rights_raw() & (1 << rb) == 0 {
                 continue;
             }
-            let rook = self.castle_rook_sq[rb];
+            let rook = self.rook_index(rb);
             let kingside = rb % 2 == 0;
             if ksq & 7 == 4 && (rook & 7) == if kingside { 7 } else { 0 } {
                 let rank = ksq >> 3;
@@ -1991,7 +2127,7 @@ impl Board {
         pinned: u64,
         pin_line: &[u64; 64],
     ) {
-        let us = self.turn;
+        let us = self.turn();
         let them = us.other();
         let ui = us.index();
         let white = us == Color::White;
@@ -2056,7 +2192,7 @@ impl Board {
                 let occ_after = (occ ^ bit(from) ^ bit(cap_sq)) | bit(ep);
                 let ti = them.index();
                 let their_pawns = self.bb(ti, Role::Pawn.index()) & !bit(cap_sq);
-                let ksq = self.king_sq[ui];
+                let ksq = self.king_index(ui);
                 let mut attackers =
                     attacks::bishop_attacks(ksq, occ_after)
                         & (self.diagonal_sliders(ti));
@@ -2081,13 +2217,13 @@ impl Board {
     /// Chess960 rank-pin configurations).
     /// Returns the (king_final, rook_final) squares.
     fn castle_path(&self, right_bit: usize) -> Option<(u8, u8)> {
-        let ksq = self.king_sq[self.turn.index()];
-        let rook = self.castle_rook_sq[right_bit];
+        let ksq = self.king_index(self.turn().index());
+        let rook = self.rook_index(right_bit);
         let kingside = (right_bit & 1) == 0; // bits 0, 2 = kingside; 1, 3 = queenside
         let rank = ksq >> 3;
         let kf = (rank << 3) | if kingside { 6 } else { 2 };
         let rf = (rank << 3) | if kingside { 5 } else { 3 };
-        let them = self.turn.other();
+        let them = self.turn().other();
 
         // Emptiness: strictly between king and rook, king's transit squares,
         // and both final squares — minus the king's and rook's own squares
@@ -2113,14 +2249,14 @@ impl Board {
 
     /// Full legality of a castling move encoded **king-from → rook-square**.
     fn is_castling_move(&self, from: u8, to: u8) -> bool {
-        let us = self.turn;
+        let us = self.turn();
         let ui = us.index();
-        if from != self.king_sq[ui] {
+        if from != self.king_index(ui) {
             return false;
         }
         let kingside = (to & 7) > (from & 7);
         let rb = crate::types::castle_right_bit(us, kingside) as usize;
-        if self.castling & (1 << rb) == 0 || self.castle_rook_sq[rb] != to {
+        if self.rights_raw() & (1 << rb) == 0 || self.rook_index(rb) != to {
             return false;
         }
         self.castle_path(rb).is_some()
@@ -2132,17 +2268,17 @@ impl Board {
     /// destination square holds the mover's own rook.
     #[allow(dead_code)]
     fn gen_castling(&self, moves: &mut ArrayVec<Move, MAX_MOVES>, danger: u64) {
-        let us = self.turn;
+        let us = self.turn();
         let ui = us.index();
-        let ksq = self.king_sq[ui];
+        let ksq = self.king_index(ui);
         for rb in [
             crate::types::castle_right_bit(us, true) as usize,
             crate::types::castle_right_bit(us, false) as usize,
         ] {
-            if self.castling & (1 << rb) == 0 {
+            if self.rights_raw() & (1 << rb) == 0 {
                 continue;
             }
-            let rook = self.castle_rook_sq[rb];
+            let rook = self.rook_index(rb);
             let kingside = rb % 2 == 0;
             // Standard-geometry fast path (king on the e-file, rook on the
             // a/h-file): provably identical to the path-based check — the
@@ -2183,7 +2319,7 @@ impl Board {
     /// `legal_moves() == pseudo_legal_moves().filter(|m| { let mut b = *self;
     /// let mover = b.turn(); b.make_move_unchecked(m); !b.king_attacked(mover) })`.
     pub fn pseudo_legal_moves(&self) -> ArrayVec<Move, MAX_MOVES> {
-        let us = self.turn;
+        let us = self.turn();
         let ui = us.index();
         let occ = self.occupied();
         let mut moves = ArrayVec::new();
@@ -2222,7 +2358,7 @@ impl Board {
         }
 
         // King steps (castling handled below with full path legality).
-        let ksq = self.king_sq[ui];
+        let ksq = self.king_index(ui);
         let mut p = KING_ATT[ksq as usize] & !self.occ[ui];
         while p != 0 {
             let to = pop_lsb(&mut p);
@@ -2237,10 +2373,10 @@ impl Board {
         let wk = crate::types::castle_right_bit(us, true) as usize;
         let wq = crate::types::castle_right_bit(us, false) as usize;
         for rb in [wk, wq] {
-            if self.castling & (1 << rb) != 0 && self.castle_path(rb).is_some() {
+            if self.rights_raw() & (1 << rb) != 0 && self.castle_path(rb).is_some() {
                 moves.push(Move::new(
-                    Square(self.king_sq[ui]),
-                    Square(self.castle_rook_sq[rb]),
+                    Square(self.king_index(ui)),
+                    Square(self.rook_index(rb)),
                     None,
                 ));
             }
@@ -2267,14 +2403,14 @@ impl Board {
         #[cfg(feature="exp-split-quiet")]
         {
             let from=mv.from().0;let to=mv.to().0;
-            let us=self.turn;let them=us.other();let ui=us.index();let ti=them.index();
+            let us=self.turn();let them=us.other();let ui=us.index();let ti=them.index();
             let target=bit(to);
             if mv.promotion().is_none()&&self.occupied()&target==0 {
                 let moved=self.piece_code_at_color(from,us);
                 let role=(moved%6) as usize;
                 let pawn=role==Role::Pawn.index();
                 if moved!=EMPTY&&!(pawn&&from&7!=to&7){
-                    let undo=Undo{hash:self.hash,checkers:self.checkers,castling:self.castling,ep:self.ep,halfmove:self.halfmove,captured:EMPTY,
+                    let undo=Undo{hash:self.hash,checkers:self.checkers,castling:self.rights_raw(),ep:self.ep,halfmove:self.halfmove,captured:EMPTY,
                         #[cfg(feature="exp-undo-role")] moved,
                         castled:false};
                     let mut hash=self.hash;
@@ -2286,20 +2422,20 @@ impl Board {
                     {self.bb_remove(ui,role,bit(from));self.bb_add(ui,role,target);}
                     self.occ[ui]^=delta;
                     hash^=zobrist::piece_key_indices(ui,role,from)^zobrist::piece_key_indices(ui,role,to);
-                    if role==Role::King.index(){self.king_sq[ui]=to;}
-                    if self.castling!=0{
-                        let next=self.castling&self.castle_rights_after(role as u8,us,from,to);
-                        if HASH&&next!=self.castling{hash^=self.castle_rights_hash(self.castling^next);}
-                        self.castling=next;
+                    if role==Role::King.index(){self.set_king_index(ui,to);}
+                    if self.rights_raw()!=0{
+                        let next=self.rights_raw()&self.castle_rights_after(role as u8,us,from,to);
+                        if HASH&&next!=self.rights_raw(){hash^=self.castle_rights_hash(self.rights_raw()^next);}
+                        self.set_castling(next);
                     }
                     self.ep=if pawn&&to.abs_diff(from)==16{(from+to)/2}else{NO_EP};
                     if HASH&&self.ep_relevant(self.ep,them){hash^=zobrist::ep_key(Square(self.ep));}
                     self.halfmove=if pawn{0}else{self.halfmove+1};
                     self.fullmove+=(us==Color::Black) as u16;
-                    self.turn=them;
+                    self.set_turn(them);
                     if HASH{hash^=zobrist::turn_key();}
                     self.hash=hash;
-                    if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                    if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
                     return undo;
                 }
             }
@@ -2311,7 +2447,7 @@ impl Board {
     fn make_move_hinted<const HASH:bool,const CHECKERS:bool,const HINT:bool>(&mut self,mv:Move,code:u8)->Undo{
         #[cfg(feature="exp-color-make")]
         {
-            if self.turn==Color::White{return self.make_move_impl::<HASH,CHECKERS,HINT,1,false>(mv,code,EMPTY);}
+            if self.turn()==Color::White{return self.make_move_impl::<HASH,CHECKERS,HINT,1,false>(mv,code,EMPTY);}
             return self.make_move_impl::<HASH,CHECKERS,HINT,0,false>(mv,code,EMPTY);
         }
         #[cfg(not(feature="exp-color-make"))]
@@ -2324,7 +2460,7 @@ impl Board {
     )->Undo{
         #[cfg(feature="exp-undo-outside")]
         {
-            let mut full=Undo{hash:self.hash,checkers:self.checkers,castling:self.castling,ep:self.ep,halfmove:self.halfmove,
+            let mut full=Undo{hash:self.hash,checkers:self.checkers,castling:self.rights_raw(),ep:self.ep,halfmove:self.halfmove,
                 captured:EMPTY,castled:false,#[cfg(feature="exp-undo-role")] moved:EMPTY};
             let small=self.make_move_transition::<HASH,CHECKERS,HINT,SIDE,PREPARED>(mv,hint,capture_hint);
             full.captured=small.captured;full.castled=small.castled;
@@ -2342,14 +2478,14 @@ impl Board {
     )->TransitionUndo{
         #[cfg(all(feature="exp-special-cold",feature="exp-undo-outside",feature="exp-known-role",feature="exp-mutation"))]
         {
-            let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn};
+            let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn()};
             let ui=us.index();let ti=us.other().index();
             let from=mv.from().0;let to=mv.to().0;let f=bit(from);let t=bit(to);
             let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
             let enemy=self.occ[ti]&t;
             if !PREPARED&&mv.promotion().is_none()&&self.occ[ui]&t==0&&!(role==0&&from&7!=to&7&&enemy==0){
                 #[cfg(feature="exp-no-rights-kernel")]
-                if self.castling==0&&self.ep==NO_EP{
+                if self.rights_raw()==0&&self.ep==NO_EP{
                     let mut hash=self.hash^zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
                     let mut captured=EMPTY;
                     if enemy!=0{
@@ -2359,15 +2495,20 @@ impl Board {
                         hash^=zobrist::piece_key_indices(ti,cap,to);
                     }
                     self.bb_toggle(ui,role as usize,f^t);self.occ[ui]^=f^t;
-                    if role==5{self.king_sq[ui]=to;}
+                    if role==5{self.set_king_index(ui,to);}
                     if role==0&&from.abs_diff(to)==16{
                         let ep=(from+to)/2;self.ep=ep;
                         if HASH&&self.ep_relevant(ep,us.other()){hash^=zobrist::ep_key(Square(ep));}
                     }
                     self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
                     self.fullmove+=(us==Color::Black) as u16;
-                    self.hash=hash;self.turn=us.other();
-                    if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                    self.hash=hash;self.set_turn(us.other());
+                    if CHECKERS{
+                    #[cfg(feature="exp-checker-color")]
+                    {self.checkers=self.refresh_color::<SIDE>(self.king_index(ti),us);}
+                    #[cfg(not(feature="exp-checker-color"))]
+                    {self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
+                }
                     return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};
                 }
                 let mut hash=self.hash;
@@ -2381,10 +2522,10 @@ impl Board {
                 }
                 self.bb_toggle(ui,role as usize,f^t);self.occ[ui]^=f^t;
                 hash^=zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
-                if role==5{self.king_sq[ui]=to;}
-                if self.castling!=0{
-                    let old=self.castling;self.castling=old&self.castle_rights_after(role,us,from,to);
-                    if HASH&&old!=self.castling{hash^=self.castle_rights_hash(old^self.castling);}
+                if role==5{self.set_king_index(ui,to);}
+                if self.rights_raw()!=0{
+                    let old=self.rights_raw();self.set_castling(old&self.castle_rights_after(role,us,from,to));
+                    if HASH&&old!=self.rights_raw(){hash^=self.castle_rights_hash(old^self.rights_raw());}
                 }
                 #[cfg(feature="exp-quiet-ep-gate")]
                 {
@@ -2402,8 +2543,13 @@ impl Board {
                 }
                 self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
                 self.fullmove+=(us==Color::Black) as u16;
-                self.hash=hash;self.turn=us.other();
-                if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                self.hash=hash;self.set_turn(us.other());
+                if CHECKERS{
+                    #[cfg(feature="exp-checker-color")]
+                    {self.checkers=self.refresh_color::<SIDE>(self.king_index(ti),us);}
+                    #[cfg(not(feature="exp-checker-color"))]
+                    {self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
+                }
                 return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};
             }
         }
@@ -2426,7 +2572,7 @@ impl Board {
         let mut undo = Undo {
             hash: self.hash,
             checkers: self.checkers,
-            castling: self.castling,
+            castling: self.rights_raw(),
             ep: self.ep,
             halfmove: self.halfmove,
             captured: EMPTY,
@@ -2436,7 +2582,7 @@ impl Board {
         };
         let from = mv.from().0;
         let to = mv.to().0;
-        let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn};
+        let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn()};
         let them = us.other();
         #[cfg(feature="exp-pawn-kernel")]
         if !PREPARED && mv.promotion().is_none() && from&7==to&7 {
@@ -2455,17 +2601,17 @@ impl Board {
                 hash^=zobrist::piece_move_delta::<HASH>(ui,0,from,to);
                 // Standard rights only change on the back ranks. Preserve
                 // nonstandard rights behavior, including permissive inputs.
-                if self.castling!=0 && (self.is_chess960||((f|t)&0xff000000000000ff)!=0){
-                    let old=self.castling;
-                    self.castling&=self.castle_rights_after(0,us,from,to);
-                    if HASH&&old!=self.castling{hash^=self.castle_rights_hash(old^self.castling);}
+                if self.rights_raw()!=0 && (self.is_chess960()||((f|t)&0xff000000000000ff)!=0){
+                    let old=self.rights_raw();
+                    self.set_castling(self.rights_raw()&(self.castle_rights_after(0,us,from,to)));
+                    if HASH&&old!=self.rights_raw(){hash^=self.castle_rights_hash(old^self.rights_raw());}
                 }
                 self.ep=if from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
                 if HASH&&self.ep_relevant(self.ep,them){hash^=zobrist::ep_key(Square(self.ep));}
                 self.halfmove=0;
                 self.fullmove+=(us==Color::Black) as u16;
-                self.turn=them;self.hash=hash;
-                if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                self.set_turn(them);self.hash=hash;
+                if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
                 return undo;
             }
         }
@@ -2508,12 +2654,12 @@ impl Board {
                 {self.bb_remove(ui,r,bit(from));self.bb_add(ui,r,target);}
                 self.occ[ui]^=delta;
                 hash^=zobrist::piece_move_delta::<HASH>(ui,r,from,to);
-                if r==Role::King.index(){self.king_sq[ui]=to;}
-                let old=self.castling;
+                if r==Role::King.index(){self.set_king_index(ui,to);}
+                let old=self.rights_raw();
                 if old!=0{
                     let next=old&self.castle_rights_after(role,us,from,to);
                     if HASH&&old!=next{hash^=self.castle_rights_hash(old^next);}
-                    self.castling=next;
+                    self.set_castling(next);
                 }
                 self.ep=NO_EP;
                 if is_pawn {
@@ -2524,9 +2670,9 @@ impl Board {
                     }
                 }else{self.halfmove=if enemy!=0{0}else{self.halfmove+1};}
                 self.fullmove+=(us==Color::Black) as u16;
-                self.turn=them;
+                self.set_turn(them);
                 self.hash=hash;
-                if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
                 return undo;
             }
         }
@@ -2558,19 +2704,19 @@ impl Board {
             {self.bb_remove(ui,role as usize,bit(from));self.bb_add(ui,role as usize,target);}
             self.occ[ui]^=delta;
             self.hash^=zobrist::piece_move_delta::<false>(ui,role as usize,from,to);
-            if role==Role::King as u8 {self.king_sq[ui]=to;}
-            if self.castling!=0 {
-                let next=self.castling&self.castle_rights_after(role,us,from,to);
-                if HASH && next!=self.castling {self.hash^=self.castle_rights_hash(self.castling^next);}
-                self.castling=next;
+            if role==Role::King as u8 {self.set_king_index(ui,to);}
+            if self.rights_raw()!=0 {
+                let next=self.rights_raw()&self.castle_rights_after(role,us,from,to);
+                if HASH && next!=self.rights_raw() {self.hash^=self.castle_rights_hash(self.rights_raw()^next);}
+                self.set_castling(next);
             }
             self.ep=if is_pawn&&to.abs_diff(from)==16 {(from+to)/2}else{NO_EP};
             if HASH&&self.ep_relevant(self.ep,them){self.hash^=zobrist::ep_key(Square(self.ep));}
             self.halfmove=if is_pawn||undo.captured!=EMPTY {0}else{self.halfmove+1};
             self.fullmove+= (us==Color::Black) as u16;
-            self.turn=them;
+            self.set_turn(them);
             if HASH{self.hash^=zobrist::turn_key();}
-            if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+            if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
             return undo;
         }
 
@@ -2584,21 +2730,21 @@ impl Board {
             {self.bb_remove(ui,role as usize,bit(from));
             self.bb_add(ui,role as usize,bit(to));}
             self.occ[ui]^=bit(from)^bit(to);
-            if role==Role::King as u8 {self.king_sq[ui]=to;}
+            if role==Role::King as u8 {self.set_king_index(ui,to);}
             // Preserve the baseline's partial/stale piece hash update on CHECKERS-only makes.
             self.hash^=zobrist::piece_move_delta::<false>(ui,role as usize,from,to);
-            if self.castling!=0 {
-                let new_castling=self.castling&self.castle_rights_after(role,us,from,to);
-                if HASH && new_castling!=self.castling {self.hash^=self.castle_rights_hash(self.castling^new_castling);}
-                self.castling=new_castling;
+            if self.rights_raw()!=0 {
+                let new_castling=self.rights_raw()&self.castle_rights_after(role,us,from,to);
+                if HASH && new_castling!=self.rights_raw() {self.hash^=self.castle_rights_hash(self.rights_raw()^new_castling);}
+                self.set_castling(new_castling);
             }
             self.ep=if is_pawn&&to.abs_diff(from)==16 {(from+to)/2}else{NO_EP};
             if HASH&&self.ep_relevant(self.ep,them){self.hash^=zobrist::ep_key(Square(self.ep));}
             if is_pawn {self.halfmove=0;}else{self.halfmove+=1;}
             if us==Color::Black{self.fullmove+=1;}
-            self.turn=them;
+            self.set_turn(them);
             if HASH{self.hash^=zobrist::turn_key();}
-            if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+            if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
             return undo;
         }
 
@@ -2610,17 +2756,17 @@ impl Board {
             self.bb_remove(ti,cap,t);self.occ[ti]^=t;
             self.bb_toggle(ui,role as usize,f^t);self.occ[ui]^=f^t;
             self.hash^=zobrist::piece_key_indices(ti,cap,to)^zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
-            if role==5{self.king_sq[ui]=to;}
-            let old=self.castling;
+            if role==5{self.set_king_index(ui,to);}
+            let old=self.rights_raw();
             if old!=0{
-                self.castling=old&self.castle_rights_after(role,us,from,to);
-                if HASH&&old!=self.castling{self.hash^=self.castle_rights_hash(old^self.castling);}
+                self.set_castling(old&self.castle_rights_after(role,us,from,to));
+                if HASH&&old!=self.rights_raw(){self.hash^=self.castle_rights_hash(old^self.rights_raw());}
             }
             self.ep=if is_pawn&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
             if HASH&&self.ep_relevant(self.ep,them){self.hash^=zobrist::ep_key(Square(self.ep));}
             self.halfmove=0;self.fullmove+=(us==Color::Black) as u16;
-            self.turn=them;
-            if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+            self.set_turn(them);
+            if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
             return undo;
         }
 
@@ -2688,12 +2834,12 @@ impl Board {
 
         // Castling rights (touching king/rook squares or rook captured) —
         // derived from `castle_rook_sq` + mover role (close-gap D3, task 4.1).
-        let new_castling = self.castling & self.castle_rights_after(role, us, from, to);
-        if new_castling != self.castling {
+        let new_castling = self.rights_raw() & self.castle_rights_after(role, us, from, to);
+        if new_castling != self.rights_raw() {
             if HASH {
-                self.hash ^= self.castle_rights_hash(self.castling ^ new_castling);
+                self.hash ^= self.castle_rights_hash(self.rights_raw() ^ new_castling);
             }
-            self.castling = new_castling;
+            self.set_castling(new_castling);
         }
 
         // En-passant square after a double pawn push.
@@ -2716,15 +2862,15 @@ impl Board {
             self.fullmove += 1;
         }
 
-        self.turn = us.other();
+        self.set_turn(us.other());
         if HASH {
             self.hash ^= zobrist::turn_key();
         }
         // Refresh cached checkers for the new side to move (+2ns/make, D3).
         if CHECKERS {
             self.checkers = self.attackers_to(
-                self.king_sq[self.turn.index()],
-                self.turn.other(),
+                self.king_index(self.turn().index()),
+                self.turn().other(),
                 self.occupied(),
             );
         }
@@ -2737,10 +2883,10 @@ impl Board {
     pub fn prepare_move_unchecked(&self,mv:Move)->PreparedMove{
         if mv.is_null(){return PreparedMove{mv,meta:0};}
         let f=mv.from().0;let t=mv.to().0;
-        let moved=self.piece_code_at_color(f,self.turn);
-        let captured=self.piece_code_at_color(t,self.turn.other());
+        let moved=self.piece_code_at_color(f,self.turn());
+        let captured=self.piece_code_at_color(t,self.turn().other());
         let normal=moved!=EMPTY && mv.promotion().is_none() &&
-            self.occ[self.turn.index()]&bit(t)==0 &&
+            self.occ[self.turn().index()]&bit(t)==0 &&
             !(moved%6==Role::Pawn as u8&&f&7!=t&7&&captured==EMPTY);
         PreparedMove{mv,meta:(moved as u16&15)|((captured as u16&15)<<4)|((normal as u16)<<8)}
     }
@@ -2753,11 +2899,11 @@ impl Board {
         if m.meta&256==0{return self.make_move_unchecked(m.mv);}
         let moved=(m.meta&15) as u8;
         let cap=((m.meta>>4)&15) as u8;let cap=if cap==15{EMPTY}else{cap};
-        debug_assert_eq!(moved,self.piece_code_at_color(m.mv.from().0,self.turn));
-        debug_assert_eq!(cap,self.piece_code_at_color(m.mv.to().0,self.turn.other()));
+        debug_assert_eq!(moved,self.piece_code_at_color(m.mv.from().0,self.turn()));
+        debug_assert_eq!(cap,self.piece_code_at_color(m.mv.to().0,self.turn().other()));
         #[cfg(feature="exp-color-make")]
         {
-            if self.turn==Color::White{return self.make_move_impl::<true,true,true,1,true>(m.mv,moved,cap);}
+            if self.turn()==Color::White{return self.make_move_impl::<true,true,true,1,true>(m.mv,moved,cap);}
             return self.make_move_impl::<true,true,true,0,true>(m.mv,moved,cap);
         }
         #[cfg(not(feature="exp-color-make"))]
@@ -2770,7 +2916,7 @@ impl Board {
     #[inline(always)]
     pub fn child_after_unchecked(&self,mv:Move)->Board{
         if !mv.is_null()&&mv.promotion().is_none(){
-            let us=self.turn;let them=us.other();let ui=us.index();let ti=them.index();
+            let us=self.turn();let them=us.other();let ui=us.index();let ti=them.index();
             let from=mv.from().0;let to=mv.to().0;let f=bit(from);let t=bit(to);
             let moved=self.piece_code_at_color(from,us);
             let role=(moved%6) as usize;
@@ -2790,17 +2936,17 @@ impl Board {
                 {child.bb_remove(ui,role,f);child.bb_add(ui,role,t);}
                 child.occ[ui]^=f^t;
                 hash^=zobrist::piece_move_delta::<true>(ui,role,from,to);
-                if role==5{child.king_sq[ui]=to;}
-                if self.castling!=0{
-                    child.castling=self.castling&self.castle_rights_after(role as u8,us,from,to);
-                    if self.castling!=child.castling{hash^=self.castle_rights_hash(self.castling^child.castling);}
+                if role==5{child.set_king_index(ui,to);}
+                if self.rights_raw()!=0{
+                    child.set_castling(self.rights_raw()&self.castle_rights_after(role as u8,us,from,to));
+                    if self.rights_raw()!=child.rights_raw(){hash^=self.castle_rights_hash(self.rights_raw()^child.rights_raw());}
                 }
                 child.ep=if role==0&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
                 if child.ep_relevant(child.ep,them){hash^=zobrist::ep_key(Square(child.ep));}
                 child.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
                 child.fullmove+=(us==Color::Black) as u16;
-                child.turn=them;child.hash=hash;
-                child.checkers=child.attackers_to(child.king_sq[ti],us,child.occupied());
+                child.set_turn(them);child.hash=hash;
+                child.checkers=child.attackers_to(child.king_index(ti),us,child.occupied());
                 return child;
             }
         }
@@ -2899,8 +3045,8 @@ impl Board {
     #[inline(always)]
     fn pass_is_legal(&self) -> bool {
         self.attackers_to(
-            self.king_sq[self.turn.index()],
-            self.turn.other(),
+            self.king_index(self.turn().index()),
+            self.turn().other(),
             self.occupied(),
         ) == 0
     }
@@ -2916,7 +3062,7 @@ impl Board {
         let undo = Undo {
             hash: self.hash,
             checkers: self.checkers,
-            castling: self.castling,
+            castling: self.rights_raw(),
             ep: self.ep,
             halfmove: self.halfmove,
             captured: EMPTY,
@@ -2924,7 +3070,7 @@ impl Board {
             moved: EMPTY,
             castled: false,
         };
-        let us = self.turn;
+        let us = self.turn();
         // Hash out the old en-passant contribution (relevance uses the mover's pawns, which have
         // not changed yet) before clearing it.
         if HASH && self.ep_relevant(self.ep, us) {
@@ -2936,14 +3082,14 @@ impl Board {
         // advanced, whoever passed (this is what keeps FEN's "White to move" and number increments
         // consistent).
         self.fullmove += 1;
-        self.turn = us.other();
+        self.set_turn(us.other());
         if HASH {
             self.hash ^= zobrist::turn_key();
         }
         if CHECKERS {
             self.checkers = self.attackers_to(
-                self.king_sq[self.turn.index()],
-                self.turn.other(),
+                self.king_index(self.turn().index()),
+                self.turn().other(),
                 self.occupied(),
             );
         }
@@ -2991,11 +3137,11 @@ impl Board {
     /// hash but not the pieces.
     #[inline(always)]
     pub fn unmake_null_move(&mut self, undo: Undo) {
-        self.turn = self.turn.other();
+        self.set_turn(self.turn().other());
         self.fullmove -= 1;
         self.hash = undo.hash;
         self.checkers = undo.checkers;
-        self.castling = undo.castling;
+        self.set_castling(undo.castling);
         self.ep = undo.ep;
         self.halfmove = undo.halfmove;
     }
@@ -3010,9 +3156,9 @@ impl Board {
     #[inline(always)]
     pub fn make_move_perft(&mut self, mv: Move) -> Undo {
         #[cfg(feature="exp-known-role")]
-        let moved=self.role_at_occupied(mv.from().0,self.turn)+self.turn as u8*6;
+        let moved=self.role_at_occupied(mv.from().0,self.turn())+self.turn() as u8*6;
         #[cfg(not(feature="exp-known-role"))]
-        let moved=self.piece_code_at_color(mv.from().0,self.turn);
+        let moved=self.piece_code_at_color(mv.from().0,self.turn());
         self.make_move_perft_known::<true>(mv,moved)
     }
 
@@ -3021,7 +3167,7 @@ impl Board {
         let mut undo = Undo {
             hash: 0,
             checkers: self.checkers,
-            castling: self.castling,
+            castling: self.rights_raw(),
             ep: self.ep,
             halfmove: 0,
             captured: EMPTY,
@@ -3031,7 +3177,7 @@ impl Board {
         };
         let from = mv.from().0;
         let to = mv.to().0;
-        let us = self.turn;
+        let us = self.turn();
         let them = us.other();
         #[cfg(feature = "exp-undo-role")]
         { undo.moved = mv.promotion().map_or(moved, |r| Piece::new(us,r).code()); }
@@ -3052,9 +3198,9 @@ impl Board {
                     }
                     self.bb_remove(ui,0,f);self.bb_add(ui,promotion.index(),t);
                     self.occ[ui]^=f^t;
-                    if self.castling!=0{self.castling&=self.castle_rights_after(role,us,from,to);}
-                    self.ep=NO_EP;self.turn=them;
-                    if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                    if self.rights_raw()!=0{self.set_castling(self.rights_raw()&(self.castle_rights_after(role,us,from,to)));}
+                    self.ep=NO_EP;self.set_turn(them);
+                    if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
                     return undo;
                 }
             }
@@ -3076,11 +3222,11 @@ impl Board {
             #[cfg(not(all(feature="exp-perft-xor",feature="exp-mutation",not(feature="exp-no-perft-xor"))))]
             {self.bb_remove(ui,role as usize,bit(from));self.bb_add(ui,role as usize,bit(to));}
             self.occ[ui]^=delta;
-            if role==Role::King as u8 {self.king_sq[ui]=to;}
-            if self.castling!=0 {self.castling&=self.castle_rights_after(role,us,from,to);}
+            if role==Role::King as u8 {self.set_king_index(ui,to);}
+            if self.rights_raw()!=0 {self.set_castling(self.rights_raw()&(self.castle_rights_after(role,us,from,to)));}
             self.ep=if is_pawn && to.abs_diff(from)==16 {(from+to)/2}else{NO_EP};
-            self.turn=them;
-            if CHECKERS {self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+            self.set_turn(them);
+            if CHECKERS {self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
             return undo;
         }
 
@@ -3144,7 +3290,7 @@ impl Board {
                 self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
-                    self.king_sq[color] = to;
+                    self.set_king_index(color,to);
                 }
             }
             None => {
@@ -3173,7 +3319,7 @@ impl Board {
                         self.bb_add(color, role_idx, b);
                         self.occ[color] |= b;
                         if role_idx == Role::King.index() {
-                            self.king_sq[color] = sq;
+                            self.set_king_index(color,sq);
                         }
                     }
                 } else {
@@ -3196,14 +3342,14 @@ impl Board {
                         self.occ[color] |= b_to;
                     }
                     if role_idx == Role::King.index() {
-                        self.king_sq[color] = to;
+                        self.set_king_index(color,to);
                     }
                 }
             }
         }
 
         // Castling rights (without hash) — derived mask (close-gap D3, 4.1).
-        self.castling &= self.castle_rights_after(role, us, from, to);
+        self.set_castling(self.rights_raw()&(self.castle_rights_after(role, us, from, to)));
 
         // En-passant square after a double pawn push (without hash relevance calc).
         self.ep = if is_pawn && to.abs_diff(from) == 16 {
@@ -3214,11 +3360,11 @@ impl Board {
 
         // Turn flip (without hash) — but keep `checkers` cached so movegen can use
         // `self.checkers` instead of recomputing `attackers_to` per node (saves ~20ns).
-        self.turn = us.other();
+        self.set_turn(us.other());
         if CHECKERS {
         self.checkers = self.attackers_to(
-            self.king_sq[self.turn.index()],
-            self.turn.other(),
+            self.king_index(self.turn().index()),
+            self.turn().other(),
             self.occupied(),
         );
         }
@@ -3232,8 +3378,8 @@ impl Board {
             !mv.is_null(),
             "unmake_move_perft(Move::NULL): a pass pairs with unmake_null_move"
         );
-        let us = self.turn.other(); // mover
-        self.turn = us;
+        let us = self.turn().other(); // mover
+        self.set_turn(us);
         self.checkers = undo.checkers;
         let from = mv.from().0;
         let to = mv.to().0;
@@ -3264,10 +3410,10 @@ impl Board {
                 self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
-                    self.king_sq[color] = sq;
+                    self.set_king_index(color,sq);
                 }
             }
-            self.castling = undo.castling;
+            self.set_castling(undo.castling);
             self.ep = undo.ep;
             return;
         }
@@ -3301,7 +3447,7 @@ impl Board {
                 self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
-                    self.king_sq[color] = from;
+                    self.set_king_index(color,from);
                 }
                 // Undo standard castling rook relocation (king-from→rook-square encoding
                 // already handled via castled flag; remaining O-O rook hop is standard geometry
@@ -3343,7 +3489,7 @@ impl Board {
             self.bb_add(color, role_idx, b);
             self.occ[color] |= b;
         }
-        self.castling = undo.castling;
+        self.set_castling(undo.castling);
         self.ep = undo.ep;
     }
 
@@ -3357,8 +3503,8 @@ impl Board {
             !mv.is_null(),
             "unmake_move(Move::NULL): a pass pairs with unmake_null_move"
         );
-        let us = self.turn.other(); // the mover
-        self.turn = us;
+        let us = self.turn().other(); // the mover
+        self.set_turn(us);
         if us == Color::Black {
             self.fullmove -= 1;
         }
@@ -3385,7 +3531,7 @@ impl Board {
             self.put_piece(to, rook_code);
             self.hash = undo.hash;
             self.checkers = undo.checkers;
-            self.castling = undo.castling;
+            self.set_castling(undo.castling);
             self.ep = undo.ep;
             self.halfmove = undo.halfmove;
             return;
@@ -3406,13 +3552,13 @@ impl Board {
             #[cfg(not(feature="exp-mutation"))]
             {self.bb_remove(ui,role,bit(to));self.bb_add(ui,role,bit(from));}
             self.occ[ui]^=delta;
-            if role==Role::King.index(){self.king_sq[ui]=from;}
+            if role==Role::King.index(){self.set_king_index(ui,from);}
             if undo.captured!=EMPTY{
                 let ep=role==Role::Pawn.index()&&from&7!=to&7&&undo.ep!=NO_EP&&to==undo.ep;
                 let sq=if ep{if us==Color::White{to-8}else{to+8}}else{to};
                 self.put_piece_no_hash(sq,undo.captured);
             }
-            self.hash=undo.hash;self.checkers=undo.checkers;self.castling=undo.castling;
+            self.hash=undo.hash;self.checkers=undo.checkers;self.set_castling(undo.castling);
             self.ep=undo.ep;self.halfmove=undo.halfmove;
             return;
         }
@@ -3453,7 +3599,7 @@ impl Board {
         }
         self.hash = undo.hash;
         self.checkers = undo.checkers;
-        self.castling = undo.castling;
+        self.set_castling(undo.castling);
         self.ep = undo.ep;
         self.halfmove = undo.halfmove;
     }
@@ -3470,12 +3616,12 @@ impl Board {
         }
         #[cfg(all(feature="exp-checked-known",feature="exp-direct-legal"))]
         {
-            let code=self.piece_code_at_color(mv.from().0,self.turn);
+            let code=self.piece_code_at_color(mv.from().0,self.turn());
             if !self.is_pseudo_legal_with_code(mv,code){return Err(IllegalMove);}
             #[cfg(feature="exp-checked-cached")]
             {
-                let f=mv.from().0;let t=mv.to().0;let us=self.turn;
-                let king=self.king_sq[us.index()] as usize;
+                let f=mv.from().0;let t=mv.to().0;let us=self.turn();
+                let king=self.king_index(us.index()) as usize;
                 let role=code%6;
                 // Cache may be stale after a documented hash-only make.
                 // Confirm existing king safety exactly before using the
@@ -3491,8 +3637,8 @@ impl Board {
                 return if safe{Ok(self.make_move_hinted::<true,true,true>(mv,code))}else{Err(IllegalMove)};
             }
             let undo=self.make_move_hinted::<true,true,true>(mv,code);
-            let mover=self.turn.other();
-            if self.attackers_to(self.king_sq[mover.index()],self.turn,self.occupied())!=0{
+            let mover=self.turn().other();
+            if self.attackers_to(self.king_index(mover.index()),self.turn(),self.occupied())!=0{
                 self.unmake_move(mv,undo);return Err(IllegalMove);
             }
             return Ok(undo);
@@ -3506,8 +3652,8 @@ impl Board {
             return if safe {Ok(self.make_move_unchecked(mv))}else{Err(IllegalMove)};
         }
         let undo = self.make_move_unchecked(mv);
-        let mover = self.turn.other();
-        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
+        let mover = self.turn().other();
+        if self.attackers_to(self.king_index(mover.index()), self.turn(), self.occupied()) != 0 {
             self.unmake_move(mv, undo);
             return Err(IllegalMove);
         }
@@ -3529,7 +3675,7 @@ impl Board {
         let mut undo = Undo {
             hash: 0,
             checkers: 0,
-            castling: self.castling,
+            castling: self.rights_raw(),
             ep: self.ep,
             halfmove: self.halfmove,
             captured: EMPTY,
@@ -3539,7 +3685,7 @@ impl Board {
         };
         let from = mv.from().0;
         let to = mv.to().0;
-        let us = self.turn;
+        let us = self.turn();
         let them = us.other();
         let moved = self.piece_code_at_color(from, us);
         #[cfg(feature = "exp-undo-role")]
@@ -3604,7 +3750,7 @@ impl Board {
                 self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
-                    self.king_sq[color] = to;
+                    self.set_king_index(color,to);
                 }
             }
             None => {
@@ -3631,7 +3777,7 @@ impl Board {
                         self.bb_add(color, role_idx, b);
                         self.occ[color] |= b;
                         if role_idx == Role::King.index() {
-                            self.king_sq[color] = sq;
+                            self.set_king_index(color,sq);
                         }
                     }
                 } else {
@@ -3653,13 +3799,13 @@ impl Board {
                         self.occ[color] |= b_to;
                     }
                     if role_idx == Role::King.index() {
-                        self.king_sq[color] = to;
+                        self.set_king_index(color,to);
                     }
                 }
             }
         }
 
-        self.castling &= self.castle_rights_after(role, us, from, to);
+        self.set_castling(self.rights_raw()&(self.castle_rights_after(role, us, from, to)));
 
         self.ep = if is_pawn && to.abs_diff(from) == 16 {
             (from + to) / 2
@@ -3676,7 +3822,7 @@ impl Board {
             self.fullmove += 1;
         }
 
-        self.turn = us.other();
+        self.set_turn(us.other());
         undo
     }
 
@@ -3688,8 +3834,8 @@ impl Board {
             !mv.is_null(),
             "unmake_move_fast(Move::NULL): a pass pairs with unmake_null_move"
         );
-        let us = self.turn.other(); // mover
-        self.turn = us;
+        let us = self.turn().other(); // mover
+        self.set_turn(us);
         if us == Color::Black {
             self.fullmove -= 1;
         }
@@ -3722,10 +3868,10 @@ impl Board {
                 self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
-                    self.king_sq[color] = sq;
+                    self.set_king_index(color,sq);
                 }
             }
-            self.castling = undo.castling;
+            self.set_castling(undo.castling);
             self.ep = undo.ep;
             self.halfmove = undo.halfmove;
             return;
@@ -3759,7 +3905,7 @@ impl Board {
                 self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
-                    self.king_sq[color] = from;
+                    self.set_king_index(color,from);
                 }
                 if moved % 6 == Role::King as u8 && (to & 7).abs_diff(from & 7) == 2 {
                     let (rfrom, rto) = match to {
@@ -3797,7 +3943,7 @@ impl Board {
             self.bb_add(color, role_idx, b);
             self.occ[color] |= b;
         }
-        self.castling = undo.castling;
+        self.set_castling(undo.castling);
         self.ep = undo.ep;
         self.halfmove = undo.halfmove;
     }
@@ -3819,8 +3965,8 @@ impl Board {
             return Err(IllegalMove);
         }
         let undo = self.make_move_fast(mv);
-        let mover = self.turn.other();
-        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
+        let mover = self.turn().other();
+        if self.attackers_to(self.king_index(mover.index()), self.turn(), self.occupied()) != 0 {
             self.unmake_move_fast(mv, undo);
             return Err(IllegalMove);
         }
@@ -3846,8 +3992,8 @@ impl Board {
             return Err(IllegalMove);
         }
         let undo = self.make_move_hashed(mv);
-        let mover = self.turn.other();
-        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
+        let mover = self.turn().other();
+        if self.attackers_to(self.king_index(mover.index()), self.turn(), self.occupied()) != 0 {
             self.unmake_move(mv, undo);
             return Err(IllegalMove);
         }
@@ -3872,8 +4018,8 @@ impl Board {
             return Err(IllegalMove);
         }
         let undo = self.make_move_checkered(mv);
-        let mover = self.turn.other();
-        if self.attackers_to(self.king_sq[mover.index()], self.turn, self.occupied()) != 0 {
+        let mover = self.turn().other();
+        if self.attackers_to(self.king_index(mover.index()), self.turn(), self.occupied()) != 0 {
             self.unmake_move(mv, undo);
             return Err(IllegalMove);
         }
@@ -3902,12 +4048,12 @@ impl Board {
         let mut tmp = *self;
         if cfg!(feature = "exp-san") {
             tmp.make_move_fast(mv);
-            let mover = tmp.turn.other();
-            return tmp.attackers_to(tmp.king_sq[mover.index()], tmp.turn, tmp.occupied()) == 0;
+            let mover = tmp.turn().other();
+            return tmp.attackers_to(tmp.king_index(mover.index()), tmp.turn(), tmp.occupied()) == 0;
         }
         let undo = tmp.make_move_unchecked(mv);
-        let mover = tmp.turn.other();
-        let safe = tmp.attackers_to(tmp.king_sq[mover.index()], tmp.turn, tmp.occupied()) == 0;
+        let mover = tmp.turn().other();
+        let safe = tmp.attackers_to(tmp.king_index(mover.index()), tmp.turn(), tmp.occupied()) == 0;
         tmp.unmake_move(mv, undo);
         safe
     }
@@ -3915,13 +4061,13 @@ impl Board {
     #[cfg(feature = "exp-direct-legal")]
     #[inline(always)]
     fn king_safe_hypothetical(&self,mv:Move)->Option<bool>{
-        self.king_safe_hypothetical_role(mv,self.piece_code_at_color(mv.from().0,self.turn)%6)
+        self.king_safe_hypothetical_role(mv,self.piece_code_at_color(mv.from().0,self.turn())%6)
     }
 
     #[cfg(feature="exp-direct-legal")]
     #[inline(always)]
     fn king_safe_hypothetical_role(&self,mv:Move,role:u8)->Option<bool>{
-        let us=self.turn;let them=us.other();
+        let us=self.turn();let them=us.other();
         let f=mv.from().0;let t=mv.to().0;
         if self.occ[us.index()]&bit(t)!=0 || (mv.promotion().is_some()&&role!=Role::Pawn as u8){return None;}
         let mut captured=bit(t)&self.occ[them.index()];
@@ -3931,7 +4077,7 @@ impl Board {
             captured=bit(cap)&self.piece_bb(them,Role::Pawn);
         }
         let occ=(self.occupied()&!(bit(f)|captured))|bit(t);
-        let k=if role==Role::King as u8 {t}else{self.king_sq[us.index()]};
+        let k=if role==Role::King as u8 {t}else{self.king_index(us.index())};
         // Mask the removed enemy piece at its old square, including en passant.
         #[cfg(feature="exp-bool-attacks")]
         return Some(!self.attacked_except(k,them,occ,captured));
@@ -3941,11 +4087,11 @@ impl Board {
 
     #[cfg(feature = "exp-early-san")]
     pub(crate) fn definitely_no_check(&self,mv:Move)->bool{
-        let us=self.turn;let them=us.other();let f=mv.from().0;let t=mv.to().0;
+        let us=self.turn();let them=us.other();let f=mv.from().0;let t=mv.to().0;
         let Some(piece)=self.piece_at(Square(f)) else{return false};
         if self.occ[us.index()]&bit(t)!=0 || mv.promotion().is_some()
             || (piece.role==Role::Pawn && f&7!=t&7 && self.occupied()&bit(t)==0) {return false;}
-        let k=self.king_sq[them.index()];
+        let k=self.king_index(them.index());
         let source=bit(f);let target=bit(t);
         let (b,r)=(crate::bitboard::EMPTY_BISHOP_RAYS[k as usize],crate::bitboard::EMPTY_ROOK_RAYS[k as usize]);
         if source&(b|r)!=0{return false;}
@@ -3979,7 +4125,7 @@ impl Board {
         if mv.is_null() {
             return true;
         }
-        self.is_pseudo_legal_with_code(mv,self.piece_code_at_color(mv.from().0,self.turn))
+        self.is_pseudo_legal_with_code(mv,self.piece_code_at_color(mv.from().0,self.turn()))
     }
 
     #[inline(always)]
@@ -3989,7 +4135,7 @@ impl Board {
         if from == to || from > 63 || to > 63 {
             return false;
         }
-        let us = self.turn;
+        let us = self.turn();
         let them = us.other();
         if code == EMPTY {
             return false;
@@ -4078,9 +4224,9 @@ impl Board {
     #[inline(always)]
     fn make_perft_internal(&mut self,mv:Move)->Undo {
         #[cfg(feature="exp-known-role")]
-        let code=self.role_at_occupied(mv.from().0,self.turn)+self.turn as u8*6;
+        let code=self.role_at_occupied(mv.from().0,self.turn())+self.turn() as u8*6;
         #[cfg(not(feature="exp-known-role"))]
-        let code=self.piece_code_at_color(mv.from().0,self.turn);
+        let code=self.piece_code_at_color(mv.from().0,self.turn());
         self.make_move_perft_known::<{!cfg!(feature="exp-fused-geometry")}>(mv,code)
     }
 
@@ -4232,16 +4378,16 @@ impl Board {
         halfmove: u16,
         fullmove: u16,
     ) {
-        self.turn = turn;
-        self.castling = castling;
-        self.castle_rook_sq = castle_rook_sq;
+        self.set_turn(turn);
+        self.set_castling(castling);
+        self.set_rook_squares(castle_rook_sq);
         self.ep = ep;
         self.halfmove = halfmove;
         self.fullmove = fullmove;
         // Refresh cached checkers for the new side to move (branch-free in_check).
         self.checkers = self.attackers_to(
-            self.king_sq[self.turn.index()],
-            self.turn.other(),
+            self.king_index(self.turn().index()),
+            self.turn().other(),
             self.occupied(),
         );
         let std_rooks: [u8; 4] = [7, 0, 63, 56];
@@ -4253,11 +4399,11 @@ impl Board {
                     break;
                 }
             }
-            if self.king_sq[Color::White.index()] != 4 || self.king_sq[Color::Black.index()] != 60 {
+            if self.king_index(Color::White.index()) != 4 || self.king_index(Color::Black.index()) != 60 {
                 is960 = true;
             }
         }
-        self.is_chess960 = is960;
+        self.set_960(is960);
         self.hash = self.zobrist_full();
     }
 }
@@ -4299,22 +4445,22 @@ impl MoveSink for TaggedPerftList<'_>{
     #[inline(always)]
     fn push_targets(&mut self,from:u8,mut targets:u64){
         if targets==0{return;}
-        let code=self.board.piece_code_at_color(from,self.board.turn);
+        let code=self.board.piece_code_at_color(from,self.board.turn());
         while targets!=0{let to=pop_lsb(&mut targets);self.moves.push((Move::quiet(Square(from),Square(to)),code));}
     }
     #[inline(always)]
     fn push_pawn_targets_offset(&mut self,mut targets:u64,offset:i8){
-        let code=self.board.turn as u8*6;
+        let code=self.board.turn() as u8*6;
         while targets!=0{let to=pop_lsb(&mut targets);self.moves.push((Move::quiet(Square((to as i16-offset as i16)as u8),Square(to)),code));}
     }
     #[inline(always)]
     fn push_pawn_promotions_offset(&mut self,mut targets:u64,offset:i8){
-        let code=self.board.turn as u8*6;
+        let code=self.board.turn() as u8*6;
         while targets!=0{let to=pop_lsb(&mut targets);let base=(to as i16-offset as i16)as u16|((to as u16)<<6);for r in 1..=4{self.moves.push((Move(base|(r<<12)),code));}}
     }
     #[inline(always)]
     fn push_one(&mut self,mv:Move){
-        let code=self.board.piece_code_at_color(mv.from().0,self.board.turn);
+        let code=self.board.piece_code_at_color(mv.from().0,self.board.turn());
         self.moves.push((mv,code));
     }
 }
@@ -4333,7 +4479,7 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
     #[inline(always)]
     fn push_targets(&mut self,from:u8,mut targets:u64){
         if targets==0{return;}
-        let moved=self.parent.piece_code_at_color(from,self.parent.turn);
+        let moved=self.parent.piece_code_at_color(from,self.parent.turn());
         #[cfg(feature="exp-leaf-reuse")]
         {
             let mut child=*self.parent;
@@ -4354,7 +4500,7 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
     }
     #[inline(always)]
     fn push_pawn_targets_offset(&mut self,mut targets:u64,offset:i8){
-        let moved=self.parent.turn as u8*6;
+        let moved=self.parent.turn() as u8*6;
         #[cfg(feature="exp-leaf-reuse")]
         {
             let mut child=*self.parent;
@@ -4377,7 +4523,7 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
     fn push_pawn_promotions_offset(&mut self,mut targets:u64,offset:i8){
         #[cfg(all(feature="exp-promotion-batch",not(feature="exp-no-promotion-batch")))]
         {
-            let us=self.parent.turn;let ui=us.index();let ti=us.other().index();
+            let us=self.parent.turn();let ui=us.index();let ti=us.other().index();
             while targets!=0{
                 let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;
                 let mut child=*self.parent;
@@ -4386,7 +4532,7 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
                 (self.visitor)(&child);self.nodes+=1;
                 #[cfg(feature="exp-promo-checkers")]
                 let (base,diagonal,orthogonal)={
-                    let king=child.king_sq[ti] as usize;let target=bit(to);let occ=child.occupied();
+                    let king=child.king_index(ti) as usize;let target=bit(to);let occ=child.occupied();
                     let d=crate::bitboard::EMPTY_BISHOP_RAYS[king]&target!=0;
                     let r=crate::bitboard::EMPTY_ROOK_RAYS[king]&target!=0;
                     let clear=(d||r)&&crate::bitboard::BETWEEN[king][to as usize]&occ==0;
@@ -4397,7 +4543,7 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
                     #[cfg(feature="exp-promo-checkers")]
                     {child.checkers=base|match role{2=>diagonal,3=>orthogonal,_=>diagonal|orthogonal};}
                     #[cfg(not(feature="exp-promo-checkers"))]
-                    {child.checkers=child.attackers_to(child.king_sq[ti],us,child.occupied());}
+                    {child.checkers=child.attackers_to(child.king_index(ti),us,child.occupied());}
                     (self.visitor)(&child);self.nodes+=1;
                 }
             }
