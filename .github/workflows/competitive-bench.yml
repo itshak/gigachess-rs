@@ -1,0 +1,73 @@
+name: Rust competitive benchmarks
+
+on:
+  push:
+    branches: [perf/rust-competitive-matrix-20261126]
+    paths:
+      - 'benchmarks/competitive/**'
+      - '.github/workflows/competitive-bench.yml'
+      - 'src/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  competitive:
+    name: ${{ matrix.os }} / ${{ matrix.mode }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, mode: portable}
+          - {os: ubuntu-24.04, mode: native}
+          - {os: ubuntu-24.04, mode: pext}
+          - {os: ubuntu-24.04-arm, mode: native}
+          - {os: windows-2025, mode: native}
+          - {os: macos-15, mode: native}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+      - name: Correctness gate
+        run: cargo test --locked --release
+      - name: Build matched release binaries
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          mkdir -p evidence
+          rustc -vV > evidence/environment.txt
+          cargo -V >> evidence/environment.txt
+          git rev-parse HEAD >> evidence/environment.txt
+          echo "mode=$MODE" >> evidence/environment.txt
+          if [[ "$RUNNER_OS" == Linux ]]; then lscpu >> evidence/environment.txt; fi
+          if [[ "$RUNNER_OS" == macOS ]]; then sysctl -n machdep.cpu.brand_string >> evidence/environment.txt || true; fi
+          if [[ "$RUNNER_OS" == Windows ]]; then powershell.exe -NoProfile -Command 'Get-CimInstance Win32_Processor | Select-Object Name,NumberOfLogicalProcessors' >> evidence/environment.txt; fi
+          features=()
+          if [[ "$MODE" != portable ]]; then export RUSTFLAGS="-C target-cpu=native"; fi
+          if [[ "$MODE" == pext ]]; then
+            grep -qw bmi2 /proc/cpuinfo || { echo "BMI2 unavailable"; exit 1; }
+            features=(--features pext)
+            cargo test --locked --release --features pext
+          fi
+          echo "RUSTFLAGS=${RUSTFLAGS:-}" >> evidence/environment.txt
+          cargo build --release --locked --manifest-path benchmarks/competitive/Cargo.toml "${features[@]}"
+      - name: Run full comparison
+        env:
+          BENCH_MS: 80
+        run: |
+          exe=benchmarks/competitive/target/release/gigachess-competitive-bench
+          if [[ "$RUNNER_OS" == Windows ]]; then exe="$exe.exe"; fi
+          "$exe" > evidence/results.tsv 2> evidence/validation.txt
+          python benchmarks/competitive/summarize.py evidence/results.tsv | tee evidence/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-competitive-${{ matrix.os }}-${{ matrix.mode }}
+          path: evidence/

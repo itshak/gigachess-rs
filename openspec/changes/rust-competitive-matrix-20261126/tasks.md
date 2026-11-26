@@ -1,0 +1,6 @@
+- [x] Audit JS v0.5.0..v0.6.0 versus Rust 0.1.11.
+- [x] Pin six native implementations in standalone harness.
+- [x] Add fixed perft, normalized corpus and replay lanes.
+- [ ] Validate complete suite on all CI runners.
+- [ ] Add public real-game, Chess960, hash, memory and cold-start lanes.
+- [ ] Run independent optimization A/B and correctness gates.
