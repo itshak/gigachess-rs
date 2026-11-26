@@ -12,6 +12,10 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-kingless-board = []
+exp-known-role = []
+exp-static-unchecked = []
+exp-castle-hash-table = []
 exp-normal-kernel = []
 exp-checker-rays = []
 exp-checked-direct = []

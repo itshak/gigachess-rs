@@ -137,8 +137,10 @@ pub struct Board {
     checkers: u64,
     #[cfg(not(feature = "exp-compact-board"))]
     bbs: [[u64; 6]; 2],  // [color_index][role_index]
-    #[cfg(feature = "exp-compact-board")]
+    #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board")))]
     roles: [u64; 6], // role bitboards intersected with color occupancy
+    #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+    roles:[u64;5],
     #[cfg(feature = "exp-mailbox")]
     mailbox: [u8; 64],
     occ: [u64; 2],       // occupancy per color
@@ -171,8 +173,10 @@ impl Board {
         Board {
             #[cfg(not(feature = "exp-compact-board"))]
             bbs: [[0; 6]; 2],
-            #[cfg(feature = "exp-compact-board")]
+            #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board")))]
             roles: [0;6],
+            #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+            roles:[0;5],
             #[cfg(feature = "exp-mailbox")]
             mailbox: [EMPTY;64],
             occ: [0; 2],
@@ -208,8 +212,10 @@ impl Board {
                 [0xff << 48, 0x42 << 56, 0x24 << 56, 0x81 << 56, 0x08 << 56, 0x10 << 56],
                 BACK_RANK,
             ],
-            #[cfg(feature = "exp-compact-board")]
+            #[cfg(all(feature = "exp-compact-board",not(feature="exp-kingless-board")))]
             roles: [0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56), 0x10 | (0x10 << 56)],
+            #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+            roles:[0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56)],
             #[cfg(feature = "exp-mailbox")]
             mailbox: {
                 let mut a = [EMPTY;64];
@@ -260,7 +266,15 @@ impl Board {
     #[inline(always)]
     fn bb(&self,color:usize,role:usize)->u64 {
         #[cfg(feature = "exp-compact-board")]
-        { self.roles[role] & self.occ[color] }
+        {
+            #[cfg(feature="exp-kingless-board")]
+            if role==Role::King.index(){
+                // Derive from occupancy, not king_sq, to preserve malformed
+                // FEN validation and Board::empty semantics.
+                return self.occ[color]&!(self.roles[0]|self.roles[1]|self.roles[2]|self.roles[3]|self.roles[4]);
+            }
+            self.roles[role] & self.occ[color]
+        }
         #[cfg(not(feature = "exp-compact-board"))]
         { self.bbs[color][role] }
     }
@@ -275,12 +289,16 @@ impl Board {
     fn bb_add(&mut self,color:usize,role:usize,mask:u64){
         #[cfg(feature = "exp-mailbox")]
         { self.mailbox[mask.trailing_zeros() as usize]=(color*6+role) as u8; }
+        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+        if role==Role::King.index(){return;}
         *self.bb_mut(color,role)|=mask;
     }
     #[inline(always)]
     fn bb_remove(&mut self,color:usize,role:usize,mask:u64){
         #[cfg(feature = "exp-mailbox")]
         { self.mailbox[mask.trailing_zeros() as usize]=EMPTY; }
+        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+        if role==Role::King.index(){return;}
         *self.bb_mut(color,role)&=!mask;
     }
     #[cfg(feature = "exp-mutation")]
@@ -292,6 +310,8 @@ impl Board {
             let to=(!self.occ[color]&mask).trailing_zeros() as usize;
             if mask!=0 { self.mailbox[from]=EMPTY;self.mailbox[to]=(color*6+role) as u8; }
         }
+        #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board"))]
+        if role==Role::King.index(){return;}
         *self.bb_mut(color,role)^=mask;
     }
 
@@ -336,7 +356,7 @@ impl Board {
             if col[4] & b != 0 {
                 return 4;
             }
-            debug_assert!(col[5] & b != 0);
+            debug_assert!(self.bb(0,5) & b != 0);
             5
         } else {
             // White piece — scan White's 6 bitboards.
@@ -359,9 +379,21 @@ impl Board {
             if col[4] & b != 0 {
                 return 10;
             }
-            debug_assert!(col[5] & b != 0);
+            debug_assert!(self.bb(1,5) & b != 0);
             11
         }
+    }
+
+    #[cfg(feature="exp-known-role")]
+    #[inline(always)]
+    fn role_at_occupied(&self,sq:u8,color:Color)->u8{
+        let b=bit(sq);
+        debug_assert_ne!(self.occ[color.index()]&b,0);
+        #[cfg(feature="exp-compact-board")]
+        let col=&self.roles;
+        #[cfg(not(feature="exp-compact-board"))]
+        let col=&self.bbs[color.index()];
+        if col[0]&b!=0{0}else if col[1]&b!=0{1}else if col[2]&b!=0{2}else if col[3]&b!=0{3}else if col[4]&b!=0{4}else{5}
     }
 
     /// Fast piece lookup for a square known to hold `color`'s piece (or empty).
@@ -386,9 +418,9 @@ impl Board {
         // Unrolled 6 checks — branch predictor friendly, no loop overhead.
         #[cfg(feature = "exp-role-lookup")]
         {
-            let r0 = ((col[1] | col[3] | col[5]) & b != 0) as u8;
+            let r0 = ((col[1] | col[3] | self.bb(color.index(),5)) & b != 0) as u8;
             let r1 = ((col[2] | col[3]) & b != 0) as u8;
-            let r2 = ((col[4] | col[5]) & b != 0) as u8;
+            let r2 = ((col[4] | self.bb(color.index(),5)) & b != 0) as u8;
             return (color as u8) * 6 + r0 + (r1 << 1) + (r2 << 2);
         }
         #[allow(unreachable_code)]
@@ -407,7 +439,7 @@ impl Board {
         if col[4] & b != 0 {
             return (color as u8) * 6 + 4;
         }
-        debug_assert!(col[5] & b != 0);
+        debug_assert!(self.bb(color.index(),5) & b != 0);
         (color as u8) * 6 + 5
     }
 
@@ -692,6 +724,21 @@ impl Board {
     /// (ADR-003: keys are per (color, rook file)).
     #[inline(always)]
     fn castle_rights_hash(&self, rights: u8) -> u64 {
+        #[cfg(feature="exp-castle-hash-table")]
+        {
+            const STANDARD:[u64;16]={
+                let mut keys=[0;16];let mut i=0;
+                while i<16 {let mut b=0;while b<4{if i&(1<<b)!=0{keys[i]^=crate::polyglot_keys::POLYGLOT_RANDOM_ARRAY[768+b];}b+=1;}i+=1;}keys
+            };
+            // Rook squares for absent rights can be unspecified. Check only
+            // active rights, including initial FEN state before is_chess960.
+            let mut valid=0u8;
+            if self.castle_rook_sq[0]&7==7 {valid|=1;}
+            if self.castle_rook_sq[1]&7==0 {valid|=2;}
+            if self.castle_rook_sq[2]&7==7 {valid|=4;}
+            if self.castle_rook_sq[3]&7==0 {valid|=8;}
+            if rights&!valid==0{return STANDARD[rights as usize];}
+        }
         zobrist::castle_file_keys_xor(rights, &self.castle_rook_sq)
     }
 
@@ -1521,10 +1568,16 @@ impl Board {
         let to = mv.to().0;
         let us = self.turn;
         let them = us.other();
+        #[cfg(feature="exp-known-role")]
+        let role=self.role_at_occupied(from,us);
+        #[cfg(feature="exp-known-role")]
+        let moved=role+us as u8*6;
+        #[cfg(not(feature="exp-known-role"))]
         let moved = self.piece_code_at_color(from, us);
         #[cfg(feature = "exp-undo-role")]
         { undo.moved = mv.promotion().map_or(moved, |r| Piece::new(us,r).code()); }
         debug_assert_ne!(moved, EMPTY, "make_move on empty square");
+        #[cfg(not(feature="exp-known-role"))]
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
         let diag = from & 7 != to & 7;
@@ -1903,6 +1956,9 @@ impl Board {
     /// `unmake_move_perft` must be paired with this.
     #[inline(always)]
     pub fn make_move_perft(&mut self, mv: Move) -> Undo {
+        #[cfg(feature="exp-known-role")]
+        let moved=self.role_at_occupied(mv.from().0,self.turn)+self.turn as u8*6;
+        #[cfg(not(feature="exp-known-role"))]
         let moved=self.piece_code_at_color(mv.from().0,self.turn);
         self.make_move_perft_known::<true>(mv,moved)
     }
@@ -2885,6 +2941,9 @@ impl Board {
     /// `checkers` from scratch via `attackers_to`, so the cache is not needed.
     #[inline(always)]
     fn make_perft_internal(&mut self,mv:Move)->Undo {
+        #[cfg(feature="exp-known-role")]
+        let code=self.role_at_occupied(mv.from().0,self.turn)+self.turn as u8*6;
+        #[cfg(not(feature="exp-known-role"))]
         let code=self.piece_code_at_color(mv.from().0,self.turn);
         self.make_move_perft_known::<{!cfg!(feature="exp-fused-geometry")}>(mv,code)
     }

@@ -46,4 +46,9 @@ fn main(){
     let pext=env::var_os("CARGO_FEATURE_PEXT").is_some()&&env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default().split(',').any(|x|x=="bmi2");
     table(&mut w,"ROOK",false,&magic::ROOK_MAGICS,pext);
     table(&mut w,"BISHOP",true,&magic::BISHOP_MAGICS,pext);
+    if !pext && env::var_os("CARGO_FEATURE_PEXT").is_some()
+        && env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default()=="x86_64" {
+        table(&mut w,"ROOK_PEXT",false,&magic::ROOK_MAGICS,true);
+        table(&mut w,"BISHOP_PEXT",true,&magic::BISHOP_MAGICS,true);
+    }
 }

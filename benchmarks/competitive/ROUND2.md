@@ -18,3 +18,17 @@ here are independently written against our existing Board interface.
   skip checker refresh only at internal nodes when fused geometry is active.
 - direct-list not pursued: legal_moves already uses direct ArrayVec.
 Windows summary output changed to ASCII, fixing cp1252 encoding error.
+
+## Layout follow-up (paired baseline C)
+- kingless-board: derive king bitboards as occupied minus the five other
+  role planes. Keep king-square cache; preserves malformed FEN rejection
+  and empty-board behavior. Expected Board size 88 bytes.
+- known-role: skip source color occupancy test only on trusted moves,
+  avoid role modulo in normal kernel.
+- static-unchecked: remove data-array bounds check (descriptor square check
+  remains; generated index bounds exhaustively verified).
+- castle-hash-table: precompute 16 standard castling-mask hash deltas,
+  fall back for nonstandard rook files.
+- Generic x86 feature pext: build static PEXT and magic tables, choose
+  runtime BMI2 when available. Native BMI2 builds still use static PEXT.
+Benchmark-only default features select C; root production defaults unchanged.
