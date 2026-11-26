@@ -31,6 +31,9 @@ pub trait MoveSink {
     fn push_pawn_promotions_offset(&mut self, targets: u64, offset: i8);
     /// Push a single fully-formed move (king, castling, en-passant, pinned pawn).
     fn push_one(&mut self, mv: Move);
+    /// Four masks produced by ordinary pawn generation: single and double
+    /// push targets are disjoint and empty; capture targets are occupied.
+    /// The two capture masks may overlap and count separately.
     #[cfg(feature="exp-pawn-batch-count")]
     #[inline(always)]
     fn push_pawn_batch(&mut self,single:u64,double:u64,left:u64,right:u64,promo:u64,step:i8,left_off:i8,right_off:i8){
@@ -250,8 +253,25 @@ impl MoveSink for MoveCounter {
     #[cfg(feature="exp-pawn-batch-count")]
     #[inline(always)]
     fn push_pawn_batch(&mut self,single:u64,double:u64,left:u64,right:u64,promo:u64,_step:i8,_left_off:i8,_right_off:i8){
-        self.count+=popcount(single)+popcount(double)+popcount(left)+popcount(right)
-            +3*(popcount(single&promo)+popcount(left&promo)+popcount(right&promo));
+        #[cfg(feature="exp-pawn-count-union")]
+        {
+            debug_assert_eq!(single&double,0);
+            debug_assert_eq!((single|double)&(left|right),0);
+            let targets=single|double|left;
+            self.count+=popcount(targets)+popcount(right);
+            let p=targets&promo;let q=right&promo;
+            #[cfg(feature="exp-pawn-count-promo-gate")]
+            if p|q==0{return;}
+            self.count+=3*(popcount(p)+popcount(q));
+        }
+        #[cfg(not(feature="exp-pawn-count-union"))]
+        {
+            self.count+=popcount(single)+popcount(double)+popcount(left)+popcount(right);
+            let p=single&promo;let q=left&promo;let r=right&promo;
+            #[cfg(feature="exp-pawn-count-promo-gate")]
+            if p|q|r==0{return;}
+            self.count+=3*(popcount(p)+popcount(q)+popcount(r));
+        }
     }
 
     #[inline]
@@ -555,7 +575,7 @@ pub(crate) fn geometry(ksq:u8,occ:u64,bq:u64,rq:u64,own:u64)->(u64,u64,u64){
         let mut check=0;let mut pins=0;let mut hv=0;
         while candidates!=0{
             let sniper=pop_lsb(&mut candidates);let b=bit(sniper);
-            let between=crate::bitboard::BETWEEN[ksq as usize][sniper as usize]&occ;
+            let between=crate::bitboard::between_for_geometry(ksq as usize,sniper as usize)&occ;
             if between==0{check|=b;}
             else if between&own!=0&&between&(between-1)==0{
                 pins|=between;
@@ -569,14 +589,14 @@ pub(crate) fn geometry(ksq:u8,occ:u64,bq:u64,rq:u64,own:u64)->(u64,u64,u64){
     let mut a=crate::bitboard::EMPTY_BISHOP_RAYS[ksq as usize]&bq;
     while a!=0{
         let sniper=pop_lsb(&mut a);
-        let between=crate::bitboard::BETWEEN[ksq as usize][sniper as usize]&occ;
+        let between=crate::bitboard::between_for_geometry(ksq as usize,sniper as usize)&occ;
         if between==0 {check|=bit(sniper);}
         else if between&own!=0 && between&(between-1)==0 {diag|=between;}
     }
     let mut a=crate::bitboard::EMPTY_ROOK_RAYS[ksq as usize]&rq;
     while a!=0{
         let sniper=pop_lsb(&mut a);
-        let between=crate::bitboard::BETWEEN[ksq as usize][sniper as usize]&occ;
+        let between=crate::bitboard::between_for_geometry(ksq as usize,sniper as usize)&occ;
         if between==0 {check|=bit(sniper);}
         else if between&own!=0 && between&(between-1)==0 {hv|=between;}
     }

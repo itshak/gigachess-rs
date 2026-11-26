@@ -533,3 +533,22 @@ callback ordering and specializes MoveCounter to sum ordinary
 targets plus three extra moves per promotion. Combined 11 exact
 regressions passed including all 960 starts, real-game legal/SAN/undo,
 exact leaf differential and the 88-byte assertion.
+
+## Round 18: count-mask union and compact checker/pin table
+Round17 all five CI, full release, six deep perft and local ABBA passed.
+O+pawn-batch-count 486/522, corpus count 1.154x O, 12/12 wins;
+pawn-double-reuse 483/522, count 1.025x O, corpus count 1.030x.
+Combined pawn/zone/leaf variant 482/522, full perft 1.208x O and
+trusted replay 6/12. Cached 88-byte layouts 461 and 463; reject.
+Retain O and its 96-byte board as the paired baseline.
+New pawn-count-union exploits disjoint legal push and occupied capture
+destinations, retaining distinct left/right capture multiplicities.
+Pawn-count-promo-gate skips the extra promotion counts if none exist.
+Between-compact replaces selected dense 32 KiB table reads with
+per-source byte indices and 28-entry rows (18 KiB combined); exact
+all 4096 entries verified. Extra regression checks promotion/capture
+overlap and count/materialize equivalence. Combined targeted nine
+regression tests plus exhaustive table equality passed.
+Submit isolated count changes, compact table, combined leaf/count,
+and O-versus-O identical-code ABBA control to quantify runner noise.
+No production changes; 492/522 remains an observed maximum only.
