@@ -61,6 +61,14 @@ pub(crate) fn piece_move_delta<const TURN:bool>(color:usize,role:usize,from:u8,t
     }
     #[cfg(not(feature="exp-hash-delta"))]
     {
+        #[cfg(feature="exp-hash-turn-fold")]
+        if TURN{
+            static TURN_FOLDED:[u64;768]={
+                let mut t=[0;768];let mut i=0;
+                while i<768{t[i]=POLYGLOT_RANDOM_ARRAY[i]^POLYGLOT_RANDOM_ARRAY[TURN_KEY];i+=1;}t
+            };
+            return TURN_FOLDED[64*(2*role+color)+from as usize]^piece_key_indices(color,role,to);
+        }
         let value=piece_key_indices(color,role,from)^piece_key_indices(color,role,to);
         if TURN{value^turn_key()}else{value}
     }

@@ -252,3 +252,21 @@ fn sparse_role_board_size() {
     let expected=if cfg!(feature="exp-align32"){96}else if cfg!(feature="exp-align16")||cfg!(feature="exp-pawnless4"){80}else{72};
     assert_eq!(core::mem::size_of::<gigachess::Board>(),expected);
 }
+
+#[cfg(all(feature="exp-promo-checkers",feature="exp-full-visitor"))]
+#[test]
+fn promotion_checker_reuse_exact_children(){
+    for fen in [
+        "1r2k3/P7/8/8/8/8/7p/4K3 w - - 0 1",
+        "1r2k3/P7/8/8/8/8/7p/4K3 b - - 0 1",
+        "8/3P1k2/8/8/8/8/8/4K3 w - - 0 1",
+        "4k3/8/8/8/8/8/3p1K2/8 b - - 0 1",
+    ]{
+        let b=parse_fen(fen).unwrap();
+        let mut reference=Vec::new();
+        for m in b.legal_moves(){let mut c=b;c.make_move_perft(m);reference.push(c);}
+        let mut actual=Vec::new();let n=b.visit_perft_leaves(1,&mut |leaf|actual.push(*leaf));
+        assert_eq!(n,reference.len() as u64, "{fen}");
+        assert_eq!(actual,reference,"{fen}");
+    }
+}
