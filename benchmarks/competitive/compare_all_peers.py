@@ -21,7 +21,7 @@ c={k:geo([c1[k],c2[k]]) for k in c1}
 ops=collections.defaultdict(list)
 for op,case,lib in b:
     if lib=="giga":ops[op].append(case)
-print("| Operation | Own baseline | "+" | ".join(libs)+" | All-peer wins |")
+print("| Operation | Own baseline | "+" | ".join(libs)+" | Pairwise wins |")
 print("|---|---:|"+"---:|"*(len(libs)+1))
 for op,cases in ops.items():
     own=[b[op,x,"giga"]/c[op,x,"giga"] for x in cases]
@@ -35,4 +35,4 @@ for op,cases in ops.items():
             total+=1
             wins+= c[op,x,lib] > c[op,x,"giga"]
     print(f"| {op} | {geo(own):.2f}x | "+" | ".join(map(fmt,libs))+f" | {wins}/{total} |")
-print("\nNative output/state contracts may differ; N/A means unsupported or unmeasured. Ratio is geometric mean of paired throughput ratios. All-peer wins are strict pairwise measured wins, not significance claims.")
+print("\nNative output/state contracts may differ; N/A means unsupported or unmeasured. Ratio is geometric mean of paired throughput ratios. Pairwise wins are strict pairwise measured wins, not significance claims.")
