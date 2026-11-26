@@ -164,3 +164,14 @@ including all 960 starts and 960 stripped castling fixtures. CI required.
 All five combined passed debug regression including real legal move
 transitions, exact child equality and all Chess960 fixtures. F is the
 benchmark-only default for the follow-up branch. Root defaults unchanged.
+
+### Round 4 Undo and hashing follow-up
+- undo-outside: tiny transition result (capture/castle/moved metadata)
+  with prior hash/checker/clocks saved in an inline wrapper. The optimizer
+  can eliminate the prior-state snapshot when Undo is discarded. The
+  public Undo layout and all restoration semantics are unchanged.
+- hash-pointer: select the exact 64-key Polyglot slice once per color/role.
+- hash-pair: scan two occupied squares with independent XOR accumulators.
+- fen-code-lut: direct byte-to-piece-code table, preserving error validation.
+Passed the expanded debug regression suite with optional prepared moves,
+ordinary/pawn fast paths, copy-make and explicit Undo role enabled.

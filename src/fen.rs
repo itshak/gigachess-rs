@@ -105,10 +105,23 @@ fn parse_fen_with_legality(fen: &str, require_reachable: bool) -> Result<Board, 
         if !(0..8).contains(&rank) || !(0..8).contains(&file) {
             return Err(FenError(format!("position {file},{rank} out of range")));
         }
-        let piece = piece_from_byte(b)
-            .ok_or_else(|| FenError(format!("bad piece char {}", b as char)))?;
-        let sq = (rank as u8) * 8 + file as u8;
-        board.put_piece_no_hash(sq, Piece::new(piece.0, piece.1).code());
+        #[cfg(feature="exp-fen-code-lut")]
+        let code={
+            const CODES:[u8;256]={
+                let mut t=[255u8;256];let chars=*b"pnbrqkPNBRQK";let mut i=0;
+                while i<12{t[chars[i] as usize]=i as u8;i+=1;}t
+            };
+            let code=CODES[b as usize];
+            if code==255{return Err(FenError(format!("bad piece char {}",b as char)));}
+            code
+        };
+        #[cfg(not(feature="exp-fen-code-lut"))]
+        let code={
+            let piece=piece_from_byte(b).ok_or_else(||FenError(format!("bad piece char {}",b as char)))?;
+            Piece::new(piece.0,piece.1).code()
+        };
+        let sq=(rank as u8)*8+file as u8;
+        board.put_piece_no_hash(sq,code);
         file += 1;
     }
     if rank != 0 || file != 8 {

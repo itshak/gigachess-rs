@@ -12,6 +12,10 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-undo-outside = []
+exp-hash-pointer = []
+exp-hash-pair = ["exp-hash-pointer"]
+exp-fen-code-lut = []
 exp-color-gen = []
 exp-bulk-write = []
 exp-pawn-kernel = []
