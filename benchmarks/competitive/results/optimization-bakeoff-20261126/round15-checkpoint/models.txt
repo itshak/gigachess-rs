@@ -1,0 +1,5 @@
+compact80 exp-compact80
+hash-small-role exp-hash-small-role
+targeted-danger exp-targeted-danger
+O-geometry exp-geometry-union,exp-zone-knights,exp-leaf-check-delta,exp-targeted-danger
+O-hash exp-zone-knights,exp-leaf-check-delta,exp-hash-small-role
