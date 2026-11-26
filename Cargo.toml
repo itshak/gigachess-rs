@@ -12,6 +12,11 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-tagged-perft = []
+exp-perft-kernel = []
+exp-direct-hash = []
+exp-quiet-fast = []
+exp-standard-no-special = []
 exp-compact-board = []
 exp-mailbox = []
 exp-direct-legal = []

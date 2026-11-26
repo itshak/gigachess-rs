@@ -37,6 +37,12 @@ pub fn piece_key(color: Color, role: Role, sq: Square) -> u64 {
     }
 }
 
+/// Direct equivalent of piece_key for validated internal color/role indices.
+#[inline(always)]
+pub(crate) fn piece_key_indices(color:usize,role:usize,sq:u8)->u64 {
+    POLYGLOT_RANDOM_ARRAY[64*(2*role+color)+sq as usize]
+}
+
 /// Raw Polyglot castling key (bit 0..3 = WK, WQ, BK, BQ), i.e. entries
 /// `768..772` of the Polyglot table. Kept for reference/migration tooling;
 /// live hashing uses [`castle_file_key`], keyed by rook file (ADR-003).

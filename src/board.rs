@@ -587,11 +587,9 @@ impl Board {
         let b = bit(sq);
         self.bb_add(color, role, b);
         self.occ[color] |= b;
-        self.hash ^= zobrist::piece_key(
-            Self::color_from_index(color),
-            Self::role_from_index(role),
-            Square(sq),
-        );
+        self.hash ^= if cfg!(feature = "exp-direct-hash") {
+            crate::zobrist::piece_key_indices(color,role,sq)
+        } else { zobrist::piece_key(Self::color_from_index(color),Self::role_from_index(role),Square(sq)) };
         if role == Role::King.index() {
             self.king_sq[color] = sq;
         }
@@ -604,11 +602,9 @@ impl Board {
         let b = bit(sq);
         self.bb_remove(color, role, b);
         self.occ[color] &= !b;
-        self.hash ^= zobrist::piece_key(
-            Self::color_from_index(color),
-            Self::role_from_index(role),
-            Square(sq),
-        );
+        self.hash ^= if cfg!(feature = "exp-direct-hash") {
+            crate::zobrist::piece_key_indices(color,role,sq)
+        } else { zobrist::piece_key(Self::color_from_index(color),Self::role_from_index(role),Square(sq)) };
     }
 
     #[inline(always)]
@@ -751,19 +747,25 @@ impl Board {
     /// const-folded so every `if white` pawn branch/shift specialises at
     /// compile time (Gigantua's colour template expansion, clean-room).
     pub fn generate_moves_into<S: MoveSink>(&self, sink: &mut S) {
-        if self.turn == Color::White {
-            self.generate_moves_templated::<true, S>(sink);
+        if cfg!(feature = "exp-standard-no-special") && !self.is_chess960 && self.castling==0 && self.ep==NO_EP {
+            if self.turn==Color::White {self.generate_moves_templated::<true,false,S>(sink);}
+            else {self.generate_moves_templated::<false,false,S>(sink);}
+        } else if self.turn == Color::White {
+            self.generate_moves_templated::<true,true,S>(sink);
         } else {
-            self.generate_moves_templated::<false, S>(sink);
+            self.generate_moves_templated::<false,true,S>(sink);
         }
     }
 
     #[inline(always)]
     fn generate_moves_cached<S: MoveSink>(&self, sink: &mut S) {
-        if self.turn == Color::White {
-            self.generate_moves_templated::<true, S>(sink);
+        if cfg!(feature = "exp-standard-no-special") && !self.is_chess960 && self.castling==0 && self.ep==NO_EP {
+            if self.turn==Color::White {self.generate_moves_templated::<true,false,S>(sink);}
+            else {self.generate_moves_templated::<false,false,S>(sink);}
+        } else if self.turn == Color::White {
+            self.generate_moves_templated::<true,true,S>(sink);
         } else {
-            self.generate_moves_templated::<false, S>(sink);
+            self.generate_moves_templated::<false,true,S>(sink);
         }
     }
 
@@ -772,7 +774,7 @@ impl Board {
     /// promo/start ranks and the `PAWN_ATT` colour index all const-fold
     /// (monomorphised ×2 per sink, `LTO=fat`).
     #[inline(always)]
-    fn generate_moves_templated<const WHITE: bool, S: MoveSink>(&self, sink: &mut S) {
+    fn generate_moves_templated<const WHITE: bool,const SPECIAL:bool, S: MoveSink>(&self, sink: &mut S) {
         let us = self.turn;
         let them = us.other();
         let ui = us.index();
@@ -928,10 +930,10 @@ impl Board {
             }
         }
 
-        self.gen_pawn_moves_templated::<WHITE, S>(sink, allowed, pinned_hv, pinned_diag, ksq);
+        self.gen_pawn_moves_templated::<WHITE,SPECIAL,S>(sink, allowed, pinned_hv, pinned_diag, ksq);
 
         // Castling is only possible when not in check.
-        if checkers == 0 {
+        if SPECIAL && checkers == 0 {
             self.gen_castling_sink(sink, danger);
         }
     }
@@ -939,7 +941,7 @@ impl Board {
     /// Pawn move generation via `MoveSink` bulk shifts (promo split) + per-pinned
     /// handling — runtime colour branch (2 monomorphisations per sink vs 4 with
     /// `WHITE` const, smaller `.text`, better icache).
-    fn gen_pawn_moves_templated<const WHITE: bool, S: MoveSink>(
+    fn gen_pawn_moves_templated<const WHITE: bool,const SPECIAL:bool,S: MoveSink>(
         &self,
         sink: &mut S,
         allowed: u64,
@@ -1067,7 +1069,7 @@ impl Board {
 
         // En passant — verified by direct simulation (handles rank pins through both
         // disappearing pawns and check-evasion-by-EP). Works for pinned & unpinned.
-        if self.ep != crate::types::NO_EP {
+        if SPECIAL && self.ep != crate::types::NO_EP {
             let ep = self.ep;
             let cap_sq = if WHITE { ep - 8 } else { ep + 8 };
             // Iterate candidate pawns that geometrically can capture EP.
@@ -1477,6 +1479,30 @@ impl Board {
             self.hash ^= zobrist::ep_key(Square(self.ep));
         }
 
+        #[cfg(feature = "exp-quiet-fast")]
+        if mv.promotion().is_none() && self.occupied()&bit(to)==0 && !(is_pawn&&diag) {
+            let ui=us.index();let ti=them.index();
+            self.bb_remove(ui,role as usize,bit(from));
+            self.bb_add(ui,role as usize,bit(to));
+            self.occ[ui]^=bit(from)^bit(to);
+            if role==Role::King as u8 {self.king_sq[ui]=to;}
+            // Preserve the baseline's partial/stale piece hash update on CHECKERS-only makes.
+            self.hash^=zobrist::piece_key_indices(ui,role as usize,from)^zobrist::piece_key_indices(ui,role as usize,to);
+            if self.castling!=0 {
+                let new_castling=self.castling&self.castle_rights_after(role,us,from,to);
+                if HASH && new_castling!=self.castling {self.hash^=self.castle_rights_hash(self.castling^new_castling);}
+                self.castling=new_castling;
+            }
+            self.ep=if is_pawn&&to.abs_diff(from)==16 {(from+to)/2}else{NO_EP};
+            if HASH&&self.ep_relevant(self.ep,them){self.hash^=zobrist::ep_key(Square(self.ep));}
+            if is_pawn {self.halfmove=0;}else{self.halfmove+=1;}
+            if us==Color::Black{self.fullmove+=1;}
+            self.turn=them;
+            if HASH{self.hash^=zobrist::turn_key();}
+            if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+            return undo;
+        }
+
         // Castling is encoded king-from → rook-square (ADR-003, decision D3):
         // a king move landing on the mover's own rook. Unambiguous — a normal
         // king move can never land on an own rook. Fast dest lookup: own vs them.
@@ -1784,6 +1810,12 @@ impl Board {
     /// `unmake_move_perft` must be paired with this.
     #[inline(always)]
     pub fn make_move_perft(&mut self, mv: Move) -> Undo {
+        let moved=self.piece_code_at_color(mv.from().0,self.turn);
+        self.make_move_perft_known(mv,moved)
+    }
+
+    #[inline(always)]
+    fn make_move_perft_known(&mut self, mv: Move, moved:u8) -> Undo {
         let mut undo = Undo {
             hash: 0,
             checkers: self.checkers,
@@ -1799,13 +1831,34 @@ impl Board {
         let to = mv.to().0;
         let us = self.turn;
         let them = us.other();
-        let moved = self.piece_code_at_color(from, us);
         #[cfg(feature = "exp-undo-role")]
         { undo.moved = mv.promotion().map_or(moved, |r| Piece::new(us,r).code()); }
         debug_assert_ne!(moved, EMPTY, "make_move_perft on empty square");
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
         let diag = from & 7 != to & 7;
+
+        #[cfg(feature = "exp-perft-kernel")]
+        if mv.promotion().is_none() && self.occ[us.index()]&bit(to)==0
+            && !(is_pawn && diag && self.occupied()&bit(to)==0) {
+            let ui=us.index(); let ti=them.index();
+            if self.occ[ti]&bit(to)!=0 {
+                let cap=self.piece_code_at_color(to,them);
+                undo.captured=cap;
+                self.bb_remove(ti,(cap%6) as usize,bit(to));
+                self.occ[ti]&=!bit(to);
+            }
+            let delta=bit(from)^bit(to);
+            self.bb_remove(ui,role as usize,bit(from));
+            self.bb_add(ui,role as usize,bit(to));
+            self.occ[ui]^=delta;
+            if role==Role::King as u8 {self.king_sq[ui]=to;}
+            if self.castling!=0 {self.castling&=self.castle_rights_after(role,us,from,to);}
+            self.ep=if is_pawn && to.abs_diff(from)==16 {(from+to)/2}else{NO_EP};
+            self.turn=them;
+            self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());
+            return undo;
+        }
 
         // Castling encoded king-from → rook-square — fast dest.
         let dest = if self.occ[us.index()] & bit(to) != 0 {
@@ -2744,6 +2797,20 @@ impl Board {
             self.generate_moves_into(&mut sink);
             return sink.nodes;
         }
+        #[cfg(feature = "exp-tagged-perft")]
+        {
+            let mut tagged=TaggedPerftList{board:self,moves:ArrayVec::new()};
+            self.generate_moves_into(&mut tagged);
+            let mut nodes=0;
+            let mut child=*self;
+            for &(mv,code) in &tagged.moves {
+                let undo=child.make_move_perft_known(mv,code);
+                nodes+=child.perft(depth-1);
+                child.unmake_move_perft(mv,undo);
+            }
+            return nodes;
+        }
+        #[allow(unreachable_code)]
         let mut list = crate::movegen::MoveList::new();
         self.generate_moves_into(&mut list);
         let mut nodes = 0u64;
@@ -2900,5 +2967,33 @@ impl MoveSink for PerftLeafSink {
             let base=(to as i16-offset as i16) as u16|((to as u16)<<6);
             for r in 1..=4 {self.push_one(Move(base|(r<<12)));}
         }
+    }
+}
+
+
+#[cfg(feature = "exp-tagged-perft")]
+struct TaggedPerftList<'a>{board:&'a Board,moves:ArrayVec<(Move,u8),MAX_MOVES>}
+#[cfg(feature = "exp-tagged-perft")]
+impl MoveSink for TaggedPerftList<'_>{
+    #[inline(always)]
+    fn push_targets(&mut self,from:u8,mut targets:u64){
+        if targets==0{return;}
+        let code=self.board.piece_code_at_color(from,self.board.turn);
+        while targets!=0{let to=pop_lsb(&mut targets);self.moves.push((Move::quiet(Square(from),Square(to)),code));}
+    }
+    #[inline(always)]
+    fn push_pawn_targets_offset(&mut self,mut targets:u64,offset:i8){
+        let code=self.board.turn as u8*6;
+        while targets!=0{let to=pop_lsb(&mut targets);self.moves.push((Move::quiet(Square((to as i16-offset as i16)as u8),Square(to)),code));}
+    }
+    #[inline(always)]
+    fn push_pawn_promotions_offset(&mut self,mut targets:u64,offset:i8){
+        let code=self.board.turn as u8*6;
+        while targets!=0{let to=pop_lsb(&mut targets);let base=(to as i16-offset as i16)as u16|((to as u16)<<6);for r in 1..=4{self.moves.push((Move(base|(r<<12)),code));}}
+    }
+    #[inline(always)]
+    fn push_one(&mut self,mv:Move){
+        let code=self.board.piece_code_at_color(mv.from().0,self.board.turn);
+        self.moves.push((mv,code));
     }
 }
