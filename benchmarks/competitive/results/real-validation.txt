@@ -1,0 +1,2 @@
+Exact normalized move-set parity (seeded): 2048 generated positions, 2048 replay plies
+Exact normalized move-set parity (lichess300): 18954 generated positions, 18954 replay plies

@@ -20,9 +20,12 @@ and macOS; raw measurements and metadata are artifacts.
 
 Six standard chess perft positions gate every fixed-position comparison:
 bulk d4 matches reference totals and full d3 must match every implementation.
-A deterministic generated game corpus validates normalized legal UCI sets
-and exercises count, materialization, sorted UCI, trusted and checked replay.
-It is synthetic, not a real-game corpus. Five timed samples after warmup;
+Two deterministic corpora (32 seeded games, 2,048 plies; 300 real Lichess games,
+18,954 plies) validate exact normalized legal UCI sets and exercise count,
+materialization, sorted UCI, trusted and checked replay. The Giga/Shakmaty
+Polyglot and FIDE repetition keys are checked at every corpus position;
+two Chess960 cases check exact move lists and depth-3 perft across Giga,
+Shakmaty and Cozy. Five timed samples after warmup;
 all library-native results are consumed by black_box. Results are ns per
 call; divide by units_per_call for per-position/per-move costs. Ratios use
 matched medians, not pooled timings. Runner variability and fixed ordering
@@ -37,8 +40,8 @@ hash-value comparison except where semantics match.
 Rust already has packed u16 moves, bulk pawns and leaf popcount, const
 generic color dispatch, direct SAN disambiguation, slim perft make/unmake,
 trusted packed replay and native 64-bit magic/PEXT. JS split-32 tables are
-not a Rust optimization. Rust startpos reparses FEN; private immutable
-initial position template is directly transferable. Next experiments:
+not a Rust optimization. Rust previously reparsed startpos FEN; the immutable compile-time template
+is now implemented and tested against the full FEN-derived state. Next experiments:
 standard-only const specialization and no-castling/EP fast paths; king
 target attack checks vs whole danger map; precomputed compile-time slider
 tables or hoisted table references; compact role/color bitboards vs mailbox
@@ -52,8 +55,28 @@ references, not a source for MIT production code.
 
 ## Outstanding scope
 
-Real public-game replay corpus comparable to JS 300-game/20k-position
-matrix; Chess960 head-to-head where supported, dedicated hash/repetition
-lanes, memory/allocation and cold-start metrics, confidence intervals,
+Broader Chess960 corpus; memory/allocation and cold-start metrics, confidence intervals,
 counterbalanced sampling, and baseline-versus-candidate runs for each
 optimization. Do not label this initial matrix as universal leadership.
+
+## Corpus provenance
+
+The 300 nonempty standard mainlines are extracted from the January 2013
+Lichess open database (https://database.lichess.org/standard/lichess_db_standard_rated_2013-01.pgn.zst,
+CC0). No player metadata is retained. Source SHA256:
+aa40b3671fa3cf1072eb182892cd90b0e1e003a4a5943492f64b77e7f3fd1635.
+Reproduce with python-chess==1.999: decompress with zstd -dc and pipe into
+make_corpus.py. Fixture SHA256:
+8c286bb3ce9432389232d2ac8669e69a5a189b42f23a453f4194fd98b4548e40.
+
+## Evidence (2026-11-26)
+
+Baseline six-runner GitHub Actions run 45763305461: all jobs passed.
+Raw results, environment and parity logs are in results/baseline-ci.
+Local Xeon E5-1620 v2, native flags, Rust 1.97.1: smoke.tsv is the initial
+baseline; real.tsv and expanded.tsv include the startpos template. These
+are short exploratory runs, not substitutes for hosted CI. Paired
+startpos template vs legacy FEN parsing in real.tsv: 4.865 ns vs 421.789 ns
+(86.7x); full release tests passed. expanded.tsv additionally validates
+Chess960 perft and Polyglot/repetition keys. No universal fastest claim:
+full-tree perft and trusted replay remain important weaknesses.

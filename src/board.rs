@@ -179,9 +179,29 @@ impl Board {
     pub fn is_chess960(&self) -> bool { self.is_chess960 }
 
     /// The standard chess starting position.
-    pub fn startpos() -> Board {
-        crate::fen::parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-            .expect("valid startpos FEN")
+    ///
+    /// All state is a private immutable template copied by value. No FEN
+    /// parsing, attack-table initialization or mutable shared state.
+    #[inline]
+    pub const fn startpos() -> Board {
+        const BACK_RANK: [u64; 6] = [0xff00, 0x42, 0x24, 0x81, 0x08, 0x10];
+        Board {
+            hash: 0x463b_9618_1691_fc9c, // canonical Polyglot startpos vector
+            checkers: 0,
+            bbs: [
+                [0xff << 48, 0x42 << 56, 0x24 << 56, 0x81 << 56, 0x08 << 56, 0x10 << 56],
+                BACK_RANK,
+            ],
+            occ: [0xffff << 48, 0xffff],
+            king_sq: [60, 4],
+            castle_rook_sq: [7, 0, 63, 56],
+            turn: Color::White,
+            castling: 0b1111,
+            ep: NO_EP,
+            halfmove: 0,
+            fullmove: 1,
+            is_chess960: false,
+        }
     }
 
     // -- accessors ----------------------------------------------------------

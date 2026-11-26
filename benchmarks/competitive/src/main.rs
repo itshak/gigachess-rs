@@ -4,6 +4,7 @@ use chess::Board as J;
 use cozy_chess::Board as C;
 use ferrum::Board as F;
 use gigachess::{fen::parse_fen, san, Board};
+use shakmaty::zobrist::Zobrist64;
 use shakmaty::Chess as S;
 use shakmaty::{CastlingMode, EnPassantMode, Position};
 use std::{hint::black_box as bb, time::Instant};
@@ -277,7 +278,13 @@ fn main() {
         row!("perft_internal_ab",name,expected,"giga_default"=>||g.perft(4),"giga_reuse"=>||g.perft_reuse(4),"giga_visitor"=>||g.perft_visitor(4));
     }
     row!("startpos","start",1,"giga"=>Board::startpos,"shakmaty"=>S::default,"cozy"=>C::default,"chess"=>J::default,"ultra"=>U::startpos,"ferrum"=>F::startpos);
-    corpus();
+    row!("startpos_internal_ab","start",1,"giga_template"=>Board::startpos,"giga_legacy_parse"=>||parse_fen(bb(POS[0].1)).unwrap());
+    chess960();
+    corpus("seeded", None);
+    corpus(
+        "lichess300",
+        Some(include_str!("../data/lichess-2013-01-first300.uci")),
+    );
 }
 fn castle_uci(mut x: String, king: bool) -> String {
     if king {
@@ -306,7 +313,7 @@ fn sorted<T>(ms: impl IntoIterator<Item = T>, f: impl Fn(T) -> String) -> Vec<St
     v.sort_unstable();
     v
 }
-fn corpus() {
+fn corpus(label: &str, real: Option<&str>) {
     let mut gb = Vec::new();
     let mut sb = Vec::new();
     let mut cb = Vec::new();
@@ -315,7 +322,14 @@ fn corpus() {
     let mut fb = Vec::new();
     let mut games = Vec::new();
     let mut rng = 0x83a765127acb3489u64;
-    for _ in 0..32 {
+    let inputs: Vec<Vec<&str>> = match real {
+        Some(s) => s
+            .lines()
+            .map(|l| l.split_ascii_whitespace().collect())
+            .collect(),
+        None => vec![vec![""; 64]; 32],
+    };
+    for requested_moves in inputs {
         let (mut g, mut s, mut c, mut j, mut u, mut f) = (
             Board::startpos(),
             S::default(),
@@ -332,7 +346,7 @@ fn corpus() {
             Vec::new(),
             Vec::new(),
         );
-        for _ in 0..64 {
+        for requested in requested_moves {
             let gl = g.legal_moves();
             let sl = s.legal_moves();
             let cl = cozy_list(&c);
@@ -352,12 +366,19 @@ fn corpus() {
             ub.push(u.clone());
             fb.push(f.clone());
             if list.is_empty() {
+                assert!(requested.is_empty(), "real game continued past terminal");
                 break;
             }
             rng ^= rng << 13;
             rng ^= rng >> 7;
             rng ^= rng << 17;
-            let t = &list[(rng as usize) % list.len()];
+            let t = if requested.is_empty() {
+                &list[(rng as usize) % list.len()]
+            } else {
+                list.iter()
+                    .find(|m| m.as_str() == requested)
+                    .expect("requested move legal")
+            };
             let a = gl.iter().copied().find(|m| gu(&g, *m) == *t).unwrap();
             let b = sl.iter().copied().find(|m| su(*m) == *t).unwrap();
             let d = cl.iter().copied().find(|m| cu(&c, *m) == *t).unwrap();
@@ -376,17 +397,63 @@ fn corpus() {
             j = j.make_move_new(e);
             u.make_move(h);
             f = f.make_move_new(i);
+            assert_eq!(
+                g.zobrist(),
+                s.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal).0
+            );
         }
         games.push((gm, sm, cm, jm, um, fm));
     }
     let positions = gb.len() as u64;
     let plies = games.iter().map(|x| x.0.len() as u64).sum();
     eprintln!(
-        "Exact normalized move-set parity: {positions} generated positions, {plies} replay plies"
+        "Exact normalized move-set parity ({label}): {positions} positions, {plies} replay plies"
     );
-    row!("corpus_count","seeded",positions,"giga"=>||{for b in &gb{bb(b.count_legal_moves());}},"shakmaty"=>||{for b in &sb{bb(b.legal_moves().len());}},"cozy"=>||{for b in &cb{bb(cozy_count(b));}},"chess"=>||{for b in &jb{bb(chess::MoveGen::new_legal(b).len());}},"ultra"=>||{for b in &ub{bb(ultra::count_legal_moves(b));}},"ferrum"=>||{for b in &fb{bb(b.generate_moves_count());}});
-    row!("corpus_materialize","seeded",positions,"giga"=>||{for b in &gb{bb(b.legal_moves());}},"shakmaty"=>||{for b in &sb{bb(b.legal_moves());}},"cozy"=>||{for b in &cb{bb(cozy_list(b));}},"chess"=>||{for b in &jb{bb(jordan_list(b));}},"ultra"=>||{for b in &ub{bb(ultra_list(b));}},"ferrum"=>||{for b in &fb{bb(b.generate_moves());}});
-    row!("corpus_uci_sorted","seeded",positions,"giga"=>||{for b in &gb{bb(sorted(b.legal_moves(),|m|gu(b,m)));}},"shakmaty"=>||{for b in &sb{bb(sorted(b.legal_moves(),su));}},"cozy"=>||{for b in &cb{bb(sorted(cozy_list(b),|m|cu(b,m)));}},"chess"=>||{for b in &jb{bb(sorted(jordan_list(b),|m|m.to_string()));}},"ultra"=>||{for b in &ub{bb(sorted(ultra_list(b).iter().copied(),|m|m.to_string()));}},"ferrum"=>||{for b in &fb{bb(sorted(b.generate_moves().iter(),|m|m.to_uci()));}});
-    row!("replay_trusted_native","seeded",plies,"giga"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_unchecked(m);}bb(b);}},"shakmaty"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b.play_unchecked(m);}bb(b);}},"cozy"=>||{for x in &games{let mut b=C::default();for &m in &x.2{b.play_unchecked(m);}bb(b);}},"chess"=>||{for x in &games{let mut b=J::default();for &m in &x.3{b=b.make_move_new(m);}bb(b);}},"ultra"=>||{for x in &games{let mut b=U::startpos();for &m in &x.4{b.make_move(m);}bb(b);}},"ferrum"=>||{for x in &games{let mut b=F::startpos();for &m in &x.5{b=b.make_move_new(m);}bb(b);}});
-    row!("replay_checked_native","seeded",plies,"giga"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.play(m).unwrap();}bb(b);}},"shakmaty"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b=b.play(m).unwrap();}bb(b);}},"cozy"=>||{for x in &games{let mut b=C::default();for &m in &x.2{b.play(m);}bb(b);}},"chess"=>||{for x in &games{let mut b=J::default();for &m in &x.3{assert!(b.legal(m));b=b.make_move_new(m);}bb(b);}},"ultra"=>||{for x in &games{let mut b=U::startpos();for &m in &x.4{assert!(ultra_list(&b).as_slice().contains(&m));b.make_move(m);}bb(b);}},"ferrum"=>||{for x in &games{let mut b=F::startpos();for &m in &x.5{assert!(b.generate_moves().iter().any(|n|n==m));b=b.make_move_new(m);}bb(b);}});
+    for (g, s) in gb.iter().zip(&sb) {
+        assert_eq!(
+            g.repetition_key(),
+            s.zobrist_hash::<Zobrist64>(EnPassantMode::Legal).0
+        );
+        assert_eq!(g.zobrist(), g.zobrist_full());
+    }
+    row!("polyglot_key",label,positions,"giga"=>||{for b in &gb{bb(b.zobrist());}},"shakmaty"=>||{for b in &sb{bb(b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal));}});
+    row!("polyglot_recompute",label,positions,"giga"=>||{for b in &gb{bb(b.zobrist_full());}},"shakmaty"=>||{for b in &sb{bb(b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal));}});
+    row!("repetition_key",label,positions,"giga"=>||{for b in &gb{bb(b.repetition_key());}},"shakmaty"=>||{for b in &sb{bb(b.zobrist_hash::<Zobrist64>(EnPassantMode::Legal));}});
+    row!("corpus_count",label,positions,"giga"=>||{for b in &gb{bb(b.count_legal_moves());}},"shakmaty"=>||{for b in &sb{bb(b.legal_moves().len());}},"cozy"=>||{for b in &cb{bb(cozy_count(b));}},"chess"=>||{for b in &jb{bb(chess::MoveGen::new_legal(b).len());}},"ultra"=>||{for b in &ub{bb(ultra::count_legal_moves(b));}},"ferrum"=>||{for b in &fb{bb(b.generate_moves_count());}});
+    row!("corpus_materialize",label,positions,"giga"=>||{for b in &gb{bb(b.legal_moves());}},"shakmaty"=>||{for b in &sb{bb(b.legal_moves());}},"cozy"=>||{for b in &cb{bb(cozy_list(b));}},"chess"=>||{for b in &jb{bb(jordan_list(b));}},"ultra"=>||{for b in &ub{bb(ultra_list(b));}},"ferrum"=>||{for b in &fb{bb(b.generate_moves());}});
+    row!("corpus_uci_sorted",label,positions,"giga"=>||{for b in &gb{bb(sorted(b.legal_moves(),|m|gu(b,m)));}},"shakmaty"=>||{for b in &sb{bb(sorted(b.legal_moves(),su));}},"cozy"=>||{for b in &cb{bb(sorted(cozy_list(b),|m|cu(b,m)));}},"chess"=>||{for b in &jb{bb(sorted(jordan_list(b),|m|m.to_string()));}},"ultra"=>||{for b in &ub{bb(sorted(ultra_list(b).iter().copied(),|m|m.to_string()));}},"ferrum"=>||{for b in &fb{bb(sorted(b.generate_moves().iter(),|m|m.to_uci()));}});
+    row!("replay_trusted_native",label,plies,"giga"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_unchecked(m);}bb(b);}},"shakmaty"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b.play_unchecked(m);}bb(b);}},"cozy"=>||{for x in &games{let mut b=C::default();for &m in &x.2{b.play_unchecked(m);}bb(b);}},"chess"=>||{for x in &games{let mut b=J::default();for &m in &x.3{b=b.make_move_new(m);}bb(b);}},"ultra"=>||{for x in &games{let mut b=U::startpos();for &m in &x.4{b.make_move(m);}bb(b);}},"ferrum"=>||{for x in &games{let mut b=F::startpos();for &m in &x.5{b=b.make_move_new(m);}bb(b);}});
+    row!("replay_checked_native",label,plies,"giga"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.play(m).unwrap();}bb(b);}},"shakmaty"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b=b.play(m).unwrap();}bb(b);}},"cozy"=>||{for x in &games{let mut b=C::default();for &m in &x.2{b.play(m);}bb(b);}},"chess"=>||{for x in &games{let mut b=J::default();for &m in &x.3{assert!(b.legal(m));b=b.make_move_new(m);}bb(b);}},"ultra"=>||{for x in &games{let mut b=U::startpos();for &m in &x.4{assert!(ultra_list(&b).as_slice().contains(&m));b.make_move(m);}bb(b);}},"ferrum"=>||{for x in &games{let mut b=F::startpos();for &m in &x.5{assert!(b.generate_moves().iter().any(|n|n==m));b=b.make_move_new(m);}bb(b);}});
+}
+
+fn chess960() {
+    for (name, fen) in [
+        (
+            "960_start",
+            "rnkrqbbn/pppppppp/8/8/8/8/PPPPPPPP/RNKRQBBN w DAda - 0 1",
+        ),
+        ("960_castle", "r2k3r/8/8/8/8/8/8/R2K3R w HAha - 0 1"),
+    ] {
+        let g = parse_fen(fen).unwrap();
+        let s: S = shakmaty::fen::Fen::from_ascii(fen.as_bytes())
+            .unwrap()
+            .into_position(CastlingMode::Chess960)
+            .unwrap();
+        let c = C::from_fen(fen, true).unwrap();
+        let moves = sorted(g.legal_moves(), |m| m.to_string());
+        assert_eq!(
+            moves,
+            sorted(s.legal_moves(), |m| shakmaty::uci::UciMove::from_move(
+                m,
+                CastlingMode::Chess960
+            )
+            .to_string())
+        );
+        assert_eq!(moves, sorted(cozy_list(&c), |m| m.to_string()));
+        let n = pg(&g, 3, true);
+        assert_eq!(n, ps(&s, 3, true));
+        assert_eq!(n, pc(&c, 3, true));
+        row!("chess960_materialize",name,moves.len() as u64,"giga"=>||bb(&g).legal_moves(),"shakmaty"=>||bb(&s).legal_moves(),"cozy"=>||cozy_list(bb(&c)));
+        row!("chess960_perft_d3",name,n,"giga"=>||pg(bb(&g),3,true),"shakmaty"=>||ps(bb(&s),3,true),"cozy"=>||pc(bb(&c),3,true));
+    }
 }

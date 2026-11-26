@@ -1,0 +1,1 @@
+Exact normalized move-set parity: 2048 generated positions, 2048 replay plies
