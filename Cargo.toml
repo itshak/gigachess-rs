@@ -12,6 +12,10 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-king-local = []
+exp-pin-rays = []
+exp-fused-geometry = []
+exp-uci-direct = []
 exp-tagged-perft = []
 exp-perft-kernel = []
 exp-direct-hash = []
