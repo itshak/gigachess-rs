@@ -170,10 +170,14 @@ pub struct Board {
     roles:[u64;5],
     // Overlapping diagonal and orthogonal slider planes: a queen is
     // the intersection, bishop/rook are the respective differences.
-    #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless")))]
+    #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless"),not(feature="exp-sparse-role3")))]
     sliders:[u64;5],
-    #[cfg(feature="exp-slider-planes-kingless")]
+    #[cfg(all(feature="exp-slider-planes-kingless",not(feature="exp-sparse-role3")))]
     sliders:[u64;4],
+    // Role codes: P=000,N=001,B=010,R=100,Q=110,K=101.
+    // Occupancy distinguishes a pawn (zero code) from an empty square.
+    #[cfg(feature="exp-sparse-role3")]
+    sliders:[u64;3],
     #[cfg(feature="exp-nibble-role")]
     role_map:[u8;32],
     #[cfg(feature="exp-role-planes")]
@@ -214,10 +218,12 @@ impl Board {
             roles: [0;6],
             #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
             roles:[0;5],
-            #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless")))]
+            #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless"),not(feature="exp-sparse-role3")))]
             sliders:[0;5],
-            #[cfg(feature="exp-slider-planes-kingless")]
+            #[cfg(all(feature="exp-slider-planes-kingless",not(feature="exp-sparse-role3")))]
             sliders:[0;4],
+            #[cfg(feature="exp-sparse-role3")]
+            sliders:[0;3],
             #[cfg(feature="exp-nibble-role")]
             role_map:[0xff;32],
             #[cfg(feature="exp-role-planes")]
@@ -261,10 +267,12 @@ impl Board {
             roles: [0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56), 0x10 | (0x10 << 56)],
             #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
             roles:[0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56)],
-            #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless")))]
+            #[cfg(all(feature="exp-slider-planes",not(feature="exp-slider-planes-kingless"),not(feature="exp-sparse-role3")))]
             sliders:[0xff00|(0xff<<48),0x42|(0x42<<56),0x2c|(0x2c<<56),0x89|(0x89<<56),0x10|(0x10<<56)],
-            #[cfg(feature="exp-slider-planes-kingless")]
+            #[cfg(all(feature="exp-slider-planes-kingless",not(feature="exp-sparse-role3")))]
             sliders:[0xff00|(0xff<<48),0x42|(0x42<<56),0x2c|(0x2c<<56),0x89|(0x89<<56)],
+            #[cfg(feature="exp-sparse-role3")]
+            sliders:[0x52|(0x52<<56),0x2c|(0x2c<<56),0x99|(0x99<<56)],
             #[cfg(feature="exp-nibble-role")]
             role_map:{
                 let mut m=[0xff;32];let back=[3u8,1,2,4,5,2,1,3];let mut i=0;
@@ -326,7 +334,15 @@ impl Board {
 
     #[inline(always)]
     fn bb(&self,color:usize,role:usize)->u64 {
-        #[cfg(feature="exp-slider-planes")]
+        #[cfg(feature="exp-sparse-role3")]
+        {
+            let [a,b,c]=self.sliders;
+            let raw=match role{
+                0=>!(a|b|c),1=>a&!c,2=>b&!c,3=>c&!(a|b),4=>b&c,_=>a&c,
+            };
+            return raw&self.occ[color];
+        }
+        #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {
             let p=&self.sliders;
             let raw=match role {
@@ -355,14 +371,18 @@ impl Board {
     }
     #[inline(always)]
     fn diagonal_sliders(&self,color:usize)->u64{
-        #[cfg(feature="exp-slider-planes")]
+        #[cfg(feature="exp-sparse-role3")]
+        {return self.sliders[1]&!self.sliders[0]&self.occ[color];}
+        #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {self.sliders[2]&self.occ[color]}
         #[cfg(not(feature="exp-slider-planes"))]
         {self.bb(color,Role::Bishop.index())|self.bb(color,Role::Queen.index())}
     }
     #[inline(always)]
     fn orthogonal_sliders(&self,color:usize)->u64{
-        #[cfg(feature="exp-slider-planes")]
+        #[cfg(feature="exp-sparse-role3")]
+        {return self.sliders[2]&!self.sliders[0]&self.occ[color];}
+        #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {self.sliders[3]&self.occ[color]}
         #[cfg(not(feature="exp-slider-planes"))]
         {self.bb(color,Role::Rook.index())|self.bb(color,Role::Queen.index())}
@@ -370,12 +390,21 @@ impl Board {
     #[cfg(feature="exp-slider-planes")]
     #[inline(always)]
     fn slider_role_at(&self,b:u64)->u8{
+        #[cfg(feature="exp-sparse-role3")]
+        {
+            let [a,c,d]=self.sliders;
+            let code=(a&b!=0) as usize+2*(c&b!=0) as usize+4*(d&b!=0) as usize;
+            return [0,1,2,0,3,5,4,0][code];
+        }
+        #[cfg(not(feature="exp-sparse-role3"))]
+        {
         if self.sliders[0]&b!=0{return 0;}
         if self.sliders[1]&b!=0{return 1;}
         // 00 king, 01 bishop, 10 rook, 11 queen.
         let d=(self.sliders[2]&b!=0) as usize;
         let r=(self.sliders[3]&b!=0) as usize;
         [5,2,3,4][d+2*r]
+        }
     }
     #[cfg(not(feature="exp-slider-planes"))]
     #[inline(always)]
@@ -412,7 +441,20 @@ impl Board {
         { self.mailbox[mask.trailing_zeros() as usize]=(color*6+role) as u8; }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        #[cfg(feature="exp-slider-planes")]
+        #[cfg(feature="exp-sparse-role3")]
+        {
+            #[cfg(feature="exp-sparse-role3-branchless")]
+            {
+                let code=[0u8,1,2,4,6,5][role];
+                for i in 0..3{self.sliders[i]|=mask&0u64.wrapping_sub(((code>>i)&1) as u64);}
+            }
+            #[cfg(not(feature="exp-sparse-role3-branchless"))]
+            match role{
+                0=>{},1=>{self.sliders[0]|=mask;},2=>{self.sliders[1]|=mask;},3=>{self.sliders[2]|=mask;},
+                4=>{self.sliders[1]|=mask;self.sliders[2]|=mask;},_=>{self.sliders[0]|=mask;self.sliders[2]|=mask;}
+            }
+        }
+        #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {
             match role {
                 0..=3=>self.sliders[role]|=mask,
@@ -436,7 +478,20 @@ impl Board {
         { self.mailbox[mask.trailing_zeros() as usize]=EMPTY; }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        #[cfg(feature="exp-slider-planes")]
+        #[cfg(feature="exp-sparse-role3")]
+        {
+            #[cfg(feature="exp-sparse-role3-branchless")]
+            {
+                let code=[0u8,1,2,4,6,5][role];
+                for i in 0..3{self.sliders[i]&=!(mask&0u64.wrapping_sub(((code>>i)&1) as u64));}
+            }
+            #[cfg(not(feature="exp-sparse-role3-branchless"))]
+            match role{
+                0=>{},1=>{self.sliders[0]&=!mask;},2=>{self.sliders[1]&=!mask;},3=>{self.sliders[2]&=!mask;},
+                4=>{self.sliders[1]&=!mask;self.sliders[2]&=!mask;},_=>{self.sliders[0]&=!mask;self.sliders[2]&=!mask;}
+            }
+        }
+        #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {
             match role {
                 0..=3=>self.sliders[role]&=!mask,
@@ -469,7 +524,20 @@ impl Board {
         }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        #[cfg(feature="exp-slider-planes")]
+        #[cfg(feature="exp-sparse-role3")]
+        {
+            #[cfg(feature="exp-sparse-role3-branchless")]
+            {
+                let code=[0u8,1,2,4,6,5][role];
+                for i in 0..3{self.sliders[i]^=mask&0u64.wrapping_sub(((code>>i)&1) as u64);}
+            }
+            #[cfg(not(feature="exp-sparse-role3-branchless"))]
+            match role{
+                0=>{},1=>{self.sliders[0]^=mask;},2=>{self.sliders[1]^=mask;},3=>{self.sliders[2]^=mask;},
+                4=>{self.sliders[1]^=mask;self.sliders[2]^=mask;},_=>{self.sliders[0]^=mask;self.sliders[2]^=mask;}
+            }
+        }
+        #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {
             match role {
                 0..=3=>self.sliders[role]^=mask,
@@ -682,6 +750,10 @@ impl Board {
     /// `rook_sq[4]` scan (rare, `is_chess960==true` only).
     #[inline(always)]
     fn castle_rights_after(&self, role: u8, us: Color, from: u8, to: u8) -> u8 {
+        #[cfg(feature="exp-castle-compact")]
+        if self.castling==0{return 0;}
+        #[cfg(feature="exp-castle-compact")]
+        if !self.is_chess960 && role!=Role::King as u8 && (bit(from)|bit(to))&0xff000000000000ff==0{return 15;}
         if cfg!(feature = "exp-standard-castle") && self.castling == 0 { return 0; }
         if !self.is_chess960 {
             // Standard: `E1` clears both white, `A1`/`H1` clear one, same for 8th.
@@ -903,10 +975,23 @@ impl Board {
             let p=&self.sliders;
             #[cfg(not(feature="exp-slider-planes"))]
             let p=&self.roles;
-            let mut result=(PAWN_ATT[by.other().index()][k]&p[0])|
-                (KNIGHT_ATT[k]&p[1])|(KING_ATT[k]&self.bb(by.index(),5));
-            let bishops=self.diagonal_sliders(by.index())&crate::bitboard::EMPTY_BISHOP_RAYS[k];
-            let rooks=self.orthogonal_sliders(by.index())&crate::bitboard::EMPTY_ROOK_RAYS[k];
+            #[cfg(feature="exp-sparse-role3")]
+            let (pawns,knights)=(self.bb(by.index(),0),self.bb(by.index(),1));
+            #[cfg(not(feature="exp-sparse-role3"))]
+            let (pawns,knights)=(p[0],p[1]);
+            #[cfg(feature="exp-compact-attack-desc")]
+            let (pawn_att,knight_att,king_att,bishop_ray,rook_ray)={
+                const DESC:[[u64;6];64]={
+                    let mut t=[[0;6];64];let mut i=0;
+                    while i<64{t[i]=[PAWN_ATT[0][i],PAWN_ATT[1][i],KNIGHT_ATT[i],KING_ATT[i],crate::bitboard::EMPTY_BISHOP_RAYS[i],crate::bitboard::EMPTY_ROOK_RAYS[i]];i+=1;}t
+                };
+                let d=&DESC[k];(d[by.other().index()],d[2],d[3],d[4],d[5])
+            };
+            #[cfg(not(feature="exp-compact-attack-desc"))]
+            let (pawn_att,knight_att,king_att,bishop_ray,rook_ray)=(PAWN_ATT[by.other().index()][k],KNIGHT_ATT[k],KING_ATT[k],crate::bitboard::EMPTY_BISHOP_RAYS[k],crate::bitboard::EMPTY_ROOK_RAYS[k]);
+            let mut result=(pawn_att&pawns)|(knight_att&knights)|(king_att&self.bb(by.index(),5));
+            let bishops=self.diagonal_sliders(by.index())&bishop_ray;
+            let rooks=self.orthogonal_sliders(by.index())&rook_ray;
             result&=allowed;
             #[cfg(feature="exp-checker-rays")]
             {
@@ -916,6 +1001,17 @@ impl Board {
                     let first=pop_lsb(&mut candidates);
                     let clear=crate::bitboard::BETWEEN[k][first as usize]&occ==0;
                     result|=bit(first)&0u64.wrapping_sub(clear as u64);
+                }
+                #[cfg(feature="exp-checker-pair")]
+                {
+                    if candidates!=0{
+                        let x=pop_lsb(&mut candidates);
+                        result|=bit(x)&0u64.wrapping_sub((crate::bitboard::BETWEEN[k][x as usize]&occ==0) as u64);
+                        if candidates!=0{
+                            let x=pop_lsb(&mut candidates);
+                            result|=bit(x)&0u64.wrapping_sub((crate::bitboard::BETWEEN[k][x as usize]&occ==0) as u64);
+                        }
+                    }
                 }
                 while candidates!=0{
                     let a=pop_lsb(&mut candidates);
@@ -1029,6 +1125,16 @@ impl Board {
     /// (ADR-003: keys are per (color, rook file)).
     #[inline(always)]
     fn castle_rights_hash(&self, rights: u8) -> u64 {
+        #[cfg(feature="exp-castle-compact")]
+        if !self.is_chess960 {
+            // set_state must set is_chess960 before computing the hash.
+            const KEYS:[u64;16]={
+                let mut t=[0;16];let mut i=1;
+                while i<16{let k=(i as u32).trailing_zeros() as usize;
+                    t[i]=t[i&(i-1)]^crate::polyglot_keys::POLYGLOT_RANDOM_ARRAY[768+k];i+=1;}t
+            };
+            return KEYS[rights as usize];
+        }
         #[cfg(feature="exp-fast-castle-keys")]
         {
             const HASHES:[u64;16]={
@@ -2181,8 +2287,11 @@ impl Board {
         #[cfg(all(feature = "exp-quiet-fast", not(feature = "exp-normal-kernel")))]
         if mv.promotion().is_none() && self.occupied()&bit(to)==0 && !(is_pawn&&diag) {
             let ui=us.index();let ti=them.index();
-            self.bb_remove(ui,role as usize,bit(from));
-            self.bb_add(ui,role as usize,bit(to));
+            #[cfg(all(feature="exp-direct-role-xor",feature="exp-mutation"))]
+            self.bb_toggle(ui,role as usize,bit(from)^bit(to));
+            #[cfg(not(all(feature="exp-direct-role-xor",feature="exp-mutation")))]
+            {self.bb_remove(ui,role as usize,bit(from));
+            self.bb_add(ui,role as usize,bit(to));}
             self.occ[ui]^=bit(from)^bit(to);
             if role==Role::King as u8 {self.king_sq[ui]=to;}
             // Preserve the baseline's partial/stale piece hash update on CHECKERS-only makes.
@@ -3781,7 +3890,6 @@ impl Board {
         self.ep = ep;
         self.halfmove = halfmove;
         self.fullmove = fullmove;
-        self.hash = self.zobrist_full();
         // Refresh cached checkers for the new side to move (branch-free in_check).
         self.checkers = self.attackers_to(
             self.king_sq[self.turn.index()],
@@ -3802,6 +3910,7 @@ impl Board {
             }
         }
         self.is_chess960 = is960;
+        self.hash = self.zobrist_full();
     }
 }
 

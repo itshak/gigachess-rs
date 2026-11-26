@@ -12,6 +12,12 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-sparse-role3 = ["exp-slider-planes"]
+exp-sparse-role3-branchless = ["exp-sparse-role3"]
+exp-direct-role-xor = []
+exp-castle-compact = []
+exp-checker-pair = []
+exp-compact-attack-desc = []
 exp-blocked-sliders = []
 exp-no-danger-needed = []
 exp-undo-outside = []
