@@ -14,6 +14,11 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-implicit-pawn = ["gigachess/exp-implicit-pawn"]
+exp-role-weight = ["gigachess/exp-role-weight"]
+exp-leaf-direct = ["gigachess/exp-leaf-direct"]
+exp-color-pawn = ["gigachess/exp-color-pawn"]
+exp-hash-square-order = ["gigachess/exp-hash-square-order"]
 exp-packed-meta = ["gigachess/exp-packed-meta"]
 exp-checker-hybrid = ["gigachess/exp-checker-hybrid"]
 exp-checker-color = ["gigachess/exp-checker-color"]
@@ -90,7 +95,8 @@ exp-color-make = ["gigachess/exp-color-make"]
 exp-checked-known = ["gigachess/exp-checked-known"]
 exp-unmake-xor = ["gigachess/exp-unmake-xor"]
 # For this paired experiment branch only, C is the benchmark baseline.
-default = ["baseline-l"]
+default = ["baseline-m"]
+baseline-m = ["baseline-l", "exp-no-danger-needed", "exp-zone-sliders"]
 baseline-l = ["baseline-k", "exp-layout-roles"]
 baseline-k = ["baseline-j", "exp-inline-make"]
 baseline-j = ["baseline-i", "exp-special-cold", "exp-align32", "exp-blocked-sliders"]

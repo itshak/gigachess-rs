@@ -32,6 +32,9 @@ const TURN_KEY: usize = 780;
 /// Zobrist key for a piece of `color`/`role` standing on `sq`.
 #[inline(always)]
 pub fn piece_key(color: Color, role: Role, sq: Square) -> u64 {
+    #[cfg(feature="exp-hash-square-order")]
+    {return piece_key_indices(color.index(),role.index(),sq.index() as u8);}
+    #[allow(unreachable_code)]
     unsafe {
         *POLYGLOT_RANDOM_ARRAY.get_unchecked(PIECE_BASE + 64 * (2 * role.index() + color.index()) + sq.index())
     }
@@ -40,6 +43,14 @@ pub fn piece_key(color: Color, role: Role, sq: Square) -> u64 {
 /// Direct equivalent of piece_key for validated internal color/role indices.
 #[inline(always)]
 pub(crate) fn piece_key_indices(color:usize,role:usize,sq:u8)->u64 {
+    #[cfg(feature="exp-hash-square-order")]
+    {
+        static KEYS:[[u64;12];64]={
+            let mut t=[[0;12];64];let mut i=0;
+            while i<768{t[i&63][i>>6]=POLYGLOT_RANDOM_ARRAY[i];i+=1;}t
+        };
+        return KEYS[sq as usize][2*role+color];
+    }
     #[cfg(feature="exp-direct-key")]
     {
         // Separate fixed-size piece rows allow constant-folding the color

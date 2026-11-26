@@ -358,3 +358,29 @@ screens completed. New paired baseline L=K+layout-roles.
 Combined local regression passed, 88-byte size/startpos/empty verified,
 default library 55 tests passed. Additional local full release tests
 and six-platform comparisons required before selecting.
+
+## Round 10: direct role layout and exact leaf transitions
+Round9 nine complete runs retrieved. M=L+no-danger-needed+zone-sliders
+(45831167420) new best 482/522, 468 >=1.03, 77 >=2, cold 6/6,
+all 36/36 child creation, count, FEN parse and make/unmake.
+Direct-key 467/522, 12/12 checked replay, 1.085x trusted vs L.
+Color-specific refresh 476/522, 1.074x checked vs L.
+Packed meta rejected: unaligned 434/522, aligned 462/522, local
+trusted 0.673x L despite 1.161x snapshot. Hybrid checker rejected.
+Round9 full local release + six deep perft + four focused ABBA passed.
+Round8 cancelled macOS jobs now both passed; kingless-ray 441/522,
+unaligned 475/522; K1 468/522. Local-only improvements do not justify
+promotion without cross-platform confirmation.
+New benchmark baseline M. New five experimental techniques:
+- implicit-pawn: five direct K,N,B,R,Q planes, pawn from occupied
+  complement; no pawn role writes, cached king squares retained.
+  Natural alignment 88 bytes, separate alignment alternative.
+- role-weight: pawn fast path, weighted role mask lookup for other
+  roles instead of multiple conditional branches.
+- leaf-direct: exact ordinary slim child transition without Undo
+  construction, retains hash/clocks unchanged, EP/castle fallback.
+- color-pawn: specialize pawn-side index at compile time.
+- hash-square-order: independently generated square-major Polyglot
+  key layout; exact same keys for public and internal accessors.
+Expanded local regression passed for four combined features and
+separate role-weight variant; full release validation pending.
