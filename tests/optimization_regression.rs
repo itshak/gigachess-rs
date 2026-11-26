@@ -144,3 +144,36 @@ fn full_visitor_observes_identical_leaf_states() {
         }
     }
 }
+
+#[cfg(any(feature="exp-nibble-role",feature="exp-role-planes",feature="exp-kingless-board"))]
+#[test]
+fn redundant_role_storage_matches_bitboards_and_fen(){
+    assert!(parse_fen("4k3/8/8/8/8/8/8/3KK3 w - - 0 1").is_err());
+    assert!(parse_fen("4k3/8/8/8/8/8/8/8 w - - 0 1").is_err());
+    for sq in 0..64 {assert_eq!(Board::empty().piece_at(Square(sq)),None);}
+    fn visit(b:&Board,depth:u8){
+        for sq in 0..64{
+            let mut expected=None;
+            for c in [Color::Black,Color::White]{
+                for r in [Role::Pawn,Role::Knight,Role::Bishop,Role::Rook,Role::Queen,Role::King]{
+                    if b.piece_bb(c,r)&(1u64<<sq)!=0{expected=Some(gigachess::Piece::new(c,r));}
+                }
+            }
+            assert_eq!(b.piece_at(Square(sq)),expected);
+        }
+        assert_eq!(b.zobrist(),b.zobrist_full());
+        if depth!=0 {for m in b.legal_moves(){let mut child=*b;child.make_move_unchecked(m);visit(&child,depth-1);}}
+    }
+    visit(&Board::startpos(),2);
+    visit(&parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap(),2);
+}
+
+#[cfg(feature="exp-uci-sort-key")]
+#[test]
+fn sorted_uci_matches_reference_including_promotions_and_960(){
+    for fen in ["r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1","4k3/P7/8/3pP3/8/8/8/4K3 w - d6 0 1","4k3/8/8/8/8/8/8/1R1K3R w BH - 0 1"]{
+        let b=parse_fen(fen).unwrap();
+        let mut expected:Vec<_>=b.legal_moves().iter().map(|&m|if b.is_chess960(){m.to_string()}else{uci(&b,m)}).collect();
+        expected.sort_unstable();assert_eq!(b.legal_moves_uci_sorted(),expected);
+    }
+}
