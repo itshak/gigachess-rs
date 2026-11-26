@@ -1,0 +1,98 @@
+name: Rust combined candidate validation
+on:
+  push:
+    branches: [perf/rust-provisional-combination-20261126]
+    paths: ['.github/workflows/combined-bakeoff.yml', 'src/**', 'Cargo.toml', 'build.rs', 'benchmarks/competitive/src/**', 'benchmarks/competitive/Cargo.toml']
+  workflow_dispatch:
+    inputs:
+      features:
+        description: Comma-separated experimental feature names
+        required: true
+        default: exp-static-sliders,exp-ray-prefilter,exp-san,exp-uci,exp-fused-perft,exp-copy-perft,exp-mutation
+permissions:
+  contents: read
+jobs:
+  paired:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, mode: portable}
+          - {os: ubuntu-24.04, mode: native}
+          - {os: ubuntu-24.04, mode: pext}
+          - {os: ubuntu-24.04-arm, mode: native}
+          - {os: macos-15, mode: native}
+          - {os: windows-2025, mode: native}
+    name: ${{ matrix.os }} / ${{ matrix.mode }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      MODE: ${{ matrix.mode }}
+      EXPERIMENTS: ${{ inputs.features || 'exp-static-sliders,exp-ray-prefilter,exp-san,exp-uci,exp-fused-perft,exp-copy-perft,exp-mutation' }}
+      BENCH_MS: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.97.1
+      - name: Environment and correctness gates
+        run: |
+          mkdir -p evidence
+          rustc -vV > evidence/environment.txt
+          cargo -V >> evidence/environment.txt
+          git rev-parse HEAD >> evidence/environment.txt
+          echo "mode=$MODE features=$EXPERIMENTS" >> evidence/environment.txt
+          if [[ "$RUNNER_OS" == Linux ]]; then lscpu >> evidence/environment.txt; fi
+          if [[ "$RUNNER_OS" == macOS ]]; then sysctl -n machdep.cpu.brand_string >> evidence/environment.txt || true; fi
+          if [[ "$RUNNER_OS" == Windows ]]; then powershell.exe -NoProfile -Command 'Get-CimInstance Win32_Processor | Select-Object Name,NumberOfLogicalProcessors' >> evidence/environment.txt; fi
+          if [[ "$MODE" != portable ]]; then echo "RUSTFLAGS=-C target-cpu=native" >> "$GITHUB_ENV"; export RUSTFLAGS="-C target-cpu=native"; fi
+          if [[ "$MODE" == pext ]]; then
+            grep -qw bmi2 /proc/cpuinfo
+            echo "BASE_FEATURES=pext" >> "$GITHUB_ENV"
+            echo "CANDIDATE_FEATURES=pext,$EXPERIMENTS" >> "$GITHUB_ENV"
+            cargo test --locked --release --features "pext,$EXPERIMENTS" > evidence/tests.txt 2>&1
+          else
+            echo "BASE_FEATURES=" >> "$GITHUB_ENV"
+            echo "CANDIDATE_FEATURES=$EXPERIMENTS" >> "$GITHUB_ENV"
+            cargo test --locked --release --features "$EXPERIMENTS" > evidence/tests.txt 2>&1
+          fi
+          echo "RUSTFLAGS=${RUSTFLAGS:-}" >> evidence/environment.txt
+      - name: Build paired baseline and combined candidate
+        run: |
+          exe=benchmarks/competitive/target/release/gigachess-competitive-bench
+          ext=""
+          if [[ "$RUNNER_OS" == Windows ]]; then ext=.exe; fi
+          cargo build --locked --release --manifest-path benchmarks/competitive/Cargo.toml --bin gigachess-competitive-bench --features "$BASE_FEATURES"
+          cp "$exe$ext" "evidence/baseline-bin$ext"
+          cargo build --locked --release --manifest-path benchmarks/competitive/Cargo.toml --bin gigachess-competitive-bench --features "$CANDIDATE_FEATURES"
+          cp "$exe$ext" "evidence/candidate-bin$ext"
+      - name: Full ABBA benchmark including first use and board sizes
+        run: |
+          ext=""
+          if [[ "$RUNNER_OS" == Windows ]]; then ext=.exe; fi
+          for pair in baseline:1 candidate:1 candidate:2 baseline:2; do
+            side=${pair%:*}
+            rep=${pair#*:}
+            "evidence/$side-bin$ext" > "evidence/$side-$rep.tsv" 2> "evidence/$side-$rep-validation.txt"
+          done
+          for side in baseline candidate; do
+            for n in {1..7}; do "evidence/$side-bin$ext" --cold-giga; done > "evidence/$side-cold-ns.txt"
+            "evidence/$side-bin$ext" --sizes > "evidence/$side-sizes.txt"
+            for lib in shakmaty cozy ultra chess ferrum; do
+              for n in {1..7}; do "evidence/$side-bin$ext" "--cold-$lib"; done > "evidence/$side-$lib-cold-ns.txt"
+            done
+          done
+          rm evidence/*-bin"$ext"
+          python benchmarks/competitive/compare_ab.py evidence | tee evidence/ab-summary.md >> "$GITHUB_STEP_SUMMARY"
+          python benchmarks/competitive/compare_all_peers.py evidence | tee evidence/peer-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: combined-${{ matrix.os }}-${{ matrix.mode }}
+          path: |
+            evidence/*.tsv
+            evidence/*.txt
+            evidence/*.md
