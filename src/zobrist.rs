@@ -43,6 +43,52 @@ pub(crate) fn piece_key_indices(color:usize,role:usize,sq:u8)->u64 {
     POLYGLOT_RANDOM_ARRAY[64*(2*role+color)+sq as usize]
 }
 
+/// Ordinary move hash delta. The optional table trades two random keys
+/// for one larger lookup, keeping the exact Polyglot contract.
+#[inline(always)]
+pub(crate) fn piece_move_delta<const TURN:bool>(color:usize,role:usize,from:u8,to:u8)->u64 {
+    #[cfg(feature="exp-hash-delta")]
+    {
+        static DELTAS:[u64;49152]={
+            let mut t=[0;49152];let mut i=0;
+            while i<49152{
+                let piece=i>>12;let f=(i>>6)&63;let to=i&63;
+                t[i]=POLYGLOT_RANDOM_ARRAY[piece*64+f]^POLYGLOT_RANDOM_ARRAY[piece*64+to];i+=1;
+            }t
+        };
+        let value=DELTAS[((2*role+color)<<12)|((from as usize)<<6)|to as usize];
+        return if TURN{value^turn_key()}else{value};
+    }
+    #[cfg(not(feature="exp-hash-delta"))]
+    {
+        let value=piece_key_indices(color,role,from)^piece_key_indices(color,role,to);
+        if TURN{value^turn_key()}else{value}
+    }
+}
+
+#[cfg(feature="exp-hash-pawn-bytes")]
+#[inline(always)]
+pub(crate) fn pawn_byte_hash(color:usize,mut pawns:u64)->u64{
+    // A rank with multiple pawns costs one XOR. Empty ranks are skipped.
+    static PAWN_RANK_KEYS:[u64;4096]={
+        let mut t=[0;4096];let mut i=0;
+        while i<4096{
+            let c=i>>11;let rank=(i>>8)&7;let mut bits:usize=i&255;let mut value=0;
+            while bits!=0 {let f=bits.trailing_zeros() as usize;bits&=bits-1;
+                value^=POLYGLOT_RANDOM_ARRAY[c*64+rank*8+f];}
+            t[i]=value;i+=1;
+        }t
+    };
+    let mut h=0;
+    while pawns!=0 {
+        let rank=(pawns.trailing_zeros()>>3) as usize;
+        let shift=rank*8;let byte=((pawns>>shift)&255) as usize;
+        h^=PAWN_RANK_KEYS[(color<<11)|(rank<<8)|byte];
+        pawns&=!(255u64<<shift);
+    }
+    h
+}
+
 /// Raw Polyglot castling key (bit 0..3 = WK, WQ, BK, BQ), i.e. entries
 /// `768..772` of the Polyglot table. Kept for reference/migration tooling;
 /// live hashing uses [`castle_file_key`], keyed by rook file (ADR-003).

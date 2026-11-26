@@ -122,3 +122,31 @@ wins; 0.882x checked replay vs C. The reused-role variant (45775774803)
 finished with 377/522 wins and 1.034x checked replay vs C.
 New E-paired layout runs 45778344181 and 45778347701 were dispatched;
 no result claimed. Neither production defaults nor main changed.
+
+## Round 4: E-selected baseline, exact remaining losses
+
+All six E jobs finished successfully (45776626381): 432/522 strict wins,
+412 >=1.03x, 63 >=2x. Sorted UCI 12/12; make/unmake 35/36; full
+perft 32/36; children 22/36; snapshot 9/36; trusted replay 0/12.
+The 88/80-byte overlapping slider layouts lost to E on mutation and
+were rejected (394/522 and 407/522). Redundant role cache and branchless
+role encoding also rejected. Independent FEN rank writer (45776160472)
+won 36/36 with 1.474x vs C; numeric UCI sort (45776157007) won 12/12.
+Retain 96-byte layout for F = E + exp-fen-rank.
+Chess 3.2.0 copy-make uses a simple source/destination XOR plus ray-based
+checkers and pins. Shakmaty 0.30.0 uses predecoded move roles and
+direct plane mutation without cached Polyglot/checker upkeep. Ferrum
+uses flagged moves and 88-byte boards. No code copied from GPL or
+ambiguous-license sources. Existing 16-bit full-state replay retained.
+
+New independent experiments:
+- align16/align32: 96-byte layout aligned for copy operations, no field changes.
+- ordinary-kernel: one occupancy classification, known capture role, single
+  local hash accumulator, XOR piece and occupancy, special moves fallback.
+- hash-pawn-bytes: rank-pattern XOR table for pawns (32 KiB), exact Polyglot.
+- hash-delta: precomputed two-square key XOR (384 KiB), tests cache tradeoff.
+- no-promotion-batch / no-perft-xor: independent ablations of E, target
+  Windows and ARM residual full-perft losses.
+- Existing leaf-reuse and inline-make evaluated separately.
+Expanded E+all new compatible feature debug regression suite passed,
+including all 960 starts and 960 stripped castling fixtures. CI required.
