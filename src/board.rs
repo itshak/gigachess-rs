@@ -958,6 +958,17 @@ impl Board {
                 2*((col[2]|col[3])&b!=0) as u8+
                 4*((col[4]|king)&b!=0) as u8;
         }
+        #[cfg(feature="exp-role-test-bit")]
+        {
+            if col[0]&b!=0{return 0;}
+            let n=((col[1]>>sq)&1) as u8;
+            let bishop=((col[2]>>sq)&1) as u8;
+            let rook=((col[3]>>sq)&1) as u8;
+            let queen=((col[4]>>sq)&1) as u8;
+            // On an occupied nonpawn square exactly one role is set;
+            // king is the default. Preserve the previous lookup result.
+            return 5-4*n-3*bishop-2*rook-queen;
+        }
         #[cfg(feature="exp-role-weight")]
         {
             if col[0]&b!=0{return 0;}
@@ -965,7 +976,7 @@ impl Board {
             return (col[1]&b!=0) as u8+2*(col[2]&b!=0) as u8+3*(col[3]&b!=0) as u8+
                 4*(col[4]&b!=0) as u8+5*(king&b!=0) as u8;
         }
-        #[cfg(not(any(feature="exp-role-select",feature="exp-role-weight")))]
+        #[cfg(not(any(feature="exp-role-select",feature="exp-role-weight",feature="exp-role-test-bit")))]
         if col[0]&b!=0{0}else if col[1]&b!=0{1}else if col[2]&b!=0{2}else if col[3]&b!=0{3}else if col[4]&b!=0{4}else{5}
         }
     }
@@ -1351,6 +1362,11 @@ impl Board {
             };
             #[cfg(not(all(feature="exp-kingless-ray",feature="exp-kingless-board",not(feature="exp-slider-planes"),not(feature="exp-implicit-queen"))))]
             let king_hits=king_att&self.bb(by.index(),5);
+            #[cfg(feature="exp-checker-near")]
+            let mut result=if (pawn_att|knight_att|king_att)&allowed==0{0}else{
+                (pawn_att&pawns)|(knight_att&knights)|king_hits
+            };
+            #[cfg(not(feature="exp-checker-near"))]
             let mut result=(pawn_att&pawns)|(knight_att&knights)|king_hits;
             #[cfg(all(feature="exp-ray-combined",not(feature="exp-slider-planes"),not(feature="exp-implicit-queen")))]
             let (bishops,rooks)=((p[2]|p[4])&bishop_ray&allowed,(p[3]|p[4])&rook_ray&allowed);
@@ -1567,7 +1583,23 @@ impl Board {
     /// the incremental hash in `self.hash` must always agree with this).
     pub fn zobrist_full(&self) -> u64 {
         let mut h = 0u64;
-        #[cfg(all(feature="exp-hash-role-scan",feature="exp-compact-board"))]
+        #[cfg(feature="exp-hash-two-lanes")]
+        {
+            #[inline(always)]
+            fn pair<const R:usize>(b:&Board)->u64{
+                let mut black=b.bb(0,R);let mut white=b.bb(1,R);
+                let mut h0=0;let mut h1=0;
+                while black!=0&&white!=0{
+                    h0^=zobrist::piece_key_indices(0,R,pop_lsb(&mut black));
+                    h1^=zobrist::piece_key_indices(1,R,pop_lsb(&mut white));
+                }
+                while black!=0{h0^=zobrist::piece_key_indices(0,R,pop_lsb(&mut black));}
+                while white!=0{h1^=zobrist::piece_key_indices(1,R,pop_lsb(&mut white));}
+                h0^h1
+            }
+            h=pair::<0>(self)^pair::<1>(self)^pair::<2>(self)^pair::<3>(self)^pair::<4>(self)^pair::<5>(self);
+        }
+        #[cfg(all(not(feature="exp-hash-two-lanes"),feature="exp-hash-role-scan",feature="exp-compact-board"))]
         {
             #[inline(always)]
             fn fold<const R:usize>(b:&Board)->u64{
@@ -1582,7 +1614,7 @@ impl Board {
             }
             h=fold::<0>(self)^fold::<1>(self)^fold::<2>(self)^fold::<3>(self)^fold::<4>(self)^fold::<5>(self);
         }
-        #[cfg(all(feature="exp-hash-unroll",not(all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
+        #[cfg(all(not(feature="exp-hash-two-lanes"),feature="exp-hash-unroll",not(all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         {
             #[inline(always)]
             fn fold<const C:usize,const R:usize>(b:&Board)->u64{
@@ -1594,7 +1626,7 @@ impl Board {
             h=fold::<0,0>(self)^fold::<0,1>(self)^fold::<0,2>(self)^fold::<0,3>(self)^fold::<0,4>(self)^fold::<0,5>(self)^
               fold::<1,0>(self)^fold::<1,1>(self)^fold::<1,2>(self)^fold::<1,3>(self)^fold::<1,4>(self)^fold::<1,5>(self);
         }
-        #[cfg(all(feature="exp-hash-role-order",not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board")))))]
+        #[cfg(all(not(feature="exp-hash-two-lanes"),feature="exp-hash-role-order",not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board")))))]
         for r in 0..6{
             let mut black=self.bb(0,r);let mut white=self.bb(1,r);
             let mut h0=0;let mut h1=0;
@@ -1602,7 +1634,7 @@ impl Board {
             while white!=0{h1^=zobrist::piece_key_indices(1,r,pop_lsb(&mut white));}
             h^=h0^h1;
         }
-        #[cfg(not(any(feature="exp-hash-role-order",feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
+        #[cfg(not(any(feature="exp-hash-two-lanes",feature="exp-hash-role-order",feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         for ci in 0..2 {
             #[cfg(feature="exp-hash-pawn-bytes")]
             {h^=zobrist::pawn_byte_hash(ci,self.bb(ci,0));}
@@ -2633,7 +2665,11 @@ impl Board {
                 self.occ[ui]^=f^t;
                 hash^=zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
                 if role==5{self.set_king_index(ui,to);}
-                if self.rights_raw()!=0{
+                #[cfg(feature="exp-castle-standard-clear")]
+                let touch=role==5||self.is_chess960()||(f|t)&0x9100000000000091!=0;
+                #[cfg(not(feature="exp-castle-standard-clear"))]
+                let touch=true;
+                if touch&&self.rights_raw()!=0{
                     let old=self.rights_raw();self.set_castling(old&self.castle_rights_after(role,us,from,to));
                     if HASH&&old!=self.rights_raw(){hash^=self.castle_rights_hash(old^self.rights_raw());}
                 }

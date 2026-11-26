@@ -433,3 +433,26 @@ Four new isolated techniques:
 Combined targeted regression (real games, SAN/undo, all 960, full
 leaf and slider parity) passed. Full release and deep perft pending.
 Limit CI to four isolated runs while round11 queue is outstanding.
+
+## Round 13: combine validated perft and replay gains
+Round11 9/10 complete successfully; implicit-queen unaligned portable
+runner failed at paired build after correctness, restarted failed job.
+N+refresh-inline+quiet-ep-gate (45850040672) new overall best 484/522,
+477 >=1.03, 75 >=2, all cold, 12/12 checked replay, 1.053x trusted vs N.
+N+align16-override also 484 but 0.840x snapshot vs N; not selected.
+N+leaf-check-delta (45850001441) 482/522, full perft 1.194x paired N,
+36/36, 1.225x worst vs fastest peer. N+direct-key+checker-color+
+quiet-ep-gate 479/522, 6/12 trusted, 12/12 checked, 36/36 full perft.
+Round12 all four CI and full release/deep perft/ABBA passed:
+equal-capture 482/522, pawn-transition 480 (1.051x trusted vs N,
+5/12 wins), pawn-key-delta 475, single-color 464. Neither latter
+is selected. New paired baseline O=N+refresh-inline+quiet-ep-gate.
+New isolated techniques: hash-two-lanes (paired independent black and
+white accumulators with constant role indexing); checker-near (gate
+nearby attacks by occupancy before role tests); castle-standard-clear
+(gate rights updates by affected standard corner/home squares);
+role-test-bit (branchless bit-test role lookup after pawn fast path).
+Combined exact regression passed including 2708-position differential.
+Additional combinations O+leaf-check-delta, O+pawn-transition,
+O+leaf-check-delta+direct-key+castle-compact, and combined perft/replay
+variant; compare actual measurements rather than count alone.
