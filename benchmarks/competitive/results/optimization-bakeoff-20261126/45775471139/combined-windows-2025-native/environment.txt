@@ -1,0 +1,17 @@
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+binary: rustc
+commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
+commit-date: 2026-07-14
+host: x86_64-pc-windows-msvc
+release: 1.97.1
+LLVM version: 22.1.6
+cargo 1.97.1 (c980f4866 2026-06-30)
+fba16bd30922eeefe22f6ca716f17a07b909c262
+mode=native features=exp-static-sliders,exp-ray-prefilter,exp-san,exp-uci,exp-fused-perft,exp-copy-perft,exp-mutation,exp-compact-board,exp-direct-legal,exp-early-san,exp-perft-kernel,exp-quiet-fast,exp-fused-geometry,exp-uci-direct,exp-ep-candidates,exp-kingless-board
+
+Name                                            NumberOfLogicalProcessors
+----                                            -------------------------
+AMD EPYC 7763 64-Core Processor                                         4
+
+
+RUSTFLAGS=-C target-cpu=native
