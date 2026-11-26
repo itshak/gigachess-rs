@@ -155,12 +155,36 @@ impl std::error::Error for IllegalMove {}
 /// skips `zobrist`/`halfmove` maintenance (`position.rs:389` `Safe only for perft`).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(C)]
-#[cfg_attr(all(feature="exp-align16",not(feature="exp-align32")),repr(align(16)))]
-#[cfg_attr(feature="exp-align32",repr(align(32)))]
+#[cfg_attr(all(feature="exp-align16",not(feature="exp-align32"),not(feature="exp-unalign")),repr(align(16)))]
+#[cfg_attr(all(feature="exp-align32",not(feature="exp-unalign")),repr(align(32)))]
 pub struct Board {
+    #[cfg(feature="exp-layout-hot")]
+    occ: [u64; 2],       // occupancy per color
+    #[cfg(feature="exp-layout-hot")]
+    king_sq: [u8; 2],
+    /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
+    /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
+    #[cfg(feature="exp-layout-hot")]
+    castle_rook_sq: [u8; 4],
+    #[cfg(feature="exp-layout-hot")]
+    turn: Color,
+    #[cfg(feature="exp-layout-hot")]
+    castling: u8,
+    #[cfg(feature="exp-layout-hot")]
+    ep: u8,
+    #[cfg(feature="exp-layout-hot")]
+    halfmove: u16,
+    #[cfg(feature="exp-layout-hot")]
+    fullmove: u16,
+    /// `true` if Chess960 (king not e1/e8 or rook not a/h) — early gate
+    /// for `standard` `ultrachess` parity (`25ns` vs `78ns`).
+    #[cfg(feature="exp-layout-hot")]
+    is_chess960: bool,
+    #[cfg(not(feature="exp-layout-roles"))]
     hash: u64,
     /// Cached checkers: enemy attackers to `king_sq[turn]`. `in_check()` is
     /// `checkers != 0` without scan (ultrachess D3, 0.32ns both states).
+    #[cfg(not(feature="exp-layout-roles"))]
     checkers: u64,
     #[cfg(not(feature = "exp-compact-board"))]
     bbs: [[u64; 6]; 2],  // [color_index][role_index]
@@ -187,19 +211,34 @@ pub struct Board {
     role_planes:[u64;3],
     #[cfg(feature = "exp-mailbox")]
     mailbox: [u8; 64],
+    #[cfg(not(feature="exp-layout-hot"))]
     occ: [u64; 2],       // occupancy per color
+    #[cfg(not(feature="exp-layout-hot"))]
     king_sq: [u8; 2],
     /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
     /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
+    #[cfg(not(feature="exp-layout-hot"))]
     castle_rook_sq: [u8; 4],
+    #[cfg(not(feature="exp-layout-hot"))]
     turn: Color,
+    #[cfg(not(feature="exp-layout-hot"))]
     castling: u8,
+    #[cfg(not(feature="exp-layout-hot"))]
     ep: u8,
+    #[cfg(not(feature="exp-layout-hot"))]
     halfmove: u16,
+    #[cfg(not(feature="exp-layout-hot"))]
     fullmove: u16,
     /// `true` if Chess960 (king not e1/e8 or rook not a/h) — early gate
     /// for `standard` `ultrachess` parity (`25ns` vs `78ns`).
+    #[cfg(not(feature="exp-layout-hot"))]
     is_chess960: bool,
+    #[cfg(feature="exp-layout-roles")]
+    hash: u64,
+    /// Cached checkers: enemy attackers to `king_sq[turn]`. `in_check()` is
+    /// `checkers != 0` without scan (ultrachess D3, 0.32ns both states).
+    #[cfg(feature="exp-layout-roles")]
+    checkers: u64,
     // Close-gap D3 (task 4.1): `mailbox: [u8;64]` removed — `piece_at` scans
     // the 12 bitboards (`piece_code_at`); `castle_mask: [u8;64]` removed —
     // rights-clearing is derived from `castle_rook_sq[4]` + the mover's role
@@ -1106,12 +1145,24 @@ impl Board {
             };
             #[cfg(not(feature="exp-compact-attack-desc"))]
             let (pawn_att,knight_att,king_att,bishop_ray,rook_ray)=(PAWN_ATT[by.other().index()][k],KNIGHT_ATT[k],KING_ATT[k],crate::bitboard::EMPTY_BISHOP_RAYS[k],crate::bitboard::EMPTY_ROOK_RAYS[k]);
-            let mut result=(pawn_att&pawns)|(knight_att&knights)|(king_att&self.bb(by.index(),5));
-            let bishops=self.diagonal_sliders(by.index())&bishop_ray;
-            let rooks=self.orthogonal_sliders(by.index())&rook_ray;
+            #[cfg(all(feature="exp-kingless-ray",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
+            let king_hits={
+                let candidates=king_att&allowed;
+                if candidates==0{0}else{candidates&!(p[0]|p[1]|p[2]|p[3]|p[4])}
+            };
+            #[cfg(not(all(feature="exp-kingless-ray",feature="exp-kingless-board",not(feature="exp-slider-planes"))))]
+            let king_hits=king_att&self.bb(by.index(),5);
+            let mut result=(pawn_att&pawns)|(knight_att&knights)|king_hits;
+            #[cfg(all(feature="exp-ray-combined",not(feature="exp-slider-planes")))]
+            let (bishops,rooks)=((p[2]|p[4])&bishop_ray&allowed,(p[3]|p[4])&rook_ray&allowed);
+            #[cfg(not(all(feature="exp-ray-combined",not(feature="exp-slider-planes"))))]
+            let (bishops,rooks)=(self.diagonal_sliders(by.index())&bishop_ray,self.orthogonal_sliders(by.index())&rook_ray);
             result&=allowed;
             #[cfg(feature="exp-checker-rays")]
             {
+                #[cfg(all(feature="exp-ray-combined",not(feature="exp-slider-planes")))]
+                let mut candidates=((p[2]|p[4])&bishop_ray|(p[3]|p[4])&rook_ray)&allowed;
+                #[cfg(not(all(feature="exp-ray-combined",not(feature="exp-slider-planes"))))]
                 let mut candidates=bishops|rooks;
                 #[cfg(feature="exp-checker-sentinel")]
                 {
@@ -1338,7 +1389,15 @@ impl Board {
             h=fold::<0,0>(self)^fold::<0,1>(self)^fold::<0,2>(self)^fold::<0,3>(self)^fold::<0,4>(self)^fold::<0,5>(self)^
               fold::<1,0>(self)^fold::<1,1>(self)^fold::<1,2>(self)^fold::<1,3>(self)^fold::<1,4>(self)^fold::<1,5>(self);
         }
-        #[cfg(not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
+        #[cfg(all(feature="exp-hash-role-order",not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board")))))]
+        for r in 0..6{
+            let mut black=self.bb(0,r);let mut white=self.bb(1,r);
+            let mut h0=0;let mut h1=0;
+            while black!=0{h0^=zobrist::piece_key_indices(0,r,pop_lsb(&mut black));}
+            while white!=0{h1^=zobrist::piece_key_indices(1,r,pop_lsb(&mut white));}
+            h^=h0^h1;
+        }
+        #[cfg(not(any(feature="exp-hash-role-order",feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         for ci in 0..2 {
             #[cfg(feature="exp-hash-pawn-bytes")]
             {h^=zobrist::pawn_byte_hash(ci,self.bb(ci,0));}
@@ -2289,6 +2348,28 @@ impl Board {
             let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
             let enemy=self.occ[ti]&t;
             if !PREPARED&&mv.promotion().is_none()&&self.occ[ui]&t==0&&!(role==0&&from&7!=to&7&&enemy==0){
+                #[cfg(feature="exp-no-rights-kernel")]
+                if self.castling==0&&self.ep==NO_EP{
+                    let mut hash=self.hash^zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
+                    let mut captured=EMPTY;
+                    if enemy!=0{
+                        let cap=self.role_at_occupied(to,us.other()) as usize;
+                        captured=(ti*6+cap) as u8;
+                        self.bb_remove(ti,cap,t);self.occ[ti]^=t;
+                        hash^=zobrist::piece_key_indices(ti,cap,to);
+                    }
+                    self.bb_toggle(ui,role as usize,f^t);self.occ[ui]^=f^t;
+                    if role==5{self.king_sq[ui]=to;}
+                    if role==0&&from.abs_diff(to)==16{
+                        let ep=(from+to)/2;self.ep=ep;
+                        if HASH&&self.ep_relevant(ep,us.other()){hash^=zobrist::ep_key(Square(ep));}
+                    }
+                    self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
+                    self.fullmove+=(us==Color::Black) as u16;
+                    self.hash=hash;self.turn=us.other();
+                    if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                    return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};
+                }
                 let mut hash=self.hash;
                 if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
                 let mut captured=EMPTY;
@@ -2958,6 +3039,26 @@ impl Board {
         let role = moved % 6;
         let is_pawn = role == Role::Pawn as u8;
         let diag = from & 7 != to & 7;
+
+        #[cfg(feature="exp-promotion-direct")]
+        if is_pawn {
+            if let Some(promotion)=mv.promotion(){
+                let ui=us.index();let ti=them.index();let f=bit(from);let t=bit(to);
+                if self.occ[ui]&t==0{
+                    if self.occ[ti]&t!=0{
+                        let cap=self.piece_code_at_color(to,them);
+                        undo.captured=cap;
+                        self.bb_remove(ti,(cap%6) as usize,t);self.occ[ti]&=!t;
+                    }
+                    self.bb_remove(ui,0,f);self.bb_add(ui,promotion.index(),t);
+                    self.occ[ui]^=f^t;
+                    if self.castling!=0{self.castling&=self.castle_rights_after(role,us,from,to);}
+                    self.ep=NO_EP;self.turn=them;
+                    if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                    return undo;
+                }
+            }
+        }
 
         #[cfg(feature = "exp-perft-kernel")]
         if mv.promotion().is_none() && self.occ[us.index()]&bit(to)==0

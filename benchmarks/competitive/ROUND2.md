@@ -302,3 +302,30 @@ New experiments:
   non-promoted attackers; reuse exact base checkers and evaluate only
   promoted destination's bishop/rook rays. Knight child is unchanged.
 Expanded regression passed including promotion leaf equality.
+
+## Round 8: specialize rights-free transitions and improve board locality
+All eleven round7 CI runs passed and all six cold medians were won
+by each candidate. J-inline (45816428181) 467/522 and 5/12 trusted
+replay, 11/12 checked replay, 35/36 children, 1.146x trusted vs I.
+J-refresh-inline 472/522; J-quiet-ep-gate 470/522.
+Best overall remains I 477/522, best native+cold I5 473/522 + 6/6.
+Round7 local full release and six ignored deep perft passed; focused
+local ABBA stopped during promotion variant, use complete CI for it.
+New benchmark paired baseline K = J-inline. New experiments:
+- no-rights-kernel: normal full transition when old castling rights and
+  old en-passant are absent, retaining new double-push EP, clocks, all
+  hashes/checkers, Undo and rare-move fallback.
+- promotion-direct: direct known pawn promotion in slim perft, retaining
+  captures, rights, occupancy, cached checkers and exact leaf observation.
+- layout-hot and layout-roles: reorder fields only, no state removed.
+- hash-role-order: independently implement role-major cache ordering
+  (Shakmaty benchmark observation), two accumulators, same Polyglot keys.
+  No GPL source copied.
+- ray-combined: combine raw diagonal/orthogonal role masks before the
+  color mask; no weakening of checker semantics.
+- unalign: separate 8-byte natural alignment comparison.
+- kingless-ray+unalign: 88-byte board, king mask derived exactly from
+  occupied complement; avoid expensive complement when king attack
+  candidates are empty; malformed FEN validation unchanged.
+Combined debug regression passed for kernel/layout-hot/hash/rays, and
+separately for layout-roles/kingless/unalign, plus explicit size test.
