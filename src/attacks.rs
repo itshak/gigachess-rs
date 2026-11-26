@@ -80,6 +80,16 @@ fn pext_available() -> bool {
 
 #[inline(always)]
 pub fn rook_attacks(sq: u8, occ: u64) -> u64 {
+    #[cfg(feature="exp-blocked-sliders")]
+    {
+        const ADJ:[u64;64]={
+            let mut t=[0;64];let mut i=0;
+            while i<64{t[i]=crate::bitboard::KING_ATT[i]&crate::bitboard::EMPTY_ROOK_RAYS[i];i+=1;}
+            t
+        };
+        let adj=ADJ[sq as usize];
+        if adj&occ==adj{return adj;}
+    }
     #[cfg(feature = "exp-static-sliders")]
     {
         #[cfg(all(target_arch="x86_64",not(target_feature="bmi2"),feature="pext"))]
@@ -113,6 +123,16 @@ pub fn rook_attacks(sq: u8, occ: u64) -> u64 {
 
 #[inline(always)]
 pub fn bishop_attacks(sq: u8, occ: u64) -> u64 {
+    #[cfg(feature="exp-blocked-sliders")]
+    {
+        const ADJ:[u64;64]={
+            let mut t=[0;64];let mut i=0;
+            while i<64{t[i]=crate::bitboard::KING_ATT[i]&crate::bitboard::EMPTY_BISHOP_RAYS[i];i+=1;}
+            t
+        };
+        let adj=ADJ[sq as usize];
+        if adj&occ==adj{return adj;}
+    }
     #[cfg(feature = "exp-static-sliders")]
     {
         #[cfg(all(target_arch="x86_64",not(target_feature="bmi2"),feature="pext"))]
