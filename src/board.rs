@@ -142,6 +142,8 @@ impl std::error::Error for IllegalMove {}
 /// skips `zobrist`/`halfmove` maintenance (`position.rs:389` `Safe only for perft`).
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(C)]
+#[cfg_attr(all(feature="exp-align16",not(feature="exp-align32")),repr(align(16)))]
+#[cfg_attr(feature="exp-align32",repr(align(32)))]
 pub struct Board {
     hash: u64,
     /// Cached checkers: enemy attackers to `king_sq[turn]`. `in_check()` is
@@ -1075,7 +1077,9 @@ impl Board {
         }
         #[cfg(not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         for ci in 0..2 {
-            for r in 0..6 {
+            #[cfg(feature="exp-hash-pawn-bytes")]
+            {h^=zobrist::pawn_byte_hash(ci,self.bb(ci,0));}
+            for r in (if cfg!(feature="exp-hash-pawn-bytes"){1}else{0})..6 {
                 let mut b = self.bb(ci, r);
                 while b != 0 {
                     let sq = pop_lsb(&mut b);
@@ -1984,6 +1988,53 @@ impl Board {
         let is_pawn = role == Role::Pawn as u8;
         let diag = from & 7 != to & 7;
 
+        #[cfg(feature="exp-ordinary-kernel")]
+        if !PREPARED && mv.promotion().is_none() {
+            let ui=us.index();let ti=them.index();
+            let target=bit(to);let enemy=self.occ[ti]&target;
+            if self.occ[ui]&target==0 && !(is_pawn&&diag&&enemy==0) {
+                let mut hash=self.hash;
+                if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
+                if enemy!=0 {
+                    #[cfg(feature="exp-known-role")]
+                    let cap_role=self.role_at_occupied(to,them) as usize;
+                    #[cfg(not(feature="exp-known-role"))]
+                    let cap_role=(self.piece_code_at_color(to,them)%6) as usize;
+                    undo.captured=(ti*6+cap_role) as u8;
+                    self.bb_remove(ti,cap_role,target);
+                    self.occ[ti]^=target;
+                    hash^=zobrist::piece_key_indices(ti,cap_role,to);
+                }
+                let r=role as usize;let delta=bit(from)^target;
+                #[cfg(feature="exp-mutation")]
+                self.bb_toggle(ui,r,delta);
+                #[cfg(not(feature="exp-mutation"))]
+                {self.bb_remove(ui,r,bit(from));self.bb_add(ui,r,target);}
+                self.occ[ui]^=delta;
+                hash^=zobrist::piece_move_delta::<HASH>(ui,r,from,to);
+                if r==Role::King.index(){self.king_sq[ui]=to;}
+                let old=self.castling;
+                if old!=0{
+                    let next=old&self.castle_rights_after(role,us,from,to);
+                    if HASH&&old!=next{hash^=self.castle_rights_hash(old^next);}
+                    self.castling=next;
+                }
+                self.ep=NO_EP;
+                if is_pawn {
+                    self.halfmove=0;
+                    if from.abs_diff(to)==16{
+                        self.ep=(from+to)/2;
+                        if HASH&&self.ep_relevant(self.ep,them){hash^=zobrist::ep_key(Square(self.ep));}
+                    }
+                }else{self.halfmove=if enemy!=0{0}else{self.halfmove+1};}
+                self.fullmove+=(us==Color::Black) as u16;
+                self.turn=them;
+                self.hash=hash;
+                if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                return undo;
+            }
+        }
+
         // Hash out the old en-passant contribution (relevance uses the
         // mover's pawns, which have not changed yet).
         if HASH && self.ep_relevant(self.ep, us) {
@@ -2010,7 +2061,7 @@ impl Board {
             #[cfg(not(feature="exp-mutation"))]
             {self.bb_remove(ui,role as usize,bit(from));self.bb_add(ui,role as usize,target);}
             self.occ[ui]^=delta;
-            self.hash^=zobrist::piece_key_indices(ui,role as usize,from)^zobrist::piece_key_indices(ui,role as usize,to);
+            self.hash^=zobrist::piece_move_delta::<false>(ui,role as usize,from,to);
             if role==Role::King as u8 {self.king_sq[ui]=to;}
             if self.castling!=0 {
                 let next=self.castling&self.castle_rights_after(role,us,from,to);
@@ -2035,7 +2086,7 @@ impl Board {
             self.occ[ui]^=bit(from)^bit(to);
             if role==Role::King as u8 {self.king_sq[ui]=to;}
             // Preserve the baseline's partial/stale piece hash update on CHECKERS-only makes.
-            self.hash^=zobrist::piece_key_indices(ui,role as usize,from)^zobrist::piece_key_indices(ui,role as usize,to);
+            self.hash^=zobrist::piece_move_delta::<false>(ui,role as usize,from,to);
             if self.castling!=0 {
                 let new_castling=self.castling&self.castle_rights_after(role,us,from,to);
                 if HASH && new_castling!=self.castling {self.hash^=self.castle_rights_hash(self.castling^new_castling);}
@@ -2433,9 +2484,9 @@ impl Board {
                 self.occ[ti]&=!bit(to);
             }
             let delta=bit(from)^bit(to);
-            #[cfg(all(feature="exp-perft-xor",feature="exp-mutation"))]
+            #[cfg(all(feature="exp-perft-xor",feature="exp-mutation",not(feature="exp-no-perft-xor")))]
             self.bb_toggle(ui,role as usize,delta);
-            #[cfg(not(all(feature="exp-perft-xor",feature="exp-mutation")))]
+            #[cfg(not(all(feature="exp-perft-xor",feature="exp-mutation",not(feature="exp-no-perft-xor"))))]
             {self.bb_remove(ui,role as usize,bit(from));self.bb_add(ui,role as usize,bit(to));}
             self.occ[ui]^=delta;
             if role==Role::King as u8 {self.king_sq[ui]=to;}
@@ -3722,7 +3773,7 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
     }
     #[inline(always)]
     fn push_pawn_promotions_offset(&mut self,mut targets:u64,offset:i8){
-        #[cfg(feature="exp-promotion-batch")]
+        #[cfg(all(feature="exp-promotion-batch",not(feature="exp-no-promotion-batch")))]
         {
             let us=self.parent.turn;let ui=us.index();let ti=us.other().index();
             while targets!=0{
@@ -3738,7 +3789,7 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
                 }
             }
         }
-        #[cfg(not(feature="exp-promotion-batch"))]
+        #[cfg(not(all(feature="exp-promotion-batch",not(feature="exp-no-promotion-batch"))))]
         while targets!=0 {let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;for r in 1..=4{self.push_one(Move(from as u16|((to as u16)<<6)|(r<<12)));}}
     }
 }
