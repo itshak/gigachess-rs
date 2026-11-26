@@ -59,7 +59,7 @@ fn real_games_exact_san_legal_and_undo() {
                 rng^=rng<<13;rng^=rng>>7;rng^=rng<<17;
                 let m=Move::quiet(Square((rng&63) as u8),Square(((rng>>6)&63) as u8));
                 assert_eq!(g.is_legal(m),legal.contains(&m.word()),"illegal/valid disagreement at {}",g.to_fen());
-                #[cfg(feature="exp-checked-direct")]
+                #[cfg(any(feature="exp-checked-direct",feature="exp-checked-known"))]
                 {
                     let mut checked=g;
                     let result=checked.play(m);

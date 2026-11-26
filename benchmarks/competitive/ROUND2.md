@@ -32,3 +32,11 @@ Windows summary output changed to ASCII, fixing cp1252 encoding error.
 - Generic x86 feature pext: build static PEXT and magic tables, choose
   runtime BMI2 when available. Native BMI2 builds still use static PEXT.
 Benchmark-only default features select C; root production defaults unchanged.
+
+## Mutation follow-up
+- color-make: dispatch once by side, specialize all color indices and
+  pawn direction in the existing full-state transition.
+- checked-known: reuse the source piece code for pseudo geometry,
+  hypothetical king safety and the eventual make; retain castle fallback.
+- unmake-xor: restore normal-move piece and occupancy via XOR, restore
+  captured piece without recomputing a discarded hash; exact Undo retained.

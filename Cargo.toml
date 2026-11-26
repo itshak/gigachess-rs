@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-color-make = []
+exp-checked-known = []
+exp-unmake-xor = []
 exp-kingless-board = []
 exp-known-role = []
 exp-static-unchecked = []
