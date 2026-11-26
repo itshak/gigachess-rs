@@ -12,6 +12,13 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-hash-role-scan = []
+exp-fen-byte-copy = []
+exp-inline-make = []
+exp-split-quiet = []
+exp-role-select = []
+exp-attack-descriptor = []
+exp-fast-castle-keys = []
 exp-promotion-batch = ["exp-full-visitor"]
 exp-perft-xor = []
 exp-leaf-reuse = ["exp-full-visitor"]

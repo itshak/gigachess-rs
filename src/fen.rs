@@ -414,9 +414,9 @@ impl Board {
         out.push(b' ');
         push_u16(&mut out, self.fullmove_number());
         // SAFETY: we only pushed ASCII FEN bytes.
-        #[cfg(feature="exp-fen-rank")]
+        #[cfg(any(feature="exp-fen-rank",feature="exp-fen-byte-copy"))]
         return unsafe{String::from_utf8_unchecked(out.as_slice().to_vec())};
-        #[cfg(not(feature="exp-fen-rank"))]
+        #[cfg(not(any(feature="exp-fen-rank",feature="exp-fen-byte-copy")))]
         unsafe { String::from_utf8_unchecked(out.into_iter().collect::<Vec<u8>>()) }
     }
 }

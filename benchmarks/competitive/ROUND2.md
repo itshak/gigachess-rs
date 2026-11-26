@@ -66,3 +66,21 @@ Benchmark-only default features select C; root production defaults unchanged.
 - promotion-batch: construct first promotion child once and vary role,
   refresh exact checker cache for each observed leaf.
 - leaf-reuse: test make/unmake versus copy-per-child in grouped visitor.
+
+## Round 3: smaller hot-path and output experiments
+C remains the direct paired benchmark baseline, E and D stay available as
+immutable comparison configurations.
+- inline-make: force-inline generic full transition to test elimination of
+  call/Undo return overhead and better context specialization.
+- split-quiet: inline a small quiet-only path with local hash accumulator,
+  XOR occupancy and exact cached checker refresh; fallback to normal
+  full-state transition on captures/specials.
+- role-select: common pawn branch, branchless role encoding thereafter.
+- attack-descriptor: co-locate each square's leaper and empty-ray masks.
+- fast-castle-keys: standard 16-entry hash delta table, exact nonstandard
+  fallback even during FEN construction.
+- hash-role-scan: six role scans with color determined per set bit, not
+  twelve color-role loops.
+- fen-byte-copy: isolate final String construction from rank writer changes.
+No legal-state assumptions are added; native replay, hash and checker
+contracts remain unchanged.

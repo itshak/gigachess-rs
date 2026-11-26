@@ -468,6 +468,15 @@ impl Board {
         let col=&self.roles;
         #[cfg(not(feature="exp-compact-board"))]
         let col=&self.bbs[color.index()];
+        #[cfg(feature="exp-role-select")]
+        {
+            if col[0]&b!=0{return 0;}
+            let king=self.bb(color.index(),5);
+            return ((col[1]|col[3]|king)&b!=0) as u8+
+                2*((col[2]|col[3])&b!=0) as u8+
+                4*((col[4]|king)&b!=0) as u8;
+        }
+        #[cfg(not(feature="exp-role-select"))]
         if col[0]&b!=0{0}else if col[1]&b!=0{1}else if col[2]&b!=0{2}else if col[3]&b!=0{3}else if col[4]&b!=0{4}else{5}
     }
 
@@ -507,6 +516,15 @@ impl Board {
         if col[0] & b != 0 {
             return (color as u8) * 6;
         }
+        #[cfg(feature="exp-role-select")]
+        {
+            let r0=((col[1]|col[3]|self.bb(color.index(),5))&b!=0) as u8;
+            let r1=((col[2]|col[3])&b!=0) as u8;
+            let r2=((col[4]|self.bb(color.index(),5))&b!=0) as u8;
+            return color as u8*6+r0+2*r1+4*r2;
+        }
+        #[allow(unreachable_code)]
+
         if col[1] & b != 0 {
             return (color as u8) * 6 + 1;
         }
@@ -780,6 +798,36 @@ impl Board {
             return result;
         }
         #[allow(unreachable_code)]
+        #[cfg(feature="exp-attack-descriptor")]
+        {
+            const DESCS:[[u64;6];64]={
+                let mut arr=[[0;6];64];let mut i=0;
+                while i<64{
+                    arr[i]=[PAWN_ATT[0][i],PAWN_ATT[1][i],KNIGHT_ATT[i],KING_ATT[i],
+                        crate::bitboard::EMPTY_BISHOP_RAYS[i],crate::bitboard::EMPTY_ROOK_RAYS[i]];
+                    i+=1;
+                }arr
+            };
+            let k=sq as usize;let d=&DESCS[k];let ci=by.index();
+            let mut a=(d[by.other().index()]&self.bb(ci,0))|(d[2]&self.bb(ci,1))|(d[3]&self.bb(ci,5));
+            let queens=self.bb(ci,4);
+            let b=(self.bb(ci,2)|queens)&d[4];let r=(self.bb(ci,3)|queens)&d[5];
+            #[cfg(feature="exp-checker-rays")]
+            {
+                let mut candidates=b|r;
+                while candidates!=0{
+                    let x=pop_lsb(&mut candidates);
+                    if crate::bitboard::BETWEEN[k][x as usize]&occ==0{a|=bit(x);}
+                }
+            }
+            #[cfg(not(feature="exp-checker-rays"))]
+            {
+                if b!=0{a|=attacks::bishop_attacks(sq,occ)&b;}
+                if r!=0{a|=attacks::rook_attacks(sq,occ)&r;}
+            }
+            return a;
+        }
+        #[allow(unreachable_code)]
         let bi = by.index();
         let mut a = 0u64;
         // Pawns of `by` attacking sq stand where a pawn of the other color
@@ -850,6 +898,22 @@ impl Board {
     /// (ADR-003: keys are per (color, rook file)).
     #[inline(always)]
     fn castle_rights_hash(&self, rights: u8) -> u64 {
+        #[cfg(feature="exp-fast-castle-keys")]
+        {
+            const HASHES:[u64;16]={
+                let mut t=[0;16];let mut i=1;
+                while i<16 {let low=(i as u32).trailing_zeros() as usize;
+                    t[i]=t[i&(i-1)]^crate::polyglot_keys::POLYGLOT_RANDOM_ARRAY[768+low];i+=1;}
+                t
+            };
+            // Absent rights may have unspecified rook squares. Check only the
+            // affected rights, even during FEN parsing before is_chess960 is set.
+            const FILES:[u8;4]=[7,0,7,0];
+            let mut bad=0u8;
+            for i in 0..4 {bad|=((self.castle_rook_sq[i]&7!=FILES[i]) as u8)<<i;}
+            if rights&bad==0{return HASHES[rights as usize];}
+        }
+
         #[cfg(feature="exp-castle-hash-table")]
         {
             const STANDARD:[u64;16]={
@@ -872,7 +936,22 @@ impl Board {
     /// the incremental hash in `self.hash` must always agree with this).
     pub fn zobrist_full(&self) -> u64 {
         let mut h = 0u64;
-        #[cfg(feature="exp-hash-unroll")]
+        #[cfg(all(feature="exp-hash-role-scan",feature="exp-compact-board"))]
+        {
+            #[inline(always)]
+            fn fold<const R:usize>(b:&Board)->u64{
+                let mut bits=b.bb(0,R)|b.bb(1,R);let white=b.occ[1];
+                let mut h=0;
+                while bits!=0{
+                    let sq=pop_lsb(&mut bits);
+                    let color=((white>>sq)&1) as usize;
+                    h^=zobrist::piece_key_indices(color,R,sq);
+                }
+                h
+            }
+            h=fold::<0>(self)^fold::<1>(self)^fold::<2>(self)^fold::<3>(self)^fold::<4>(self)^fold::<5>(self);
+        }
+        #[cfg(all(feature="exp-hash-unroll",not(all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         {
             #[inline(always)]
             fn fold<const C:usize,const R:usize>(b:&Board)->u64{
@@ -884,7 +963,7 @@ impl Board {
             h=fold::<0,0>(self)^fold::<0,1>(self)^fold::<0,2>(self)^fold::<0,3>(self)^fold::<0,4>(self)^fold::<0,5>(self)^
               fold::<1,0>(self)^fold::<1,1>(self)^fold::<1,2>(self)^fold::<1,3>(self)^fold::<1,4>(self)^fold::<1,5>(self);
         }
-        #[cfg(not(feature="exp-hash-unroll"))]
+        #[cfg(not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         for ci in 0..2 {
             for r in 0..6 {
                 let mut b = self.bb(ci, r);
@@ -1703,6 +1782,46 @@ impl Board {
     fn make_move_unchecked_with<const HASH: bool, const CHECKERS: bool>(
         &mut self,mv:Move
     )->Undo{
+        #[cfg(feature="exp-split-quiet")]
+        {
+            let from=mv.from().0;let to=mv.to().0;
+            let us=self.turn;let them=us.other();let ui=us.index();let ti=them.index();
+            let target=bit(to);
+            if mv.promotion().is_none()&&self.occupied()&target==0 {
+                let moved=self.piece_code_at_color(from,us);
+                let role=(moved%6) as usize;
+                let pawn=role==Role::Pawn.index();
+                if moved!=EMPTY&&!(pawn&&from&7!=to&7){
+                    let undo=Undo{hash:self.hash,checkers:self.checkers,castling:self.castling,ep:self.ep,halfmove:self.halfmove,captured:EMPTY,
+                        #[cfg(feature="exp-undo-role")] moved,
+                        castled:false};
+                    let mut hash=self.hash;
+                    if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
+                    let delta=bit(from)^target;
+                    #[cfg(feature="exp-mutation")]
+                    self.bb_toggle(ui,role,delta);
+                    #[cfg(not(feature="exp-mutation"))]
+                    {self.bb_remove(ui,role,bit(from));self.bb_add(ui,role,target);}
+                    self.occ[ui]^=delta;
+                    hash^=zobrist::piece_key_indices(ui,role,from)^zobrist::piece_key_indices(ui,role,to);
+                    if role==Role::King.index(){self.king_sq[ui]=to;}
+                    if self.castling!=0{
+                        let next=self.castling&self.castle_rights_after(role as u8,us,from,to);
+                        if HASH&&next!=self.castling{hash^=self.castle_rights_hash(self.castling^next);}
+                        self.castling=next;
+                    }
+                    self.ep=if pawn&&to.abs_diff(from)==16{(from+to)/2}else{NO_EP};
+                    if HASH&&self.ep_relevant(self.ep,them){hash^=zobrist::ep_key(Square(self.ep));}
+                    self.halfmove=if pawn{0}else{self.halfmove+1};
+                    self.fullmove+=(us==Color::Black) as u16;
+                    self.turn=them;
+                    if HASH{hash^=zobrist::turn_key();}
+                    self.hash=hash;
+                    if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                    return undo;
+                }
+            }
+        }
         self.make_move_hinted::<HASH,CHECKERS,false>(mv,EMPTY)
     }
 
@@ -1717,6 +1836,7 @@ impl Board {
         self.make_move_impl::<HASH,CHECKERS,HINT,2,false>(mv,code,EMPTY)
     }
 
+    #[cfg_attr(feature="exp-inline-make",inline(always))]
     fn make_move_impl<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8,const PREPARED:bool>(
         &mut self,mv:Move,hint:u8,capture_hint:u8
     )->Undo{
