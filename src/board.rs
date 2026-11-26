@@ -161,7 +161,7 @@ impl std::error::Error for IllegalMove {}
 pub struct Board {
     #[cfg(feature="exp-layout-hot")]
     occ: [u64; 2],       // occupancy per color
-    #[cfg(all(feature="exp-layout-hot",not(feature="exp-packed-meta")))]
+    #[cfg(all(feature="exp-layout-hot",any(not(feature="exp-packed-meta"),feature="exp-cached-packed-king")))]
     king_sq: [u8; 2],
     /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
     /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
@@ -218,7 +218,7 @@ pub struct Board {
     mailbox: [u8; 64],
     #[cfg(not(feature="exp-layout-hot"))]
     occ: [u64; 2],       // occupancy per color
-    #[cfg(all(not(feature="exp-layout-hot"),not(feature="exp-packed-meta")))]
+    #[cfg(all(not(feature="exp-layout-hot"),any(not(feature="exp-packed-meta"),feature="exp-cached-packed-king")))]
     king_sq: [u8; 2],
     /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
     /// Chess960: arbitrary back-rank squares; standard: h1/a1/h8/a8.
@@ -299,7 +299,7 @@ impl Board {
             fullmove: 1,
             hash: 0,
             checkers: 0,
-            #[cfg(not(feature="exp-packed-meta"))]
+            #[cfg(any(not(feature="exp-packed-meta"),feature="exp-cached-packed-king"))]
             king_sq: [0; 2],
             #[cfg(not(feature="exp-packed-meta"))]
             is_chess960: false,
@@ -367,7 +367,7 @@ impl Board {
                 a
             },
             occ: [0xffff << 48, 0xffff],
-            #[cfg(not(feature="exp-packed-meta"))]
+            #[cfg(any(not(feature="exp-packed-meta"),feature="exp-cached-packed-king"))]
             king_sq: [60, 4],
             #[cfg(not(feature="exp-packed-meta"))]
             castle_rook_sq: [7, 0, 63, 56],
@@ -449,7 +449,7 @@ impl Board {
     }
     #[inline(always)]
     fn king_index(&self,i:usize)->u8{
-        #[cfg(all(feature="exp-packed-meta",feature="exp-king-pair",feature="exp-kingless-board",not(feature="exp-slider-planes"),not(feature="exp-implicit-pawn"),not(feature="exp-implicit-queen")))]
+        #[cfg(all(feature="exp-packed-meta",not(feature="exp-cached-packed-king"),feature="exp-king-pair",feature="exp-kingless-board",not(feature="exp-slider-planes"),not(feature="exp-implicit-pawn"),not(feature="exp-implicit-queen")))]
         {
             let p=&self.roles;
             // Split the complement into two masks. A zero king plane
@@ -460,16 +460,16 @@ impl Board {
             bits&=!(p[3]|p[4]);
             return (bits.trailing_zeros() as u8)&63;
         }
-        #[cfg(feature="exp-packed-meta")]
+        #[cfg(all(feature="exp-packed-meta",not(feature="exp-cached-packed-king")))]
         {let bits=self.bb(i,5);if bits==0{0}else{bits.trailing_zeros() as u8}}
-        #[cfg(not(feature="exp-packed-meta"))]
+        #[cfg(any(not(feature="exp-packed-meta"),feature="exp-cached-packed-king"))]
         {self.king_sq[i]}
     }
     #[inline(always)]
     fn set_king_index(&mut self,i:usize,sq:u8){
-        #[cfg(feature="exp-packed-meta")]
+        #[cfg(all(feature="exp-packed-meta",not(feature="exp-cached-packed-king")))]
         {let _=(i,sq);}
-        #[cfg(not(feature="exp-packed-meta"))]
+        #[cfg(any(not(feature="exp-packed-meta"),feature="exp-cached-packed-king"))]
         {self.king_sq[i]=sq;}
     }
     // -- accessors ----------------------------------------------------------
@@ -2126,6 +2126,8 @@ impl Board {
             // Single pushes: north(pawns) & empty
             let single = if WHITE { unpinned << 8 } else { unpinned >> 8 } & empty;
             let single_allowed = single & allowed;
+            #[cfg(not(feature="exp-pawn-batch-count"))]
+            {
             let single_promo = single_allowed & promo_rank;
             let single_nonpromo = single_allowed & !promo_rank;
             if single_nonpromo != 0 {
@@ -2137,10 +2139,17 @@ impl Board {
                 sink.push_pawn_promotions_offset(single_promo, offset);
             }
 
+            }
+
             // Double pushes: pawns on start rank with both squares empty.
+            #[cfg(not(feature="exp-pawn-double-reuse"))]
             let pawns_start = unpinned & start_rank_bb;
+            #[cfg(not(feature="exp-pawn-double-reuse"))]
             let intermediate = if WHITE { pawns_start << 8 } else { pawns_start >> 8 } & empty;
+            #[cfg(feature="exp-pawn-double-reuse")]
+            let intermediate=single & if WHITE{crate::types::RANK_BB[2]}else{crate::types::RANK_BB[5]};
             let double = if WHITE { intermediate << 8 } else { intermediate >> 8 } & empty & allowed;
+            #[cfg(not(feature="exp-pawn-batch-count"))]
             if double != 0 {
                 let offset: i8 = if WHITE { 16 } else { -16 };
                 sink.push_pawn_targets_offset(double, offset);
@@ -2156,6 +2165,8 @@ impl Board {
                 let r = (unpinned & !crate::types::FILE_BB[7]) >> 7 & them_occ & allowed;
                 (l, r, -9, -7)
             };
+            #[cfg(not(feature="exp-pawn-batch-count"))]
+            {
             let left_nonpromo = left_caps & !promo_rank;
             let left_promo = left_caps & promo_rank;
             let right_nonpromo = right_caps & !promo_rank;
@@ -2172,6 +2183,9 @@ impl Board {
             if right_promo != 0 {
                 sink.push_pawn_promotions_offset(right_promo, right_off);
             }
+            }
+            #[cfg(feature="exp-pawn-batch-count")]
+            sink.push_pawn_batch(single_allowed,double,left_caps,right_caps,promo_rank,if WHITE{8}else{-8},left_off,right_off);
         }
 
         // Pinned pawns — per-pawn with pin line (LINE[king][from]) masking.

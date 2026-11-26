@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-cached-packed-king = ["exp-packed-meta", "exp-kingless-board", "exp-unalign"]
+exp-pawn-double-reuse = []
+exp-pawn-batch-count = []
 exp-compact80-sliders = ["exp-packed-meta", "exp-slider-planes", "exp-unalign"]
 exp-king-pair = []
 exp-compact-slider-xor = []
