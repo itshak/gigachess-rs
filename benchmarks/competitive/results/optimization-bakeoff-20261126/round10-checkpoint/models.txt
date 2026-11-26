@@ -1,0 +1,10 @@
+implicit-pawn exp-implicit-pawn,exp-unalign
+implicit-pawn-aligned exp-implicit-pawn
+role-weight exp-role-weight
+leaf-direct exp-leaf-direct
+color-pawn exp-color-pawn
+hash-square-order exp-hash-square-order
+M1 exp-direct-key,exp-castle-compact
+M2 exp-promo-checkers,exp-promotion-direct,exp-attack-mask
+M3 exp-direct-key,exp-checker-color,exp-quiet-ep-gate
+M4 exp-fen-code-lut,exp-castle-compact,exp-refresh-inline

@@ -1,0 +1,133 @@
+| Platform | Wins | >=1.03x | >=2x | Total |
+|---|---:|---:|---:|---:|
+| macos-15-native | 70 | 67 | 15 | 87 |
+| ubuntu-24.04-arm-native | 73 | 70 | 11 | 87 |
+| ubuntu-24.04-native | 77 | 72 | 14 | 87 |
+| ubuntu-24.04-pext | 77 | 72 | 9 | 87 |
+| ubuntu-24.04-portable | 71 | 68 | 11 | 87 |
+| windows-2025-native | 69 | 67 | 11 | 87 |
+| ALL | 437 | 416 | 71 | 522 |
+
+| Operation | vs paired baseline | vs fastest peer | Wins | Worst case |
+|---|---:|---:|---:|---:|
+| apply_children_full | 0.858x | 1.078x | 25/36 | 0.746x |
+| chess960_materialize | 0.936x | 1.323x | 12/12 | 1.130x |
+| chess960_perft_d3 | 0.932x | 1.308x | 12/12 | 1.159x |
+| corpus_count | 0.973x | 1.025x | 5/12 | 0.803x |
+| corpus_materialize | 0.998x | 1.126x | 12/12 | 1.003x |
+| corpus_uci_sorted | 0.952x | 1.461x | 12/12 | 1.052x |
+| count | 1.021x | 1.342x | 35/36 | 0.960x |
+| fen_parse | 1.015x | 1.150x | 35/36 | 0.998x |
+| fen_write_native_ep | 1.003x | 1.806x | 36/36 | 1.217x |
+| make_unmake_full | 0.876x | 1.128x | 29/36 | 0.905x |
+| materialize | 1.017x | 1.331x | 31/36 | 0.913x |
+| perft_bulk_d4 | 1.013x | 1.126x | 26/36 | 0.836x |
+| perft_full_d3 | 0.933x | 1.188x | 27/36 | 0.857x |
+| polyglot_key | 1.001x | 32.394x | 12/12 | 15.884x |
+| polyglot_recompute | 0.968x | 1.027x | 8/12 | 0.857x |
+| repetition_key | 0.960x | 19.409x | 12/12 | 13.971x |
+| replay_checked_native | 0.958x | 1.037x | 10/12 | 0.943x |
+| replay_trusted_native | 0.792x | 0.666x | 1/12 | 0.450x |
+| san_parse_all | 0.996x | 1.918x | 36/36 | 1.304x |
+| san_render_native | 0.969x | 2.415x | 36/36 | 1.755x |
+| snapshot | 1.005x | 1.059x | 20/36 | 0.668x |
+| startpos | 1.011x | 1.141x | 5/6 | 0.997x |
+
+| Platform | Operation | Case | Fastest peer | Ratio |
+|---|---|---|---|---:|
+| macos-15-native | replay_trusted_native | seeded | shakmaty | 0.450x |
+| ubuntu-24.04-arm-native | replay_trusted_native | lichess300 | shakmaty | 0.517x |
+| ubuntu-24.04-arm-native | replay_trusted_native | seeded | shakmaty | 0.521x |
+| macos-15-native | replay_trusted_native | lichess300 | shakmaty | 0.525x |
+| windows-2025-native | replay_trusted_native | lichess300 | shakmaty | 0.632x |
+| ubuntu-24.04-pext | replay_trusted_native | lichess300 | shakmaty | 0.640x |
+| ubuntu-24.04-native | replay_trusted_native | lichess300 | shakmaty | 0.653x |
+| macos-15-native | snapshot | start | ferrum | 0.668x |
+| ubuntu-24.04-portable | replay_trusted_native | lichess300 | shakmaty | 0.669x |
+| windows-2025-native | apply_children_full | promotion | cozy | 0.746x |
+| windows-2025-native | apply_children_full | tactical | cozy | 0.768x |
+| ubuntu-24.04-portable | replay_trusted_native | seeded | shakmaty | 0.783x |
+| ubuntu-24.04-native | corpus_count | seeded | ultra | 0.803x |
+| macos-15-native | snapshot | middlegame | ferrum | 0.805x |
+| macos-15-native | corpus_count | lichess300 | ultra | 0.805x |
+| ubuntu-24.04-native | perft_bulk_d4 | promotion | ultra | 0.836x |
+| macos-15-native | snapshot | kiwipete | ferrum | 0.841x |
+| windows-2025-native | perft_full_d3 | promotion | ultra | 0.857x |
+| windows-2025-native | polyglot_recompute | lichess300 | shakmaty | 0.857x |
+| ubuntu-24.04-arm-native | perft_full_d3 | promotion | ultra | 0.863x |
+| ubuntu-24.04-pext | perft_bulk_d4 | promotion | ultra | 0.867x |
+| macos-15-native | perft_full_d3 | promotion | ultra | 0.869x |
+| windows-2025-native | apply_children_full | kiwipete | cozy | 0.877x |
+| windows-2025-native | perft_full_d3 | kiwipete | ultra | 0.881x |
+| ubuntu-24.04-arm-native | perft_full_d3 | tactical | ultra | 0.882x |
+| macos-15-native | perft_bulk_d4 | middlegame | ultra | 0.884x |
+| macos-15-native | snapshot | tactical | ferrum | 0.885x |
+| macos-15-native | perft_bulk_d4 | kiwipete | ultra | 0.890x |
+| windows-2025-native | perft_full_d3 | tactical | ultra | 0.892x |
+| macos-15-native | apply_children_full | tactical | chess | 0.893x |
+| ubuntu-24.04-native | replay_trusted_native | seeded | shakmaty | 0.902x |
+| ubuntu-24.04-portable | perft_bulk_d4 | promotion | ultra | 0.905x |
+| ubuntu-24.04-pext | make_unmake_full | tactical | ultra | 0.905x |
+| ubuntu-24.04-pext | make_unmake_full | promotion | ultra | 0.911x |
+| ubuntu-24.04-native | make_unmake_full | promotion | ultra | 0.911x |
+| ubuntu-24.04-native | make_unmake_full | tactical | ultra | 0.913x |
+| windows-2025-native | materialize | kiwipete | ultra | 0.913x |
+| windows-2025-native | apply_children_full | endgame | cozy | 0.921x |
+| ubuntu-24.04-arm-native | perft_full_d3 | kiwipete | ultra | 0.925x |
+| macos-15-native | make_unmake_full | endgame | ultra | 0.937x |
+| ubuntu-24.04-pext | replay_trusted_native | seeded | shakmaty | 0.937x |
+| windows-2025-native | replay_checked_native | seeded | cozy | 0.943x |
+| ubuntu-24.04-portable | make_unmake_full | tactical | ultra | 0.944x |
+| ubuntu-24.04-arm-native | perft_full_d3 | middlegame | ultra | 0.945x |
+| macos-15-native | materialize | middlegame | ultra | 0.946x |
+| windows-2025-native | perft_full_d3 | middlegame | ultra | 0.946x |
+| ubuntu-24.04-arm-native | snapshot | tactical | ferrum | 0.946x |
+| ubuntu-24.04-arm-native | snapshot | kiwipete | ferrum | 0.947x |
+| ubuntu-24.04-arm-native | snapshot | start | ferrum | 0.947x |
+| ubuntu-24.04-arm-native | snapshot | middlegame | ferrum | 0.949x |
+| ubuntu-24.04-arm-native | snapshot | endgame | ferrum | 0.951x |
+| ubuntu-24.04-portable | polyglot_recompute | seeded | shakmaty | 0.953x |
+| ubuntu-24.04-arm-native | snapshot | promotion | ferrum | 0.953x |
+| ubuntu-24.04-native | corpus_count | lichess300 | ultra | 0.954x |
+| ubuntu-24.04-pext | polyglot_recompute | lichess300 | shakmaty | 0.954x |
+| macos-15-native | apply_children_full | endgame | chess | 0.954x |
+| ubuntu-24.04-pext | corpus_count | lichess300 | ultra | 0.955x |
+| windows-2025-native | apply_children_full | start | cozy | 0.956x |
+| macos-15-native | apply_children_full | start | chess | 0.957x |
+| ubuntu-24.04-pext | perft_bulk_d4 | start | ultra | 0.957x |
+| windows-2025-native | corpus_count | lichess300 | ultra | 0.957x |
+| ubuntu-24.04-native | perft_bulk_d4 | start | ultra | 0.958x |
+| windows-2025-native | materialize | middlegame | ultra | 0.959x |
+| ubuntu-24.04-pext | corpus_count | seeded | ultra | 0.960x |
+| ubuntu-24.04-portable | count | promotion | ferrum | 0.960x |
+| ubuntu-24.04-portable | make_unmake_full | promotion | ultra | 0.963x |
+| ubuntu-24.04-arm-native | apply_children_full | tactical | chess | 0.967x |
+| ubuntu-24.04-portable | corpus_count | seeded | ultra | 0.970x |
+| macos-15-native | materialize | tactical | ultra | 0.971x |
+| ubuntu-24.04-portable | replay_checked_native | seeded | cozy | 0.980x |
+| ubuntu-24.04-native | perft_bulk_d4 | tactical | ultra | 0.989x |
+| windows-2025-native | apply_children_full | middlegame | cozy | 0.991x |
+| windows-2025-native | materialize | tactical | ultra | 0.992x |
+| macos-15-native | perft_bulk_d4 | promotion | ultra | 0.993x |
+| ubuntu-24.04-portable | snapshot | start | ferrum | 0.994x |
+| ubuntu-24.04-native | perft_bulk_d4 | kiwipete | ultra | 0.995x |
+| ubuntu-24.04-portable | snapshot | promotion | ferrum | 0.995x |
+| ubuntu-24.04-arm-native | apply_children_full | promotion | ferrum | 0.996x |
+| ubuntu-24.04-portable | polyglot_recompute | lichess300 | shakmaty | 0.997x |
+| windows-2025-native | startpos | start | shakmaty | 0.997x |
+| ubuntu-24.04-portable | snapshot | middlegame | ferrum | 0.998x |
+| ubuntu-24.04-pext | fen_parse | promotion | ferrum | 0.998x |
+| ubuntu-24.04-portable | snapshot | kiwipete | ferrum | 0.999x |
+| ubuntu-24.04-portable | snapshot | endgame | ferrum | 1.000x |
+| ubuntu-24.04-portable | snapshot | tactical | ferrum | 1.000x |
+
+| Platform | Giga median (ns) | Fastest peer | Peer median (ns) | Ratio |
+|---|---:|---|---:|---:|
+| macos-15-native | 4542 | shakmaty | 9833 | 2.165x |
+| ubuntu-24.04-arm-native | 5919 | shakmaty | 8976 | 1.516x |
+| ubuntu-24.04-native | 5541 | shakmaty | 7049 | 1.272x |
+| ubuntu-24.04-pext | 5177 | cozy | 7929 | 1.532x |
+| ubuntu-24.04-portable | 5854 | shakmaty | 7951 | 1.358x |
+| windows-2025-native | 12600 | shakmaty | 17100 | 1.357x |
+
+Cold wins: 6/6 (separate from native cases).

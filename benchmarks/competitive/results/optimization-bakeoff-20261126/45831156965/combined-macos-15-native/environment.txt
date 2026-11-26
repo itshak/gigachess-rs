@@ -1,0 +1,12 @@
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+binary: rustc
+commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
+commit-date: 2026-07-14
+host: aarch64-apple-darwin
+release: 1.97.1
+LLVM version: 22.1.6
+cargo 1.97.1 (c980f4866 2026-06-30)
+b1ab18a1aa2e5d8a70d2d8034bcca3a4fc30ce70
+mode=native features=exp-static-sliders,exp-ray-prefilter,exp-san,exp-uci,exp-fused-perft,exp-copy-perft,exp-mutation,exp-compact-board,exp-direct-legal,exp-early-san,exp-perft-kernel,exp-quiet-fast,exp-fused-geometry,exp-uci-direct,exp-ep-candidates,exp-checker-rays,exp-full-visitor,exp-color-make,exp-checked-known,exp-unmake-xor,exp-known-role,exp-static-unchecked,exp-uci-sort-key,exp-compact-attacks,exp-bool-attacks,exp-promotion-batch,exp-perft-xor,exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-direct-key
+Apple M1 (Virtual)
+RUSTFLAGS=-C target-cpu=native

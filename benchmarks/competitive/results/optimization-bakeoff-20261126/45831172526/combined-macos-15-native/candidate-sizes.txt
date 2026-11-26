@@ -1,0 +1,1 @@
+giga=96 shakmaty=136 cozy=104 chess=104 ultra=248 ferrum=88
