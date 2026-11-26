@@ -12,6 +12,11 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-implicit-pawn = ["exp-kingless-board"]
+exp-role-weight = []
+exp-leaf-direct = []
+exp-color-pawn = []
+exp-hash-square-order = []
 exp-packed-meta = []
 exp-checker-hybrid = []
 exp-checker-color = []
