@@ -289,3 +289,38 @@ fn packed_metadata_board_is_88_bytes(){
     assert_eq!(Board::empty().king_square(Color::White),Square(0));
     assert_eq!(Board::empty().king_square(Color::Black),Square(0));
 }
+
+#[cfg(all(feature="exp-leaf-check-delta",feature="exp-full-visitor"))]
+#[test]
+fn grouped_leaf_checkers_match_independent_transitions(){
+    fn verify(b:&Board){
+        let mut expected=Vec::new();
+        for m in b.legal_moves(){let mut c=*b;c.make_move_perft(m);expected.push(c);}
+        let mut actual=Vec::new();
+        assert_eq!(b.visit_perft_leaves(1,&mut |leaf|actual.push(*leaf)),expected.len() as u64);
+        assert_eq!(actual,expected,"{}",b.to_fen());
+    }
+    for fen in [
+        "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1",
+        "4k3/8/8/8/1B6/8/4R3/4K3 w - - 0 1",
+        "r2k3r/8/8/8/8/8/8/R2K3R w HAha - 0 1",
+        "4k3/P7/8/3pP3/8/8/8/4K3 w - d6 0 1",
+    ]{verify(&gigachess::fen::parse_fen_allow_illegal(fen).unwrap());}
+    let mut n=0;
+    for line in include_str!("../benchmarks/competitive/data/lichess-2013-01-first300.uci").lines(){
+        let mut b=Board::startpos();
+        for token in line.split_ascii_whitespace(){
+            if n%7==0{verify(&b);}
+            let m=b.legal_moves().into_iter().find(|&m|uci(&b,m)==token).unwrap();
+            b.make_move_unchecked(m);
+            n+=1;
+        }
+    }
+    assert_eq!(n,18954);
+}
+
+#[cfg(all(feature="exp-implicit-queen",feature="exp-unalign",not(feature="exp-packed-meta"),not(feature="exp-slider-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox"),not(feature="exp-role-planes")))]
+#[test]
+fn queen_implicit_layout_is_88_bytes(){
+    assert_eq!(core::mem::size_of::<Board>(),88);
+}

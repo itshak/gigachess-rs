@@ -384,3 +384,30 @@ New benchmark baseline M. New five experimental techniques:
   key layout; exact same keys for public and internal accessors.
 Expanded local regression passed for four combined features and
 separate role-weight variant; full release validation pending.
+
+## Round 11: reuse source removal and checker geometry across leaf groups
+All ten round10 runs passed, cold 6/6 each. M+leaf-direct (45839690097)
+480/522, 470 >=1.03, all 36/36 full perft (1.220x vs M), all 12/12
+checked replay. M remains 482/522 record; N=M+leaf-direct is selected
+as paired baseline because the improvement is targeted and repeatable
+(local full perft 1.115x, min 1.039x, CI 1.220x). Implicit pawn
+421/522 unaligned, 435 aligned, role-weight 461, square-order hash
+451 with recompute 0.684x M: rejected. Round10 local full release,
+six deep perft, four focused screens complete.
+New techniques:
+- leaf-base: share nonpawn source removal, EP clearing, turn change,
+  copy that base for each destination. Castling retains existing path.
+- leaf-check-delta: compute exact checker mask after source removal
+  once, clear old ray checkers blocked by the destination, add direct
+  destination checker using role-specific reverse geometry. Capture
+  leaves destination occupancy unchanged. No assumption of reachable
+  FEN or preexisting opposite check. No skipped observable state.
+- implicit-queen: five direct P,N,B,R,K planes, queen from occupied
+  complement. 88-byte natural alignment with cached king square.
+- align16-override: compare 16 vs 32-byte alignment on N, same size.
+- role-key-fold: interleaved role/color rows with and without turn
+  key, identical Polyglot delta semantics, no new unsafe.
+Combined debug gate passed including real corpus, all 960 and full
+leaf parity. Extra checker-delta differential test covers 2708
+sampled positions from 18,954 real-game plies, plus permissive FEN,
+castling, promotion and EP. Explicit 88-byte assertion passed.

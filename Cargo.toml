@@ -12,6 +12,11 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-leaf-base = ["exp-leaf-direct"]
+exp-leaf-check-delta = ["exp-leaf-base"]
+exp-implicit-queen = ["exp-kingless-board"]
+exp-align16-override = []
+exp-role-key-fold = []
 exp-implicit-pawn = ["exp-kingless-board"]
 exp-role-weight = []
 exp-leaf-direct = []
