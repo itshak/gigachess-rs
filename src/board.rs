@@ -10,7 +10,9 @@
 use crate::attacks;
 use crate::bitboard::{bit, lsb, pop_lsb, popcount, BETWEEN, KING_ATT, KNIGHT_ATT, PAWN_ATT};
 use crate::moves::Move;
-use crate::movegen::{compute_pinned_split, MoveCounter, MoveSink};
+use crate::movegen::{MoveCounter, MoveSink};
+#[cfg(not(feature="exp-fused-geometry"))]
+use crate::movegen::compute_pinned_split;
 use crate::types::{Color, Piece, Role, Square, NO_EP};
 use crate::zobrist;
 use arrayvec::ArrayVec;
@@ -788,14 +790,34 @@ impl Board {
         let occ_no_king = occ ^ bit(ksq);
         let mut danger = 0u64;
         let possible_king = KING_ATT[ksq as usize] & !self.occ[ui];
-        let targeted = cfg!(feature = "exp-king-targets")
+        let mut needed = possible_king;
+        let mut local = false;
+        if cfg!(feature = "exp-king-local") && !self.is_chess960 {
+            let rights=(self.castling >> ((1-ui)*2))&3;
+            let shift=if WHITE{0}else{56};
+            if rights==0 || ksq==shift+4 {
+                local=true;
+                if self.checkers==0 || cfg!(feature="exp-fused-geometry") {
+                    if rights&1!=0 && occ&(0x60u64<<shift)==0 {needed|=0x60u64<<shift;}
+                    if rights&2!=0 && occ&(0x0eu64<<shift)==0 {needed|=0x0cu64<<shift;}
+                }
+            }
+        }
+        let targeted = (local && needed.count_ones()<=3)
+            || (cfg!(feature = "exp-king-targets")
             && self.castling & (3 << ((1-ui)*2)) == 0
-            && possible_king.count_ones() <= 3;
+            && possible_king.count_ones() <= 3);
         if targeted {
-            let mut targets = possible_king;
+            let mut targets = needed;
             while targets != 0 {
                 let to = pop_lsb(&mut targets);
-                if self.attackers_to(to, them, occ_no_king) != 0 { danger |= bit(to); }
+                if cfg!(feature = "exp-king-local") {
+                    let k=to as usize;
+                    let leapers=(PAWN_ATT[ui][k]&self.bb(ti,Role::Pawn.index()))|(KNIGHT_ATT[k]&self.bb(ti,Role::Knight.index()))|(KING_ATT[k]&self.bb(ti,Role::King.index()));
+                    if leapers!=0
+                        || (crate::bitboard::EMPTY_BISHOP_RAYS[k]&their_bq!=0 && attacks::bishop_attacks(to,occ_no_king)&their_bq!=0)
+                        || (crate::bitboard::EMPTY_ROOK_RAYS[k]&their_rq!=0 && attacks::rook_attacks(to,occ_no_king)&their_rq!=0) {danger|=bit(to);}
+                } else if self.attackers_to(to, them, occ_no_king) != 0 { danger |= bit(to); }
             }
         } else {
         // Pawns — bulk shifts templated on WHITE (no runtime `them` branch, const-folded).
@@ -835,6 +857,15 @@ impl Board {
             sink.push_targets(ksq, king_targets);
         }
 
+        #[cfg(feature = "exp-fused-geometry")]
+        let (checkers,pinned_hv,pinned_diag) = {
+            let (sliders,hv,diag)=crate::movegen::geometry(ksq,occ,their_bq,their_rq,self.occ[ui]);
+            let check=sliders|(PAWN_ATT[ui][ksq as usize]&self.bb(ti,Role::Pawn.index()))
+                |(KNIGHT_ATT[ksq as usize]&self.bb(ti,Role::Knight.index()))
+                |(KING_ATT[ksq as usize]&self.bb(ti,Role::King.index()));
+            (check,hv,diag)
+        };
+        #[cfg(not(feature = "exp-fused-geometry"))]
         let checkers = self.checkers;
         if popcount(checkers) >= 2 {
             return; // double check: only king moves are legal
@@ -849,6 +880,7 @@ impl Board {
         };
 
         // Split pinned masks (ultrachess compute_pinned_split, enemy occupancy blocks rays).
+        #[cfg(not(feature = "exp-fused-geometry"))]
         let (pinned_hv, pinned_diag) = compute_pinned_split(ksq, occ, their_bq, their_rq, self.occ[ui], self.occ[ti]);
         let pinned_any = pinned_hv | pinned_diag;
 
@@ -1811,11 +1843,11 @@ impl Board {
     #[inline(always)]
     pub fn make_move_perft(&mut self, mv: Move) -> Undo {
         let moved=self.piece_code_at_color(mv.from().0,self.turn);
-        self.make_move_perft_known(mv,moved)
+        self.make_move_perft_known::<true>(mv,moved)
     }
 
     #[inline(always)]
-    fn make_move_perft_known(&mut self, mv: Move, moved:u8) -> Undo {
+    fn make_move_perft_known<const CHECKERS:bool>(&mut self, mv: Move, moved:u8) -> Undo {
         let mut undo = Undo {
             hash: 0,
             checkers: self.checkers,
@@ -1856,7 +1888,7 @@ impl Board {
             if self.castling!=0 {self.castling&=self.castle_rights_after(role,us,from,to);}
             self.ep=if is_pawn && to.abs_diff(from)==16 {(from+to)/2}else{NO_EP};
             self.turn=them;
-            self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());
+            if CHECKERS {self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
             return undo;
         }
 
@@ -1991,11 +2023,13 @@ impl Board {
         // Turn flip (without hash) — but keep `checkers` cached so movegen can use
         // `self.checkers` instead of recomputing `attackers_to` per node (saves ~20ns).
         self.turn = us.other();
+        if CHECKERS {
         self.checkers = self.attackers_to(
             self.king_sq[self.turn.index()],
             self.turn.other(),
             self.occupied(),
         );
+        }
         undo
     }
 
@@ -2784,6 +2818,12 @@ impl Board {
     /// which skips `zobrist`/`halfmove`/`fullmove` and `checkers` refresh
     /// (`position.rs:389` `Safe only for perft`, D3). Generation recomputes
     /// `checkers` from scratch via `attackers_to`, so the cache is not needed.
+    #[inline(always)]
+    fn make_perft_internal(&mut self,mv:Move)->Undo {
+        let code=self.piece_code_at_color(mv.from().0,self.turn);
+        self.make_move_perft_known::<{!cfg!(feature="exp-fused-geometry")}>(mv,code)
+    }
+
     pub fn perft(&self, depth: u32) -> u64 {
         if depth == 0 {
             return 1;
@@ -2804,7 +2844,7 @@ impl Board {
             let mut nodes=0;
             let mut child=*self;
             for &(mv,code) in &tagged.moves {
-                let undo=child.make_move_perft_known(mv,code);
+                let undo=child.make_move_perft_known::<{!cfg!(feature="exp-fused-geometry")}>(mv,code);
                 nodes+=child.perft(depth-1);
                 child.unmake_move_perft(mv,undo);
             }
@@ -2817,14 +2857,14 @@ impl Board {
         #[cfg(feature = "exp-copy-perft")]
         for &mv in list.as_slice() {
             let mut child = *self;
-            child.make_move_perft(mv);
+            child.make_perft_internal(mv);
             nodes += child.perft(depth - 1);
         }
         #[cfg(not(feature = "exp-copy-perft"))]
         {
             let mut child = *self;
             for &mv in list.as_slice() {
-                let undo = child.make_move_perft(mv);
+                let undo = child.make_perft_internal(mv);
                 nodes += child.perft(depth - 1);
                 child.unmake_move_perft(mv, undo);
             }
@@ -2948,7 +2988,7 @@ struct PerftLeafSink { child: Board, nodes:u64 }
 impl MoveSink for PerftLeafSink {
     #[inline(always)]
     fn push_one(&mut self,mv:Move) {
-        let undo=self.child.make_move_perft(mv);
+        let undo=self.child.make_perft_internal(mv);
         self.nodes+=self.child.count_legal_moves() as u64;
         self.child.unmake_move_perft(mv,undo);
     }

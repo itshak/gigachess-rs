@@ -71,6 +71,18 @@ impl Move {
         Role::from_promo_bits(self.0 >> 12)
     }
 
+    /// Direct standard ASCII UCI rendering, with canonical king-to-rook castling.
+    #[cfg(feature="exp-uci-direct")]
+    #[inline]
+    pub fn to_uci_string(self)->String {
+        if self.is_null(){return String::from("0000");}
+        let [ff,fr]=self.from().to_alg();let [tf,tr]=self.to().to_alg();
+        let mut s=String::with_capacity(if self.promotion().is_some(){5}else{4});
+        s.push(ff as char);s.push(fr as char);s.push(tf as char);s.push(tr as char);
+        if let Some(p)=self.promotion(){s.push(p.char_upper().to_ascii_lowercase());}
+        s
+    }
+
     /// Raw 16-bit word for the `moves2` wire format.
     #[inline]
     pub const fn word(self) -> u16 {

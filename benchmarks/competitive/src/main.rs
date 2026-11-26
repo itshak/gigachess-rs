@@ -336,7 +336,11 @@ fn castle_uci(mut x: String, king: bool) -> String {
     x
 }
 fn gu(b: &Board, m: gigachess::Move) -> String {
-    castle_uci(m.to_string(), m.from() == b.king_square(b.turn()))
+    #[cfg(feature="exp-uci-direct")]
+    let text=m.to_uci_string();
+    #[cfg(not(feature="exp-uci-direct"))]
+    let text=m.to_string();
+    castle_uci(text, m.from() == b.king_square(b.turn()))
 }
 fn cu(b: &C, m: cozy_chess::Move) -> String {
     castle_uci(m.to_string(), m.from == b.king(b.side_to_move()))

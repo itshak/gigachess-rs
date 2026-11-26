@@ -14,6 +14,10 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-king-local = ["gigachess/exp-king-local"]
+exp-pin-rays = ["gigachess/exp-pin-rays"]
+exp-fused-geometry = ["gigachess/exp-fused-geometry"]
+exp-uci-direct = ["gigachess/exp-uci-direct"]
 exp-tagged-perft = ["gigachess/exp-tagged-perft"]
 exp-perft-kernel = ["gigachess/exp-perft-kernel"]
 exp-direct-hash = ["gigachess/exp-direct-hash"]

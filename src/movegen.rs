@@ -406,6 +406,13 @@ pub fn compute_pinned_split(
     use crate::bitboard::BETWEEN;
     use crate::attacks;
 
+    #[cfg(feature = "exp-pin-rays")]
+    {
+        let (_,hv,diag)=geometry(ksq,occ,their_bq,their_rq,own_occ);
+        let _=their_occ;
+        return (hv,diag);
+    }
+    #[allow(unreachable_code)]
     let mut pinned_diag = 0u64;
     let mut pinned_hv = 0u64;
 
@@ -469,4 +476,28 @@ mod tests {
         assert_eq!(hv, 0);
         assert_eq!(diag, 0);
     }
+}
+
+
+/// Independently implemented empty-ray scan: a slider checks with zero
+/// intervening blockers, and pins with exactly one intervening own piece.
+#[cfg(any(feature="exp-pin-rays",feature="exp-fused-geometry"))]
+#[inline(always)]
+pub(crate) fn geometry(ksq:u8,occ:u64,bq:u64,rq:u64,own:u64)->(u64,u64,u64){
+    let mut check=0;let mut hv=0;let mut diag=0;
+    let mut a=crate::bitboard::EMPTY_BISHOP_RAYS[ksq as usize]&bq;
+    while a!=0{
+        let sniper=pop_lsb(&mut a);
+        let between=crate::bitboard::BETWEEN[ksq as usize][sniper as usize]&occ;
+        if between==0 {check|=bit(sniper);}
+        else if between&own!=0 && between&(between-1)==0 {diag|=between;}
+    }
+    let mut a=crate::bitboard::EMPTY_ROOK_RAYS[ksq as usize]&rq;
+    while a!=0{
+        let sniper=pop_lsb(&mut a);
+        let between=crate::bitboard::BETWEEN[ksq as usize][sniper as usize]&occ;
+        if between==0 {check|=bit(sniper);}
+        else if between&own!=0 && between&(between-1)==0 {hv|=between;}
+    }
+    (check,hv,diag)
 }
