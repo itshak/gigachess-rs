@@ -12,6 +12,11 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-role-tree = []
+exp-role-simd = []
+exp-capture-direct = []
+exp-checked-cached = []
+exp-quiet-common = []
 exp-sparse-role3 = ["exp-slider-planes"]
 exp-sparse-role3-branchless = ["exp-sparse-role3"]
 exp-direct-role-xor = []
