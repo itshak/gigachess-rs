@@ -12,6 +12,12 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-promotion-batch = ["exp-full-visitor"]
+exp-perft-xor = []
+exp-leaf-reuse = ["exp-full-visitor"]
+exp-prepared-move = ["exp-normal-kernel"]
+exp-compact-attacks = []
+exp-bool-attacks = []
 exp-uci-sort-key = []
 exp-fen-rank = []
 exp-nibble-role = []

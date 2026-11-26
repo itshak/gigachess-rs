@@ -18,6 +18,8 @@ pub mod types;
 pub mod zobrist;
 
 pub use board::{Board, IllegalMove, Undo};
+#[cfg(feature="exp-prepared-move")]
+pub use board::PreparedMove;
 pub use moves::Move;
 pub use reach::ReachSignature;
 pub use replay::{replay_moves2_trusted, Flow};
