@@ -1544,10 +1544,27 @@ impl Board {
     /// for branch-free `in_check()` (0.32ns) and increments/decrements `hash`
     /// for `zobrist()` load (0.34ns). Cost +2ns/make `attackers_to` to refresh
     /// `checkers` is kept per `BENCH.md: Deliberate make+unmake tradeoff`.
+    #[inline(always)]
     fn make_move_unchecked_with<const HASH: bool, const CHECKERS: bool>(
-        &mut self,
-        mv: Move,
-    ) -> Undo {
+        &mut self,mv:Move
+    )->Undo{
+        self.make_move_hinted::<HASH,CHECKERS,false>(mv,EMPTY)
+    }
+
+    #[inline(always)]
+    fn make_move_hinted<const HASH:bool,const CHECKERS:bool,const HINT:bool>(&mut self,mv:Move,code:u8)->Undo{
+        #[cfg(feature="exp-color-make")]
+        {
+            if self.turn==Color::White{return self.make_move_impl::<HASH,CHECKERS,HINT,1>(mv,code);}
+            return self.make_move_impl::<HASH,CHECKERS,HINT,0>(mv,code);
+        }
+        #[cfg(not(feature="exp-color-make"))]
+        self.make_move_impl::<HASH,CHECKERS,HINT,2>(mv,code)
+    }
+
+    fn make_move_impl<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8>(
+        &mut self,mv:Move,hint:u8
+    )->Undo{
         // A pass is not a move with squares. Every entry that could reach here
         // dispatches `Move::NULL` onto the null transition first, so finding one
         // means a new entry point bypassed that dispatch — fail loudly in debug
@@ -1566,14 +1583,14 @@ impl Board {
         };
         let from = mv.from().0;
         let to = mv.to().0;
-        let us = self.turn;
+        let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn};
         let them = us.other();
         #[cfg(feature="exp-known-role")]
-        let role=self.role_at_occupied(from,us);
+        let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
         #[cfg(feature="exp-known-role")]
         let moved=role+us as u8*6;
         #[cfg(not(feature="exp-known-role"))]
-        let moved = self.piece_code_at_color(from, us);
+        let moved=if HINT{hint}else{self.piece_code_at_color(from,us)};
         #[cfg(feature = "exp-undo-role")]
         { undo.moved = mv.promotion().map_or(moved, |r| Piece::new(us,r).code()); }
         debug_assert_ne!(moved, EMPTY, "make_move on empty square");
@@ -2322,6 +2339,25 @@ impl Board {
         let moved = self.piece_code_at_color(to, us);
         debug_assert_ne!(moved, EMPTY, "unmake_move on empty destination");
 
+        #[cfg(feature="exp-unmake-xor")]
+        if mv.promotion().is_none() && !(moved%6==Role::King as u8 && (to&7).abs_diff(from&7)==2){
+            let ui=us.index();let role=(moved%6) as usize;
+            let delta=bit(from)^bit(to);
+            #[cfg(feature="exp-mutation")]
+            self.bb_toggle(ui,role,delta);
+            #[cfg(not(feature="exp-mutation"))]
+            {self.bb_remove(ui,role,bit(to));self.bb_add(ui,role,bit(from));}
+            self.occ[ui]^=delta;
+            if role==Role::King.index(){self.king_sq[ui]=from;}
+            if undo.captured!=EMPTY{
+                let ep=role==Role::Pawn.index()&&from&7!=to&7&&undo.ep!=NO_EP&&to==undo.ep;
+                let sq=if ep{if us==Color::White{to-8}else{to+8}}else{to};
+                self.put_piece_no_hash(sq,undo.captured);
+            }
+            self.hash=undo.hash;self.checkers=undo.checkers;self.castling=undo.castling;
+            self.ep=undo.ep;self.halfmove=undo.halfmove;
+            return;
+        }
         self.remove_piece(to, moved);
         match mv.promotion() {
             Some(_) => self.put_piece(from, Piece::new(us, Role::Pawn).code()),
@@ -2374,6 +2410,21 @@ impl Board {
         if mv.is_null() {
             return self.make_null_move();
         }
+        #[cfg(all(feature="exp-checked-known",feature="exp-direct-legal"))]
+        {
+            let code=self.piece_code_at_color(mv.from().0,self.turn);
+            if !self.is_pseudo_legal_with_code(mv,code){return Err(IllegalMove);}
+            if let Some(safe)=self.king_safe_hypothetical_role(mv,code%6){
+                return if safe{Ok(self.make_move_hinted::<true,true,true>(mv,code))}else{Err(IllegalMove)};
+            }
+            let undo=self.make_move_hinted::<true,true,true>(mv,code);
+            let mover=self.turn.other();
+            if self.attackers_to(self.king_sq[mover.index()],self.turn,self.occupied())!=0{
+                self.unmake_move(mv,undo);return Err(IllegalMove);
+            }
+            return Ok(undo);
+        }
+        #[allow(unreachable_code)]
         if !self.is_pseudo_legal(mv) {
             return Err(IllegalMove);
         }
@@ -2791,9 +2842,14 @@ impl Board {
     #[cfg(feature = "exp-direct-legal")]
     #[inline(always)]
     fn king_safe_hypothetical(&self,mv:Move)->Option<bool>{
+        self.king_safe_hypothetical_role(mv,self.piece_code_at_color(mv.from().0,self.turn)%6)
+    }
+
+    #[cfg(feature="exp-direct-legal")]
+    #[inline(always)]
+    fn king_safe_hypothetical_role(&self,mv:Move,role:u8)->Option<bool>{
         let us=self.turn;let them=us.other();
         let f=mv.from().0;let t=mv.to().0;
-        let role=self.piece_code_at_color(f,us)%6;
         if self.occ[us.index()]&bit(t)!=0 || (mv.promotion().is_some()&&role!=Role::Pawn as u8){return None;}
         let mut captured=bit(t)&self.occ[them.index()];
         if role==Role::Pawn as u8 && f&7!=t&7 && captured==0 {
@@ -2847,6 +2903,11 @@ impl Board {
         if mv.is_null() {
             return true;
         }
+        self.is_pseudo_legal_with_code(mv,self.piece_code_at_color(mv.from().0,self.turn))
+    }
+
+    #[inline(always)]
+    fn is_pseudo_legal_with_code(&self,mv:Move,code:u8)->bool{
         let from = mv.from().0;
         let to = mv.to().0;
         if from == to || from > 63 || to > 63 {
@@ -2854,7 +2915,6 @@ impl Board {
         }
         let us = self.turn;
         let them = us.other();
-        let code = self.piece_code_at_color(from, us);
         if code == EMPTY {
             return false;
         }
