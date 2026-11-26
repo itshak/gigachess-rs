@@ -1,0 +1,420 @@
+=== 45787640581 ===
+exp-fen-rank,exp-align16,exp-blocked-sliders,exp-color-gen
+| ALL | 458 | 431 | 65 | 522 |
+| apply_children_full | 0.993x | 1.057x | 29/36 | 0.844x |
+| count | 1.011x | 1.348x | 35/36 | 0.957x |
+| materialize | 0.991x | 1.287x | 31/36 | 0.849x |
+| perft_full_d3 | 0.974x | 1.304x | 32/36 | 0.914x |
+| polyglot_recompute | 0.984x | 1.048x | 10/12 | 0.899x |
+| replay_checked_native | 0.976x | 1.027x | 8/12 | 0.780x |
+| replay_trusted_native | 1.014x | 0.665x | 0/12 | 0.488x |
+| snapshot | 0.936x | 0.995x | 23/36 | 0.694x |
+Cold wins: 6/6 (separate from native cases).
+=== 45787636084 ===
+exp-fen-rank,exp-align32,exp-blocked-sliders
+| ALL | 461 | 440 | 67 | 522 |
+| apply_children_full | 1.042x | 1.125x | 32/36 | 0.821x |
+| count | 0.982x | 1.330x | 35/36 | 0.956x |
+| materialize | 0.992x | 1.336x | 34/36 | 0.719x |
+| perft_full_d3 | 0.993x | 1.310x | 34/36 | 0.933x |
+| polyglot_recompute | 0.995x | 1.029x | 9/12 | 0.896x |
+| replay_checked_native | 0.996x | 1.023x | 8/12 | 0.800x |
+| replay_trusted_native | 0.999x | 0.640x | 0/12 | 0.442x |
+| snapshot | 1.249x | 1.068x | 18/36 | 0.710x |
+Cold wins: 6/6 (separate from native cases).
+=== 45787631963 ===
+exp-fen-rank,exp-align16,exp-blocked-sliders
+| ALL | 460 | 433 | 70 | 522 |
+| apply_children_full | 1.031x | 1.109x | 30/36 | 0.796x |
+| count | 0.997x | 1.322x | 35/36 | 0.890x |
+| materialize | 1.015x | 1.303x | 34/36 | 0.876x |
+| perft_full_d3 | 0.993x | 1.219x | 30/36 | 0.705x |
+| polyglot_recompute | 0.988x | 1.024x | 8/12 | 0.867x |
+| replay_checked_native | 1.023x | 1.016x | 9/12 | 0.844x |
+| replay_trusted_native | 0.987x | 0.640x | 0/12 | 0.475x |
+| snapshot | 0.977x | 0.969x | 23/36 | 0.734x |
+Cold wins: 6/6 (separate from native cases).
+=== 45787476247 ===
+exp-fen-rank,exp-quiet-common
+| ALL | 450 | 428 | 66 | 522 |
+| apply_children_full | 0.946x | 0.989x | 18/36 | 0.681x |
+| count | 0.990x | 1.319x | 35/36 | 0.973x |
+| materialize | 0.981x | 1.148x | 30/36 | 0.767x |
+| perft_full_d3 | 0.964x | 1.132x | 28/36 | 0.860x |
+| polyglot_recompute | 0.978x | 0.999x | 7/12 | 0.820x |
+| replay_checked_native | 0.982x | 0.966x | 5/12 | 0.827x |
+| replay_trusted_native | 0.974x | 0.640x | 0/12 | 0.481x |
+| snapshot | 1.012x | 1.037x | 25/36 | 0.775x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787471629 ===
+exp-fen-rank,exp-checked-cached
+| ALL | 462 | 444 | 68 | 522 |
+| apply_children_full | 1.012x | 1.053x | 28/36 | 0.796x |
+| count | 1.001x | 1.333x | 35/36 | 0.990x |
+| materialize | 0.982x | 1.248x | 33/36 | 0.858x |
+| perft_full_d3 | 0.991x | 1.209x | 30/36 | 0.640x |
+| polyglot_recompute | 0.990x | 1.036x | 9/12 | 0.884x |
+| replay_checked_native | 0.889x | 0.910x | 1/12 | 0.808x |
+| replay_trusted_native | 0.959x | 0.630x | 0/12 | 0.360x |
+| snapshot | 0.895x | 1.004x | 22/36 | 0.697x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787467337 ===
+exp-fen-rank,exp-capture-direct
+| ALL | 469 | 443 | 71 | 522 |
+| apply_children_full | 0.976x | 1.084x | 27/36 | 0.904x |
+| count | 0.996x | 1.352x | 35/36 | 0.860x |
+| materialize | 0.994x | 1.276x | 32/36 | 0.764x |
+| perft_full_d3 | 0.980x | 1.316x | 35/36 | 0.917x |
+| polyglot_recompute | 0.995x | 1.038x | 10/12 | 0.835x |
+| replay_checked_native | 1.042x | 1.064x | 9/12 | 0.914x |
+| replay_trusted_native | 1.058x | 0.659x | 0/12 | 0.498x |
+| snapshot | 1.013x | 0.992x | 20/36 | 0.651x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787462883 ===
+exp-fen-rank,exp-role-simd
+| ALL | 387 | 369 | 66 | 522 |
+| apply_children_full | 0.728x | 0.756x | 5/36 | 0.497x |
+| count | 0.990x | 1.321x | 34/36 | 0.971x |
+| materialize | 1.005x | 1.201x | 32/36 | 0.775x |
+| perft_full_d3 | 0.860x | 1.033x | 20/36 | 0.757x |
+| polyglot_recompute | 0.988x | 0.998x | 6/12 | 0.883x |
+| replay_checked_native | 0.867x | 0.845x | 1/12 | 0.652x |
+| replay_trusted_native | 0.865x | 0.612x | 0/12 | 0.425x |
+| snapshot | 0.923x | 0.987x | 16/36 | 0.613x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787458553 ===
+exp-fen-rank,exp-role-tree
+| ALL | 440 | 420 | 70 | 522 |
+| apply_children_full | 0.962x | 1.042x | 21/36 | 0.684x |
+| count | 0.991x | 1.319x | 34/36 | 0.920x |
+| materialize | 0.991x | 1.245x | 33/36 | 0.947x |
+| perft_full_d3 | 0.972x | 1.158x | 26/36 | 0.764x |
+| polyglot_recompute | 1.015x | 1.027x | 8/12 | 0.866x |
+| replay_checked_native | 0.951x | 0.935x | 2/12 | 0.841x |
+| replay_trusted_native | 1.020x | 0.664x | 0/12 | 0.476x |
+| snapshot | 1.068x | 1.035x | 19/36 | 0.823x |
+Cold wins: 1/6 (separate from native cases).
+=== 45787217460 ===
+exp-fen-rank,exp-compact-attack-desc
+| ALL | 459 | 433 | 68 | 522 |
+| apply_children_full | 0.998x | 1.036x | 24/36 | 0.846x |
+| count | 0.992x | 1.335x | 36/36 | 1.051x |
+| materialize | 0.987x | 1.297x | 34/36 | 0.964x |
+| perft_full_d3 | 0.995x | 1.336x | 31/36 | 0.865x |
+| polyglot_recompute | 1.016x | 1.047x | 9/12 | 0.932x |
+| replay_checked_native | 1.021x | 1.044x | 11/12 | 0.975x |
+| replay_trusted_native | 1.008x | 0.631x | 0/12 | 0.462x |
+| snapshot | 1.127x | 0.973x | 15/36 | 0.804x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787213573 ===
+exp-fen-rank,exp-checker-pair
+| ALL | 448 | 427 | 68 | 522 |
+| apply_children_full | 0.961x | 1.000x | 19/36 | 0.715x |
+| count | 1.004x | 1.337x | 35/36 | 0.968x |
+| materialize | 0.993x | 1.270x | 33/36 | 0.873x |
+| perft_full_d3 | 1.002x | 1.275x | 32/36 | 0.885x |
+| polyglot_recompute | 1.003x | 1.008x | 8/12 | 0.821x |
+| replay_checked_native | 1.019x | 1.051x | 6/12 | 0.887x |
+| replay_trusted_native | 0.903x | 0.559x | 0/12 | 0.427x |
+| snapshot | 0.877x | 1.017x | 23/36 | 0.886x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787209549 ===
+exp-fen-rank,exp-castle-compact
+| ALL | 458 | 446 | 69 | 522 |
+| apply_children_full | 1.001x | 1.070x | 27/36 | 0.793x |
+| count | 0.988x | 1.336x | 35/36 | 0.966x |
+| materialize | 0.963x | 1.242x | 33/36 | 0.768x |
+| perft_full_d3 | 0.908x | 1.182x | 30/36 | 0.853x |
+| polyglot_recompute | 1.058x | 1.079x | 12/12 | 1.029x |
+| replay_checked_native | 0.980x | 1.001x | 5/12 | 0.952x |
+| replay_trusted_native | 0.992x | 0.614x | 0/12 | 0.431x |
+| snapshot | 1.047x | 0.992x | 15/36 | 0.891x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787205932 ===
+exp-fen-rank,exp-direct-role-xor
+| ALL | 458 | 438 | 76 | 522 |
+| apply_children_full | 1.036x | 1.069x | 28/36 | 0.767x |
+| count | 1.004x | 1.323x | 35/36 | 0.978x |
+| materialize | 0.985x | 1.208x | 33/36 | 0.627x |
+| perft_full_d3 | 0.930x | 1.142x | 26/36 | 0.716x |
+| polyglot_recompute | 1.016x | 1.013x | 7/12 | 0.866x |
+| replay_checked_native | 0.992x | 0.993x | 7/12 | 0.856x |
+| replay_trusted_native | 1.002x | 0.639x | 0/12 | 0.469x |
+| snapshot | 1.023x | 0.993x | 19/36 | 0.623x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787202060 ===
+exp-fen-rank,exp-sparse-role3-branchless
+| ALL | 373 | 350 | 57 | 522 |
+| apply_children_full | 0.863x | 0.882x | 7/36 | 0.658x |
+| count | 0.964x | 1.321x | 34/36 | 0.967x |
+| materialize | 1.001x | 1.316x | 32/36 | 0.769x |
+| perft_full_d3 | 0.805x | 1.029x | 16/36 | 0.740x |
+| polyglot_recompute | 0.989x | 1.005x | 9/12 | 0.895x |
+| replay_checked_native | 0.749x | 0.777x | 0/12 | 0.553x |
+| replay_trusted_native | 0.899x | 0.596x | 0/12 | 0.378x |
+| snapshot | 1.116x | 1.219x | 35/36 | 0.775x |
+Cold wins: 1/6 (separate from native cases).
+=== 45787198016 ===
+exp-fen-rank,exp-sparse-role3
+| ALL | 440 | 418 | 58 | 522 |
+| apply_children_full | 0.932x | 0.970x | 15/36 | 0.742x |
+| count | 1.003x | 1.297x | 33/36 | 0.948x |
+| materialize | 1.011x | 1.320x | 32/36 | 0.746x |
+| perft_full_d3 | 0.943x | 1.239x | 32/36 | 0.838x |
+| polyglot_recompute | 1.016x | 1.034x | 10/12 | 0.943x |
+| replay_checked_native | 0.810x | 0.823x | 1/12 | 0.598x |
+| replay_trusted_native | 0.807x | 0.508x | 0/12 | 0.385x |
+| snapshot | 1.007x | 1.221x | 34/36 | 0.715x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787193954 ===
+exp-fen-rank,exp-align32
+| ALL | 470 | 456 | 62 | 522 |
+| apply_children_full | 1.048x | 1.080x | 30/36 | 0.778x |
+| count | 1.000x | 1.324x | 35/36 | 0.977x |
+| materialize | 1.015x | 1.234x | 32/36 | 0.723x |
+| perft_full_d3 | 1.085x | 1.273x | 32/36 | 0.944x |
+| polyglot_recompute | 1.018x | 1.017x | 8/12 | 0.869x |
+| replay_checked_native | 1.015x | 0.989x | 6/12 | 0.799x |
+| replay_trusted_native | 1.009x | 0.643x | 0/12 | 0.465x |
+| snapshot | 1.124x | 1.101x | 23/36 | 0.707x |
+Cold wins: 0/6 (separate from native cases).
+=== 45787189850 ===
+exp-fen-rank,exp-align16
+| ALL | 431 | 415 | 70 | 522 |
+| apply_children_full | 0.965x | 1.052x | 22/36 | 0.799x |
+| count | 0.995x | 1.310x | 36/36 | 1.001x |
+| materialize | 0.993x | 1.138x | 32/36 | 0.792x |
+| perft_full_d3 | 1.015x | 1.121x | 23/36 | 0.884x |
+| polyglot_recompute | 0.941x | 0.992x | 6/12 | 0.845x |
+| replay_checked_native | 0.987x | 0.973x | 6/12 | 0.827x |
+| replay_trusted_native | 0.986x | 0.660x | 0/12 | 0.450x |
+| snapshot | 0.866x | 0.885x | 5/36 | 0.770x |
+Cold wins: 0/6 (separate from native cases).
+=== 45784637443 ===
+exp-fen-rank,exp-no-danger-needed
+| ALL | 464 | 442 | 72 | 522 |
+| apply_children_full | 1.015x | 1.081x | 28/36 | 0.720x |
+| count | 1.041x | 1.395x | 36/36 | 1.010x |
+| materialize | 1.013x | 1.236x | 33/36 | 0.860x |
+| perft_full_d3 | 1.007x | 1.147x | 27/36 | 0.852x |
+| polyglot_recompute | 1.001x | 1.007x | 7/12 | 0.873x |
+| replay_checked_native | 1.008x | 0.973x | 5/12 | 0.838x |
+| replay_trusted_native | 0.983x | 0.636x | 0/12 | 0.471x |
+| snapshot | 1.036x | 1.060x | 22/36 | 0.787x |
+Cold wins: 4/6 (separate from native cases).
+=== 45784633109 ===
+exp-fen-rank,exp-blocked-sliders
+| ALL | 449 | 431 | 72 | 522 |
+| apply_children_full | 0.996x | 1.093x | 24/36 | 0.864x |
+| count | 1.000x | 1.326x | 36/36 | 1.029x |
+| materialize | 1.020x | 1.176x | 32/36 | 0.849x |
+| perft_full_d3 | 0.995x | 1.143x | 29/36 | 0.841x |
+| polyglot_recompute | 0.981x | 1.015x | 8/12 | 0.870x |
+| replay_checked_native | 1.000x | 0.985x | 6/12 | 0.897x |
+| replay_trusted_native | 1.017x | 0.649x | 0/12 | 0.457x |
+| snapshot | 1.144x | 0.986x | 15/36 | 0.858x |
+Cold wins: 6/6 (separate from native cases).
+=== 45784361336 ===
+exp-fen-rank,exp-fen-code-lut
+| ALL | 455 | 435 | 70 | 522 |
+| apply_children_full | 1.063x | 1.046x | 25/36 | 0.764x |
+| count | 1.008x | 1.316x | 35/36 | 0.986x |
+| materialize | 1.017x | 1.271x | 34/36 | 0.805x |
+| perft_full_d3 | 1.029x | 1.195x | 27/36 | 0.863x |
+| polyglot_recompute | 1.021x | 1.019x | 9/12 | 0.886x |
+| replay_checked_native | 1.021x | 0.985x | 7/12 | 0.845x |
+| replay_trusted_native | 0.968x | 0.638x | 0/12 | 0.479x |
+| snapshot | 1.112x | 1.008x | 14/36 | 0.844x |
+Cold wins: 0/6 (separate from native cases).
+=== 45784353046 ===
+exp-fen-rank,exp-hash-pointer
+| ALL | 453 | 428 | 65 | 522 |
+| apply_children_full | 0.940x | 1.002x | 22/36 | 0.793x |
+| count | 1.002x | 1.343x | 35/36 | 0.861x |
+| materialize | 1.008x | 1.304x | 32/36 | 0.849x |
+| perft_full_d3 | 1.032x | 1.362x | 35/36 | 0.913x |
+| polyglot_recompute | 0.921x | 0.983x | 4/12 | 0.904x |
+| replay_checked_native | 1.002x | 1.057x | 10/12 | 0.929x |
+| replay_trusted_native | 0.955x | 0.631x | 0/12 | 0.462x |
+| snapshot | 0.956x | 0.961x | 12/36 | 0.593x |
+Cold wins: 0/6 (separate from native cases).
+=== 45784348835 ===
+exp-fen-rank,exp-undo-outside
+| ALL | 477 | 454 | 76 | 522 |
+| apply_children_full | 1.050x | 1.144x | 30/36 | 0.755x |
+| count | 0.988x | 1.328x | 35/36 | 0.747x |
+| materialize | 1.028x | 1.243x | 33/36 | 0.798x |
+| perft_full_d3 | 0.986x | 1.249x | 31/36 | 0.887x |
+| polyglot_recompute | 0.999x | 1.068x | 8/12 | 0.918x |
+| replay_checked_native | 1.022x | 1.019x | 8/12 | 0.891x |
+| replay_trusted_native | 1.063x | 0.690x | 2/12 | 0.494x |
+| snapshot | 0.939x | 1.020x | 27/36 | 0.824x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783954770 ===
+exp-fen-rank,exp-child-copy
+| ALL | 458 | 437 | 66 | 522 |
+| apply_children_full | 0.934x | 0.999x | 21/36 | 0.797x |
+| count | 0.993x | 1.342x | 35/36 | 0.987x |
+| materialize | 0.982x | 1.299x | 32/36 | 0.798x |
+| perft_full_d3 | 1.009x | 1.320x | 33/36 | 0.932x |
+| polyglot_recompute | 1.014x | 1.003x | 7/12 | 0.862x |
+| replay_checked_native | 1.014x | 1.037x | 9/12 | 0.874x |
+| replay_trusted_native | 0.978x | 0.635x | 0/12 | 0.474x |
+| snapshot | 0.970x | 0.979x | 17/36 | 0.578x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783950334 ===
+exp-fen-rank,exp-pawn-kernel
+| ALL | 452 | 436 | 72 | 522 |
+| apply_children_full | 0.988x | 1.053x | 27/36 | 0.791x |
+| count | 0.985x | 1.349x | 35/36 | 0.968x |
+| materialize | 0.973x | 1.231x | 33/36 | 0.946x |
+| perft_full_d3 | 0.971x | 1.174x | 30/36 | 0.843x |
+| polyglot_recompute | 1.009x | 1.039x | 9/12 | 0.896x |
+| replay_checked_native | 0.964x | 1.000x | 3/12 | 0.880x |
+| replay_trusted_native | 0.920x | 0.615x | 1/12 | 0.452x |
+| snapshot | 0.966x | 0.983x | 12/36 | 0.724x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783946246 ===
+exp-fen-rank,exp-bulk-write
+| ALL | 465 | 445 | 68 | 522 |
+| apply_children_full | 1.131x | 1.128x | 29/36 | 0.696x |
+| count | 0.998x | 1.320x | 33/36 | 0.845x |
+| materialize | 0.990x | 1.273x | 34/36 | 0.794x |
+| perft_full_d3 | 0.989x | 1.278x | 30/36 | 0.748x |
+| polyglot_recompute | 1.019x | 1.012x | 7/12 | 0.909x |
+| replay_checked_native | 0.988x | 0.987x | 7/12 | 0.758x |
+| replay_trusted_native | 0.999x | 0.630x | 0/12 | 0.471x |
+| snapshot | 1.024x | 1.019x | 28/36 | 0.441x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783941522 ===
+exp-fen-rank,exp-color-gen
+| ALL | 463 | 444 | 70 | 522 |
+| apply_children_full | 1.024x | 1.079x | 27/36 | 0.612x |
+| count | 0.966x | 1.313x | 36/36 | 1.012x |
+| materialize | 0.963x | 1.156x | 33/36 | 0.782x |
+| perft_full_d3 | 0.984x | 1.144x | 27/36 | 0.743x |
+| polyglot_recompute | 1.050x | 1.023x | 8/12 | 0.887x |
+| replay_checked_native | 1.040x | 0.992x | 8/12 | 0.846x |
+| replay_trusted_native | 1.016x | 0.632x | 0/12 | 0.442x |
+| snapshot | 1.065x | 1.094x | 21/36 | 0.660x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783678581 ===
+exp-inline-make
+| ALL | 463 | 453 | 60 | 522 |
+| apply_children_full | 1.094x | 1.181x | 34/36 | 0.865x |
+| count | 1.005x | 1.296x | 33/36 | 0.946x |
+| materialize | 1.003x | 1.259x | 33/36 | 0.862x |
+| perft_full_d3 | 1.016x | 1.222x | 27/36 | 0.827x |
+| polyglot_recompute | 0.978x | 1.006x | 7/12 | 0.890x |
+| replay_checked_native | 1.067x | 1.081x | 9/12 | 0.946x |
+| replay_trusted_native | 1.114x | 0.697x | 1/12 | 0.497x |
+| snapshot | 1.017x | 1.029x | 18/36 | 0.812x |
+Cold wins: 1/6 (separate from native cases).
+=== 45783673950 ===
+exp-leaf-reuse
+| ALL | 449 | 420 | 64 | 522 |
+| apply_children_full | 0.964x | 1.036x | 24/36 | 0.626x |
+| count | 0.994x | 1.349x | 36/36 | 1.025x |
+| materialize | 0.986x | 1.186x | 31/36 | 0.784x |
+| perft_full_d3 | 0.807x | 0.955x | 12/36 | 0.664x |
+| polyglot_recompute | 0.961x | 0.991x | 6/12 | 0.778x |
+| replay_checked_native | 0.968x | 1.011x | 7/12 | 0.883x |
+| replay_trusted_native | 0.960x | 0.655x | 0/12 | 0.483x |
+| snapshot | 1.263x | 1.059x | 32/36 | 0.943x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783668599 ===
+exp-no-perft-xor
+| ALL | 450 | 432 | 58 | 522 |
+| apply_children_full | 0.998x | 1.078x | 27/36 | 0.793x |
+| count | 1.003x | 1.319x | 33/36 | 0.960x |
+| materialize | 0.975x | 1.281x | 32/36 | 0.803x |
+| perft_full_d3 | 0.942x | 1.203x | 30/36 | 0.823x |
+| polyglot_recompute | 1.038x | 1.030x | 8/12 | 0.959x |
+| replay_checked_native | 0.992x | 1.015x | 7/12 | 0.930x |
+| replay_trusted_native | 0.976x | 0.626x | 0/12 | 0.411x |
+| snapshot | 1.009x | 1.001x | 21/36 | 0.633x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783663301 ===
+exp-no-promotion-batch
+| ALL | 466 | 442 | 58 | 522 |
+| apply_children_full | 1.002x | 1.052x | 26/36 | 0.878x |
+| count | 0.967x | 1.300x | 34/36 | 0.641x |
+| materialize | 0.977x | 1.273x | 33/36 | 0.873x |
+| perft_full_d3 | 0.987x | 1.257x | 30/36 | 0.853x |
+| polyglot_recompute | 1.004x | 1.014x | 8/12 | 0.869x |
+| replay_checked_native | 1.016x | 1.014x | 8/12 | 0.828x |
+| replay_trusted_native | 0.997x | 0.617x | 0/12 | 0.440x |
+| snapshot | 1.123x | 1.105x | 27/36 | 0.714x |
+Cold wins: 1/6 (separate from native cases).
+=== 45783658574 ===
+exp-hash-delta
+| ALL | 456 | 435 | 63 | 522 |
+| apply_children_full | 0.987x | 1.132x | 28/36 | 0.816x |
+| count | 0.991x | 1.326x | 35/36 | 0.949x |
+| materialize | 0.988x | 1.283x | 34/36 | 0.845x |
+| perft_full_d3 | 0.990x | 1.295x | 34/36 | 0.951x |
+| polyglot_recompute | 1.005x | 1.024x | 9/12 | 0.924x |
+| replay_checked_native | 0.987x | 0.998x | 6/12 | 0.917x |
+| replay_trusted_native | 1.003x | 0.633x | 0/12 | 0.475x |
+| snapshot | 0.981x | 0.967x | 10/36 | 0.814x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783653802 ===
+exp-hash-pawn-bytes
+| ALL | 452 | 432 | 61 | 522 |
+| apply_children_full | 0.985x | 0.986x | 21/36 | 0.641x |
+| count | 0.994x | 1.327x | 35/36 | 0.946x |
+| materialize | 1.007x | 1.261x | 32/36 | 0.870x |
+| perft_full_d3 | 1.004x | 1.219x | 30/36 | 0.725x |
+| polyglot_recompute | 0.976x | 0.999x | 7/12 | 0.871x |
+| replay_checked_native | 0.997x | 1.009x | 8/12 | 0.830x |
+| replay_trusted_native | 0.984x | 0.644x | 0/12 | 0.473x |
+| snapshot | 1.073x | 1.043x | 18/36 | 0.913x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783648045 ===
+exp-ordinary-kernel
+| ALL | 452 | 435 | 65 | 522 |
+| apply_children_full | 0.977x | 1.090x | 26/36 | 0.907x |
+| count | 0.999x | 1.333x | 35/36 | 0.949x |
+| materialize | 0.981x | 1.212x | 33/36 | 0.756x |
+| perft_full_d3 | 0.992x | 1.237x | 34/36 | 0.913x |
+| polyglot_recompute | 1.007x | 1.024x | 8/12 | 0.897x |
+| replay_checked_native | 1.022x | 1.012x | 8/12 | 0.763x |
+| replay_trusted_native | 1.009x | 0.657x | 0/12 | 0.463x |
+| snapshot | 0.878x | 1.028x | 20/36 | 0.751x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783643518 ===
+exp-align32
+| ALL | 460 | 436 | 61 | 522 |
+| apply_children_full | 1.021x | 1.097x | 31/36 | 0.729x |
+| count | 1.031x | 1.354x | 36/36 | 1.007x |
+| materialize | 1.006x | 1.243x | 34/36 | 0.689x |
+| perft_full_d3 | 1.011x | 1.329x | 35/36 | 0.950x |
+| polyglot_recompute | 0.982x | 1.028x | 9/12 | 0.920x |
+| replay_checked_native | 1.045x | 1.032x | 10/12 | 0.934x |
+| replay_trusted_native | 1.010x | 0.647x | 0/12 | 0.471x |
+| snapshot | 1.322x | 1.019x | 14/36 | 0.661x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783639110 ===
+exp-align16
+| ALL | 465 | 441 | 58 | 522 |
+| apply_children_full | 0.940x | 1.032x | 27/36 | 0.749x |
+| count | 0.981x | 1.308x | 34/36 | 0.813x |
+| materialize | 1.021x | 1.343x | 35/36 | 0.863x |
+| perft_full_d3 | 0.993x | 1.323x | 34/36 | 0.923x |
+| polyglot_recompute | 0.989x | 1.023x | 10/12 | 0.888x |
+| replay_checked_native | 1.017x | 1.063x | 8/12 | 0.922x |
+| replay_trusted_native | 0.991x | 0.638x | 0/12 | 0.462x |
+| snapshot | 1.146x | 1.002x | 22/36 | 0.574x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783634997 ===
+exp-fen-rank
+| ALL | 446 | 432 | 64 | 522 |
+| apply_children_full | 0.968x | 1.045x | 24/36 | 0.779x |
+| count | 0.973x | 1.283x | 33/36 | 0.802x |
+| materialize | 0.991x | 1.282x | 33/36 | 0.769x |
+| perft_full_d3 | 1.029x | 1.282x | 34/36 | 0.932x |
+| polyglot_recompute | 0.984x | 1.017x | 7/12 | 0.929x |
+| replay_checked_native | 0.984x | 1.009x | 7/12 | 0.807x |
+| replay_trusted_native | 0.989x | 0.622x | 0/12 | 0.457x |
+| snapshot | 0.937x | 0.943x | 6/36 | 0.657x |
+Cold wins: 1/6 (separate from native cases).

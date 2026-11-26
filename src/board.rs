@@ -176,8 +176,11 @@ pub struct Board {
     sliders:[u64;4],
     // Role codes: P=000,N=001,B=010,R=100,Q=110,K=101.
     // Occupancy distinguishes a pawn (zero code) from an empty square.
-    #[cfg(feature="exp-sparse-role3")]
+    #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
     sliders:[u64;3],
+    // N, B|Q, R|Q, K. Pawns are the occupied complement.
+    #[cfg(feature="exp-pawnless4")]
+    sliders:[u64;4],
     #[cfg(feature="exp-nibble-role")]
     role_map:[u8;32],
     #[cfg(feature="exp-role-planes")]
@@ -222,8 +225,10 @@ impl Board {
             sliders:[0;5],
             #[cfg(all(feature="exp-slider-planes-kingless",not(feature="exp-sparse-role3")))]
             sliders:[0;4],
-            #[cfg(feature="exp-sparse-role3")]
+            #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
             sliders:[0;3],
+            #[cfg(feature="exp-pawnless4")]
+            sliders:[0;4],
             #[cfg(feature="exp-nibble-role")]
             role_map:[0xff;32],
             #[cfg(feature="exp-role-planes")]
@@ -271,8 +276,10 @@ impl Board {
             sliders:[0xff00|(0xff<<48),0x42|(0x42<<56),0x2c|(0x2c<<56),0x89|(0x89<<56),0x10|(0x10<<56)],
             #[cfg(all(feature="exp-slider-planes-kingless",not(feature="exp-sparse-role3")))]
             sliders:[0xff00|(0xff<<48),0x42|(0x42<<56),0x2c|(0x2c<<56),0x89|(0x89<<56)],
-            #[cfg(feature="exp-sparse-role3")]
+            #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
             sliders:[0x52|(0x52<<56),0x2c|(0x2c<<56),0x99|(0x99<<56)],
+            #[cfg(feature="exp-pawnless4")]
+            sliders:[0x42|(0x42<<56),0x2c|(0x2c<<56),0x89|(0x89<<56),0x10|(0x10<<56)],
             #[cfg(feature="exp-nibble-role")]
             role_map:{
                 let mut m=[0xff;32];let back=[3u8,1,2,4,5,2,1,3];let mut i=0;
@@ -334,7 +341,13 @@ impl Board {
 
     #[inline(always)]
     fn bb(&self,color:usize,role:usize)->u64 {
-        #[cfg(feature="exp-sparse-role3")]
+        #[cfg(feature="exp-pawnless4")]
+        {
+            let [n,d,r,k]=self.sliders;
+            let raw=match role{0=>!(n|d|r|k),1=>n,2=>d&!r,3=>r&!d,4=>d&r,_=>k};
+            return raw&self.occ[color];
+        }
+        #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
         {
             let [a,b,c]=self.sliders;
             let raw=match role{
@@ -371,7 +384,9 @@ impl Board {
     }
     #[inline(always)]
     fn diagonal_sliders(&self,color:usize)->u64{
-        #[cfg(feature="exp-sparse-role3")]
+        #[cfg(feature="exp-pawnless4")]
+        {return self.sliders[1]&self.occ[color];}
+        #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
         {return self.sliders[1]&!self.sliders[0]&self.occ[color];}
         #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {self.sliders[2]&self.occ[color]}
@@ -380,7 +395,9 @@ impl Board {
     }
     #[inline(always)]
     fn orthogonal_sliders(&self,color:usize)->u64{
-        #[cfg(feature="exp-sparse-role3")]
+        #[cfg(feature="exp-pawnless4")]
+        {return self.sliders[2]&self.occ[color];}
+        #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
         {return self.sliders[2]&!self.sliders[0]&self.occ[color];}
         #[cfg(all(feature="exp-slider-planes",not(feature="exp-sparse-role3")))]
         {self.sliders[3]&self.occ[color]}
@@ -390,7 +407,15 @@ impl Board {
     #[cfg(feature="exp-slider-planes")]
     #[inline(always)]
     fn slider_role_at(&self,b:u64)->u8{
-        #[cfg(feature="exp-sparse-role3")]
+        #[cfg(feature="exp-pawnless4")]
+        {
+            let [n,d,r,k]=self.sliders;
+            if (n|d|r|k)&b==0{return 0;}
+            if n&b!=0{return 1;}
+            if k&b!=0{return 5;}
+            return [5,2,3,4][(d&b!=0) as usize+2*(r&b!=0) as usize];
+        }
+        #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
         {
             let [a,c,d]=self.sliders;
             let code=(a&b!=0) as usize+2*(c&b!=0) as usize+4*(d&b!=0) as usize;
@@ -441,7 +466,15 @@ impl Board {
         { self.mailbox[mask.trailing_zeros() as usize]=(color*6+role) as u8; }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        #[cfg(feature="exp-sparse-role3")]
+        #[cfg(feature="exp-pawnless4")]
+        {
+            match role{
+                0=>{},1=>self.sliders[0]|=mask,2=>self.sliders[1]|=mask,
+                3=>self.sliders[2]|=mask,4=>{self.sliders[1]|=mask;self.sliders[2]|=mask;},
+                _=>self.sliders[3]|=mask,
+            }
+        }
+        #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
         {
             #[cfg(feature="exp-sparse-role3-branchless")]
             {
@@ -478,7 +511,15 @@ impl Board {
         { self.mailbox[mask.trailing_zeros() as usize]=EMPTY; }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        #[cfg(feature="exp-sparse-role3")]
+        #[cfg(feature="exp-pawnless4")]
+        {
+            match role{
+                0=>{},1=>self.sliders[0]&=!mask,2=>self.sliders[1]&=!mask,
+                3=>self.sliders[2]&=!mask,4=>{self.sliders[1]&=!mask;self.sliders[2]&=!mask;},
+                _=>self.sliders[3]&=!mask,
+            }
+        }
+        #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
         {
             #[cfg(feature="exp-sparse-role3-branchless")]
             {
@@ -524,7 +565,15 @@ impl Board {
         }
         #[cfg(all(feature="exp-compact-board",feature="exp-kingless-board",not(feature="exp-slider-planes")))]
         if role==Role::King.index(){return;}
-        #[cfg(feature="exp-sparse-role3")]
+        #[cfg(feature="exp-pawnless4")]
+        {
+            match role{
+                0=>{},1=>self.sliders[0]^=mask,2=>self.sliders[1]^=mask,
+                3=>self.sliders[2]^=mask,4=>{self.sliders[1]^=mask;self.sliders[2]^=mask;},
+                _=>self.sliders[3]^=mask,
+            }
+        }
+        #[cfg(all(feature="exp-sparse-role3",not(feature="exp-pawnless4")))]
         {
             #[cfg(feature="exp-sparse-role3-branchless")]
             {
@@ -1006,6 +1055,15 @@ impl Board {
     /// en-passant square (Polyglot ep-hash relevance condition).
     #[inline(always)]
     fn ep_relevant(&self, ep: u8, side: Color) -> bool {
+        #[cfg(feature="exp-ep-mask")]
+        {
+            const MASKS:[[u64;256];2]={
+                let mut t=[[0;256];2];let mut i=0;
+                while i<64{t[0][i]=PAWN_ATT[1][i];t[1][i]=PAWN_ATT[0][i];i+=1;}t
+            };
+            return MASKS[side.index()][ep as usize]&self.bb(side.index(),0)!=0;
+        }
+        #[allow(unreachable_code)]
         if ep == NO_EP {
             return false;
         }
@@ -1460,12 +1518,30 @@ impl Board {
             danger |= KNIGHT_ATT[sq as usize];
         }
         danger |= KING_ATT[self.king_sq[ti] as usize];
-        let mut p = their_bq;
+        #[cfg(feature="exp-zone-sliders")]
+        let (bzone,rzone)={
+            const ZONES:[[u64;2];64]={
+                let mut t=[[0;2];64];let mut i=0;
+                while i<64{
+                    let mut squares=KING_ATT[i];
+                    if i&7==4 {squares|=1u64<<(i-2)|1u64<<(i+2);}
+                    while squares!=0{
+                        let sq=squares.trailing_zeros() as usize;squares&=squares-1;
+                        t[i][0]|=crate::bitboard::EMPTY_BISHOP_RAYS[sq];
+                        t[i][1]|=crate::bitboard::EMPTY_ROOK_RAYS[sq];
+                    }i+=1;
+                }t
+            };
+            (ZONES[ksq as usize][0],ZONES[ksq as usize][1])
+        };
+        #[cfg(not(feature="exp-zone-sliders"))]
+        let (bzone,rzone)=(!0u64,!0u64);
+        let mut p = their_bq&bzone;
         while p != 0 {
             let sq = pop_lsb(&mut p);
             danger |= attacks::bishop_attacks(sq, occ_no_king);
         }
-        let mut p = their_rq;
+        let mut p = their_rq&rzone;
         while p != 0 {
             let sq = pop_lsb(&mut p);
             danger |= attacks::rook_attacks(sq, occ_no_king);
@@ -2172,6 +2248,47 @@ impl Board {
 
     #[cfg_attr(feature="exp-inline-make",inline(always))]
     fn make_move_transition<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8,const PREPARED:bool>(
+        &mut self,mv:Move,hint:u8,capture_hint:u8
+    )->TransitionUndo{
+        #[cfg(all(feature="exp-special-cold",feature="exp-undo-outside",feature="exp-known-role",feature="exp-mutation"))]
+        {
+            let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn};
+            let ui=us.index();let ti=us.other().index();
+            let from=mv.from().0;let to=mv.to().0;let f=bit(from);let t=bit(to);
+            let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
+            let enemy=self.occ[ti]&t;
+            if !PREPARED&&mv.promotion().is_none()&&self.occ[ui]&t==0&&!(role==0&&from&7!=to&7&&enemy==0){
+                let mut hash=self.hash;
+                if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
+                let mut captured=EMPTY;
+                if enemy!=0{
+                    let cap=self.role_at_occupied(to,us.other()) as usize;
+                    captured=(ti*6+cap) as u8;
+                    self.bb_remove(ti,cap,t);self.occ[ti]^=t;
+                    hash^=zobrist::piece_key_indices(ti,cap,to);
+                }
+                self.bb_toggle(ui,role as usize,f^t);self.occ[ui]^=f^t;
+                hash^=zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
+                if role==5{self.king_sq[ui]=to;}
+                if self.castling!=0{
+                    let old=self.castling;self.castling=old&self.castle_rights_after(role,us,from,to);
+                    if HASH&&old!=self.castling{hash^=self.castle_rights_hash(old^self.castling);}
+                }
+                self.ep=if role==0&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
+                if HASH&&self.ep_relevant(self.ep,us.other()){hash^=zobrist::ep_key(Square(self.ep));}
+                self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
+                self.fullmove+=(us==Color::Black) as u16;
+                self.hash=hash;self.turn=us.other();
+                if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};
+            }
+        }
+        self.make_move_general::<HASH,CHECKERS,HINT,SIDE,PREPARED>(mv,hint,capture_hint)
+    }
+
+    #[cfg_attr(feature="exp-special-cold",inline(never))]
+    #[cfg_attr(all(feature="exp-inline-make",not(feature="exp-special-cold")),inline(always))]
+    fn make_move_general<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8,const PREPARED:bool>(
         &mut self,mv:Move,hint:u8,capture_hint:u8
     )->TransitionUndo{
         // A pass is not a move with squares. Every entry that could reach here

@@ -1,0 +1,10 @@
+I1 exp-align32,exp-blocked-sliders
+I2 exp-align16,exp-blocked-sliders
+I3 exp-align32,exp-blocked-sliders,exp-capture-direct,exp-castle-compact,exp-compact-attack-desc
+I4 exp-align32,exp-blocked-sliders,exp-inline-make,exp-capture-direct
+I5 exp-align32,exp-blocked-sliders,exp-no-danger-needed,exp-bulk-write
+I6 exp-align32,exp-blocked-sliders,exp-no-promotion-batch
+pawnless4 exp-pawnless4
+zone-sliders exp-zone-sliders
+ep-mask exp-ep-mask
+special-cold exp-special-cold

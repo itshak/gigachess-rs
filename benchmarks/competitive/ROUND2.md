@@ -249,3 +249,31 @@ Sparse layout is exactly 72 bytes unaligned, 80 aligned to 16, 96 aligned
 to 32. Native SIMD needs actual cross-platform execution; scalar fallback
 tested, AVX2 compile checked. Existing F baseline is unchanged apart from
 initial hash computation order (after Chess960 detection).
+
+## Round 6: Undo-outside, cold-start sweep, and refined compact board
+Round5 all 16 passed. F+undo-outside (45784348835) 477/522,
+including 2/12 trusted replay, 30/36 children, 27/36 snapshots.
+F+align32 470/522; F+capture-direct 469/522; castle-compact 12/12
+recomputed hashes; compact-attack-desc 11/12 checked replay.
+F+align32+blocked 461/522 plus 6/6 cold first-use wins.
+Sparse 72-byte layout 34/36 snapshot but trusted replay 0.807x F;
+branchless 35/36 snapshots but more regressions. SIMD and role-tree
+not selected (387 and 440 total). No-danger-needed 464/522,
+4/6 cold. Inline-make 34/36 children, 1.114x E trusted replay.
+Two incomplete old runs cancelled on macOS, retried failed jobs.
+
+New variants:
+- pawnless4: 80-byte board; four role planes N, B|Q, R|Q, K, pawn
+  is occupied complement. Preserves malformed FEN king counting.
+  No pawn-plane writes, no redundant cache; exact hash and checkers.
+- zone-sliders: reverse empty rays from king-neighborhood and both
+  standard castling transit paths to prefilter enemy danger-map sliders.
+  Pin/check geometry stays exact, other castle paths probe independently.
+- ep-mask: direct zero-mask entry for absent EP, keep native EP square
+  and Polyglot geometric capturer semantics.
+- special-cold: compact normal move transition returning minimal
+  capture/castle metadata, rare cases call noninlined general path.
+  Independent of prepared input; unchanged moves2 and Undo contract.
+All four passed combined debug regression (nine tests including size,
+960 and stripped castle fixtures, real games, exhaustive blocker tests).
+F+undo-outside is the new benchmark-only paired baseline.
