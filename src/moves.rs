@@ -77,6 +77,14 @@ impl Move {
     pub fn to_uci_string(self)->String {
         if self.is_null(){return String::from("0000");}
         let [ff,fr]=self.from().to_alg();let [tf,tr]=self.to().to_alg();
+        #[cfg(feature="exp-uci-bytes")]
+        {
+            let mut bytes=[ff,fr,tf,tr,0];
+            let n=if let Some(p)=self.promotion(){bytes[4]=p.char_upper().to_ascii_lowercase() as u8;5}else{4};
+            // SAFETY: square coordinates and promotion letters are ASCII.
+            return unsafe{String::from_utf8_unchecked(bytes[..n].to_vec())};
+        }
+        #[allow(unreachable_code)]
         let mut s=String::with_capacity(if self.promotion().is_some(){5}else{4});
         s.push(ff as char);s.push(fr as char);s.push(tf as char);s.push(tr as char);
         if let Some(p)=self.promotion(){s.push(p.char_upper().to_ascii_lowercase());}
