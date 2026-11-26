@@ -898,6 +898,12 @@ impl Board {
             #[cfg(feature="exp-checker-rays")]
             {
                 let mut candidates=bishops|rooks;
+                #[cfg(feature="exp-checker-first")]
+                if candidates!=0{
+                    let first=pop_lsb(&mut candidates);
+                    let clear=crate::bitboard::BETWEEN[k][first as usize]&occ==0;
+                    result|=bit(first)&0u64.wrapping_sub(clear as u64);
+                }
                 while candidates!=0{
                     let a=pop_lsb(&mut candidates);
                     if crate::bitboard::BETWEEN[k][a as usize]&occ==0{result|=bit(a);}
@@ -1196,8 +1202,11 @@ impl Board {
     /// (monomorphised ×2 per sink, `LTO=fat`).
     #[inline(always)]
     fn generate_moves_templated<const WHITE: bool,const SPECIAL:bool, S: MoveSink>(&self, sink: &mut S) {
-        let us = self.turn;
-        let them = us.other();
+        #[cfg(feature="exp-color-gen")]
+        let us=if WHITE{Color::White}else{Color::Black};
+        #[cfg(not(feature="exp-color-gen"))]
+        let us=self.turn;
+        let them=us.other();
         let ui = us.index();
         let ti = them.index();
         let ksq = self.king_sq[ui];
@@ -1974,6 +1983,38 @@ impl Board {
         let to = mv.to().0;
         let us=if SIDE==1{Color::White}else if SIDE==0{Color::Black}else{self.turn};
         let them = us.other();
+        #[cfg(feature="exp-pawn-kernel")]
+        if !PREPARED && mv.promotion().is_none() && from&7==to&7 {
+            let ui=us.index();let ti=them.index();let f=bit(from);let t=bit(to);
+            if self.bb(ui,0)&f!=0 && self.occupied()&t==0 {
+                #[cfg(feature="exp-undo-role")]
+                {undo.moved=us as u8*6;}
+                let mut hash=self.hash;
+                if HASH&&self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
+                let delta=f^t;
+                #[cfg(feature="exp-mutation")]
+                self.bb_toggle(ui,0,delta);
+                #[cfg(not(feature="exp-mutation"))]
+                {self.bb_remove(ui,0,f);self.bb_add(ui,0,t);}
+                self.occ[ui]^=delta;
+                hash^=zobrist::piece_move_delta::<HASH>(ui,0,from,to);
+                // Standard rights only change on the back ranks. Preserve
+                // nonstandard rights behavior, including permissive inputs.
+                if self.castling!=0 && (self.is_chess960||((f|t)&0xff000000000000ff)!=0){
+                    let old=self.castling;
+                    self.castling&=self.castle_rights_after(0,us,from,to);
+                    if HASH&&old!=self.castling{hash^=self.castle_rights_hash(old^self.castling);}
+                }
+                self.ep=if from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
+                if HASH&&self.ep_relevant(self.ep,them){hash^=zobrist::ep_key(Square(self.ep));}
+                self.halfmove=0;
+                self.fullmove+=(us==Color::Black) as u16;
+                self.turn=them;self.hash=hash;
+                if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+                return undo;
+            }
+        }
+
         #[cfg(feature="exp-known-role")]
         let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
         #[cfg(feature="exp-known-role")]
@@ -2240,6 +2281,51 @@ impl Board {
         }
         #[cfg(not(feature="exp-color-make"))]
         self.make_move_impl::<true,true,true,2,true>(m.mv,moved,cap)
+    }
+
+    /// Construct the exact full-state child of a trusted move. Unlike
+    /// make/unmake, this path does not need to build an Undo record.
+    #[cfg(feature="exp-child-copy")]
+    #[inline(always)]
+    pub fn child_after_unchecked(&self,mv:Move)->Board{
+        if !mv.is_null()&&mv.promotion().is_none(){
+            let us=self.turn;let them=us.other();let ui=us.index();let ti=them.index();
+            let from=mv.from().0;let to=mv.to().0;let f=bit(from);let t=bit(to);
+            let moved=self.piece_code_at_color(from,us);
+            let role=(moved%6) as usize;
+            let enemy=self.occ[ti]&t;
+            if moved!=EMPTY&&self.occ[ui]&t==0&&!(role==0&&from&7!=to&7&&enemy==0){
+                let mut child=*self;
+                let mut hash=self.hash;
+                if self.ep_relevant(self.ep,us){hash^=zobrist::ep_key(Square(self.ep));}
+                if enemy!=0 {
+                    let capture=(self.piece_code_at_color(to,them)%6) as usize;
+                    child.bb_remove(ti,capture,t);child.occ[ti]^=t;
+                    hash^=zobrist::piece_key_indices(ti,capture,to);
+                }
+                #[cfg(feature="exp-mutation")]
+                child.bb_toggle(ui,role,f^t);
+                #[cfg(not(feature="exp-mutation"))]
+                {child.bb_remove(ui,role,f);child.bb_add(ui,role,t);}
+                child.occ[ui]^=f^t;
+                hash^=zobrist::piece_move_delta::<true>(ui,role,from,to);
+                if role==5{child.king_sq[ui]=to;}
+                if self.castling!=0{
+                    child.castling=self.castling&self.castle_rights_after(role as u8,us,from,to);
+                    if self.castling!=child.castling{hash^=self.castle_rights_hash(self.castling^child.castling);}
+                }
+                child.ep=if role==0&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
+                if child.ep_relevant(child.ep,them){hash^=zobrist::ep_key(Square(child.ep));}
+                child.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
+                child.fullmove+=(us==Color::Black) as u16;
+                child.turn=them;child.hash=hash;
+                child.checkers=child.attackers_to(child.king_sq[ti],us,child.occupied());
+                return child;
+            }
+        }
+        let mut child=*self;
+        child.make_move_unchecked(mv);
+        child
     }
 
     /// Applies `mv` without legality validation, maintaining the incremental

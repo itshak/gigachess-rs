@@ -150,3 +150,17 @@ New independent experiments:
 - Existing leaf-reuse and inline-make evaluated separately.
 Expanded E+all new compatible feature debug regression suite passed,
 including all 960 starts and 960 stripped castling fixtures. CI required.
+
+### Round 4 copy and move generation follow-up
+- color-gen: use the const WHITE parameter for actual color indices.
+- bulk-write: one checked capacity reservation and length update for each
+  target group; promotion groups written together, exact ordering.
+- pawn-kernel: specialize quiet nonpromoting pawn transitions before
+  general role decoding, preserve full hash/clock/checker state.
+- child-copy: public experimental full-state copy-make method, no Undo;
+  same move inputs and exact output Board as existing child workload.
+- checker-first: process first ray candidate separately with branchless
+  mask, retain remaining candidates and exact checker semantics.
+All five combined passed debug regression including real legal move
+transitions, exact child equality and all Chess960 fixtures. F is the
+benchmark-only default for the follow-up branch. Root defaults unchanged.

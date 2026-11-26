@@ -357,7 +357,7 @@ fn main() {
         let cm = cozy_list(&c);
         let jm = jordan_list(&j);
         let fm = f.generate_moves();
-        row!("apply_children_full",name,count as u64,"giga"=>||{for &m in &gm{let mut x=*bb(&g);x.make_move_unchecked(bb(m));bb(x);}},"shakmaty"=>||{for &m in &sm{let mut x=bb(&s).clone();x.play_unchecked(bb(m));bb(x);}},"cozy"=>||{for &m in &cm{let mut x=bb(&c).clone();x.play_unchecked(bb(m));bb(x);}},"chess"=>||{for &m in &jm{bb(bb(&j).make_move_new(bb(m)));}},"ultra"=>||{for &m in &um{let mut x=bb(&u).clone();x.make_move(bb(m));bb(x);}},"ferrum"=>||{for m in fm.iter(){bb(bb(&f).make_move_new(bb(m)));}});
+        row!("apply_children_full",name,count as u64,"giga"=>||{for &m in &gm{#[cfg(feature="exp-child-copy")]{bb(bb(&g).child_after_unchecked(bb(m)));}#[cfg(not(feature="exp-child-copy"))]{let mut x=*bb(&g);x.make_move_unchecked(bb(m));bb(x);}}},"shakmaty"=>||{for &m in &sm{let mut x=bb(&s).clone();x.play_unchecked(bb(m));bb(x);}},"cozy"=>||{for &m in &cm{let mut x=bb(&c).clone();x.play_unchecked(bb(m));bb(x);}},"chess"=>||{for &m in &jm{bb(bb(&j).make_move_new(bb(m)));}},"ultra"=>||{for &m in &um{let mut x=bb(&u).clone();x.make_move(bb(m));bb(x);}},"ferrum"=>||{for m in fm.iter(){bb(bb(&f).make_move_new(bb(m)));}});
         row!("make_unmake_full",name,count as u64,"giga"=>||{let mut x=g;for &m in &gm{let undo=x.make_move_unchecked(bb(m));bb(&x);x.unmake_move(m,undo);bb(&x);}},"ultra"=>||{for &m in &um{u.make_move(bb(m));bb(&u);u.unmake_move(m);bb(&u);}});
         row!("perft_internal_ab",name,expected,"giga_default"=>||g.perft(4),"giga_reuse"=>||g.perft_reuse(4),"giga_visitor"=>||g.perft_visitor(4));
     }

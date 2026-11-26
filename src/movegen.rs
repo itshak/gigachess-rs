@@ -139,6 +139,21 @@ impl MoveSink for MoveList {
 impl MoveSink for arrayvec::ArrayVec<Move, MAX_MOVES> {
     #[inline(always)]
     fn push_targets(&mut self, from: u8, mut targets: u64) {
+        #[cfg(feature="exp-bulk-write")]
+        {
+            let len=self.len();let count=targets.count_ones() as usize;
+            assert!(count<=MAX_MOVES-len);
+            let mut pos=len;
+            while targets!=0{
+                let to=pop_lsb(&mut targets);
+                // SAFETY: checked total capacity, exactly count writes.
+                unsafe{self.as_mut_ptr().add(pos).write(Move(from as u16|((to as u16)<<6)));}
+                pos+=1;
+            }
+            unsafe{self.set_len(pos);}
+            return;
+        }
+        #[allow(unreachable_code)]
         let from_bits = from as u16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
@@ -148,6 +163,19 @@ impl MoveSink for arrayvec::ArrayVec<Move, MAX_MOVES> {
 
     #[inline(always)]
     fn push_pawn_targets_offset(&mut self, mut targets: u64, offset: i8) {
+        #[cfg(feature="exp-bulk-write")]
+        {
+            let len=self.len();let count=targets.count_ones() as usize;
+            assert!(count<=MAX_MOVES-len);let mut pos=len;
+            while targets!=0{
+                let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u16;
+                unsafe{self.as_mut_ptr().add(pos).write(Move(from|((to as u16)<<6)));}
+                pos+=1;
+            }
+            unsafe{self.set_len(pos);}
+            return;
+        }
+        #[allow(unreachable_code)]
         let off = offset as i16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);
@@ -158,6 +186,21 @@ impl MoveSink for arrayvec::ArrayVec<Move, MAX_MOVES> {
 
     #[inline(always)]
     fn push_pawn_promotions_offset(&mut self, mut targets: u64, offset: i8) {
+        #[cfg(feature="exp-bulk-write")]
+        {
+            let len=self.len();let count=4*targets.count_ones() as usize;
+            assert!(count<=MAX_MOVES-len);let mut pos=len;
+            while targets!=0{
+                let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u16;
+                let base=from|((to as u16)<<6);
+                let moves=[Move(base|0x1000),Move(base|0x2000),Move(base|0x3000),Move(base|0x4000)];
+                unsafe{core::ptr::copy_nonoverlapping(moves.as_ptr(),self.as_mut_ptr().add(pos),4);}
+                pos+=4;
+            }
+            unsafe{self.set_len(pos);}
+            return;
+        }
+        #[allow(unreachable_code)]
         let off = offset as i16;
         while targets != 0 {
             let to = pop_lsb(&mut targets);

@@ -12,6 +12,11 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-color-gen = []
+exp-bulk-write = []
+exp-pawn-kernel = []
+exp-child-copy = []
+exp-checker-first = []
 exp-align16 = []
 exp-align32 = []
 exp-ordinary-kernel = []
