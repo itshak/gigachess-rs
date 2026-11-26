@@ -270,3 +270,9 @@ fn promotion_checker_reuse_exact_children(){
         assert_eq!(actual,reference,"{fen}");
     }
 }
+
+#[cfg(all(feature="exp-kingless-ray",feature="exp-unalign",not(feature="exp-slider-planes"),not(feature="exp-mailbox"),not(feature="exp-nibble-role"),not(feature="exp-role-planes")))]
+#[test]
+fn kingless_unaligned_layout_is_88_bytes(){
+    assert_eq!(core::mem::size_of::<Board>(),88);
+}
