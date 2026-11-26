@@ -14,7 +14,7 @@ All 26 independent experiments (52 Linux x64/ARM64 jobs) completed. Features are
 | [45767240593](https://github.com/itshak/gigachess-rs/actions/runs/45767240593) | twelve-feature combination, six platforms |
 | [45767325283](https://github.com/itshak/gigachess-rs/actions/runs/45767325283) | fifteen-feature combination, six platforms |
 
-The latter two combined runs are in progress at this snapshot. No selection or release claim is made.
+The initial seven-feature matrix generated all six performance summaries; five jobs succeeded and Windows reported a failure in the full ABBA step despite producing its summary artifacts. Treat Windows data as provisional. The latter two combined runs are in progress at this snapshot. No selection or release claim is made.
 
 ## Interpretation
 
@@ -22,7 +22,7 @@ The strongest independent improvements are static slider tables (cold initializa
 
 Initial seven-feature combination across six runners: bulk perft 1.07–1.26x own baseline and 1.03–1.23x fastest measured peer; SAN parse 1.35–1.59x own baseline; SAN render 1.29–1.58x own baseline. Full perft, child application, sorted UCI, snapshots and replay remain competitive deficits. Full perft harness now observes every leaf, so earlier unobserved-leaf timings are not comparable. Static table generic x86 runtime PEXT dispatch must be checked before release; native PEXT is separately covered.
 
-Extra real-game correctness gate passed locally for a fourteen-feature combination: 18,954 positions, 554,971 legal move SAN/undo transitions, all 65,536 encoded moves, exhaustive relevant slider blockers, Chess960 special moves. The stronger fifteen-feature combination has its own CI gate. An earlier local timing screen was invalidated because the source changed during the sequence; none of its timings is used.
+Extra real-game correctness gate passed locally for a fourteen-feature combination: 18,954 positions, 554,971 legal move SAN/undo transitions, all 65,536 encoded moves, exhaustive relevant slider blockers, Chess960 special moves. The stronger fifteen-feature combination has its own CI gate and passed the local full release suite plus all six ignored deep perft cases (including startpos d6 and Kiwipete d5). An earlier local timing screen was invalidated because the source changed during the sequence; none of its timings is used.
 
 ## Remaining acceptance gates
 

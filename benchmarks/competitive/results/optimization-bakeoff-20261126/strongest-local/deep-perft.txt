@@ -1,0 +1,13 @@
+    Finished `release` profile [optimized] target(s) in 0.05s
+     Running tests/perft.rs (target/release/deps/perft-764152aac5888312)
+
+running 6 tests
+test pos4_d5 ... ok
+test pos3_d6 ... ok
+test pos5_d5 ... ok
+test pos6_d5 ... ok
+test startpos_d6 ... ok
+test kiwipete_d5 ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.40s
+
