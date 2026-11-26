@@ -12,6 +12,11 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-packed-meta = []
+exp-checker-hybrid = []
+exp-checker-color = []
+exp-direct-key = []
+exp-castle-file-gate = []
 exp-no-rights-kernel = []
 exp-promotion-direct = []
 exp-layout-hot = []

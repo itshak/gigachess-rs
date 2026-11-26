@@ -40,6 +40,17 @@ pub fn piece_key(color: Color, role: Role, sq: Square) -> u64 {
 /// Direct equivalent of piece_key for validated internal color/role indices.
 #[inline(always)]
 pub(crate) fn piece_key_indices(color:usize,role:usize,sq:u8)->u64 {
+    #[cfg(feature="exp-direct-key")]
+    {
+        // Separate fixed-size piece rows allow constant-folding the color
+        // and role bounds in specialized kernels, without new unsafe code.
+        static KEYS:[[u64;64];12]={
+            let mut t=[[0;64];12];let mut i=0;
+            while i<768{t[i>>6][i&63]=POLYGLOT_RANDOM_ARRAY[i];i+=1;}t
+        };
+        return KEYS[2*role+color][sq as usize];
+    }
+    #[cfg(not(feature="exp-direct-key"))]
     POLYGLOT_RANDOM_ARRAY[64*(2*role+color)+sq as usize]
 }
 
