@@ -12,6 +12,10 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-pawnless4 = ["exp-sparse-role3"]
+exp-zone-sliders = []
+exp-ep-mask = []
+exp-special-cold = []
 exp-role-tree = []
 exp-role-simd = []
 exp-capture-direct = []

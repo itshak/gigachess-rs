@@ -249,6 +249,6 @@ fn all_960_backranks_and_castling_parity(){
 #[cfg(feature="exp-sparse-role3")]
 #[test]
 fn sparse_role_board_size() {
-    let expected=if cfg!(feature="exp-align32"){96}else if cfg!(feature="exp-align16"){80}else{72};
+    let expected=if cfg!(feature="exp-align32"){96}else if cfg!(feature="exp-align16")||cfg!(feature="exp-pawnless4"){80}else{72};
     assert_eq!(core::mem::size_of::<gigachess::Board>(),expected);
 }
