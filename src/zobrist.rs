@@ -65,6 +65,16 @@ pub(crate) fn piece_key_indices(color:usize,role:usize,sq:u8)->u64 {
     POLYGLOT_RANDOM_ARRAY[64*(2*role+color)+sq as usize]
 }
 
+#[cfg(feature="exp-hash-small-role")]
+#[inline(always)]
+pub(crate) fn piece_key_optional(color:usize,role:usize,sq:usize)->u64{
+    static ROWS:[[u64;65];12]={
+        let mut t=[[0;65];12];let mut i=0;
+        while i<768{t[i>>6][i&63]=POLYGLOT_RANDOM_ARRAY[i];i+=1;}t
+    };
+    ROWS[2*role+color][sq]
+}
+
 /// Ordinary move hash delta. The optional table trades two random keys
 /// for one larger lookup, keeping the exact Polyglot contract.
 #[inline(always)]

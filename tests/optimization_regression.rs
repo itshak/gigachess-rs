@@ -347,3 +347,22 @@ fn predicted_checkers_match_fresh_attacks_on_permissive_positions(){
         }
     }
 }
+
+#[cfg(feature="exp-compact80")]
+#[test]
+fn compact_board_retains_exact_state_in_80_bytes(){
+    assert_eq!(core::mem::size_of::<Board>(),80);
+    let b=Board::startpos();
+    assert_eq!(b.king_square(Color::White),Square(4));
+    assert_eq!(b.king_square(Color::Black),Square(60));
+    assert_eq!(b.zobrist(),b.zobrist_full());
+    assert_eq!(b.to_fen(),"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    assert_eq!(Board::empty().king_square(Color::White),Square(0));
+    assert_eq!(Board::empty().king_square(Color::Black),Square(0));
+    for fen in ["4k3/8/8/8/8/8/8/4K3 w - - 65535 65535",
+        "4k3/8/8/8/8/8/8/1R1K3R w BH - 0 1"]{
+        let b=parse_fen(fen).unwrap();
+        assert_eq!(b.zobrist(),b.zobrist_full());
+        assert_eq!(parse_fen(&b.to_fen()).unwrap(),b);
+    }
+}

@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-hash-small-role = []
+exp-targeted-danger = []
+exp-compact80 = ["exp-packed-meta", "exp-kingless-board", "exp-unalign"]
 exp-checker-predict = []
 exp-geometry-union = []
 exp-zone-knights = []
