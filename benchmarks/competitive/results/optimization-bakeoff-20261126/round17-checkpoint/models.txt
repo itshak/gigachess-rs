@@ -1,0 +1,5 @@
+cached-packed-king exp-cached-packed-king,exp-kingless-ray
+pawn-double-reuse exp-pawn-double-reuse
+pawn-batch-count exp-pawn-batch-count
+pawn-combination exp-pawn-double-reuse,exp-pawn-batch-count,exp-zone-knights,exp-leaf-check-delta
+cached-leaf exp-cached-packed-king,exp-kingless-ray,exp-leaf-check-delta,exp-pawn-batch-count
