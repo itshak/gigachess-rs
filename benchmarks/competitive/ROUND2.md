@@ -476,3 +476,23 @@ knights by the reverse attacks of every relevant king/castle step.
 Combined regression and permissive-position checker-cache comparison
 passed. Repeat O+checker-near as control; combine the new geometry
 flags and the successful full leaf delta. O remains paired baseline.
+
+## Round 15: compact 80-byte board and selective hash/attack work
+Round14 all six CI, full local release and six deep perft passed.
+Repeat P 45884473516 scored 484/522, paired native replay 0.911x O;
+492/522 record remains a single observed maximum, not a stable gain.
+O+geometry-union+zone-knights+leaf-check-delta 486/522,
+full perft 1.213x O, checked 1.050x, trusted 1.007x.
+O+checker-near+leaf-check-delta+direct-key+castle-compact 479/522,
+12/12 hash recompute, but trusted 0.878x and checked 0.924x.
+Zone-knights 484/522, corpus count 1.052x, materialize 1.053x,
+trusted 1.044x. Predict-checkers 473, trusted 0.893x; reject.
+Three new techniques: compact80 combines packed metadata with five
+direct role planes, retaining all logical fields and deriving king
+square from occupancy (80 bytes, verified); hash-small-role folds
+two sentinel lookups per nonpawn role/color, handles extra promoted
+pieces with exact loop; targeted-danger uses reverse attack queries
+for <=2 relevant standard king/castling destinations.
+Combined targeted tests pass, including 80-byte layout, clock extremes,
+all 960 starts, exact perft leaf state and real-game replay.
+Keep O paired baseline; test separate flags and selected combinations.

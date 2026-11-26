@@ -1608,7 +1608,29 @@ impl Board {
     /// the incremental hash in `self.hash` must always agree with this).
     pub fn zobrist_full(&self) -> u64 {
         let mut h = 0u64;
-        #[cfg(feature="exp-hash-two-lanes")]
+        #[cfg(feature="exp-hash-small-role")]
+        {
+            #[inline(always)]
+            fn fold<const C:usize,const R:usize>(b:&Board)->u64{
+                let mut bits=b.bb(C,R);
+                // Most nonpawn planes contain at most two pieces. Two
+                // sentinel lookups avoid per-piece branches; promoted pieces
+                // beyond those two still use the exact ordinary loop.
+                let mut value=0;
+                if R!=0{
+                    let first=bits.trailing_zeros() as usize;
+                    bits&=bits.wrapping_sub(1);
+                    let second=bits.trailing_zeros() as usize;
+                    bits&=bits.wrapping_sub(1);
+                    value=zobrist::piece_key_optional(C,R,first)^zobrist::piece_key_optional(C,R,second);
+                }
+                while bits!=0{value^=zobrist::piece_key_indices(C,R,pop_lsb(&mut bits));}
+                value
+            }
+            h=fold::<0,0>(self)^fold::<0,1>(self)^fold::<0,2>(self)^fold::<0,3>(self)^fold::<0,4>(self)^fold::<0,5>(self)^
+              fold::<1,0>(self)^fold::<1,1>(self)^fold::<1,2>(self)^fold::<1,3>(self)^fold::<1,4>(self)^fold::<1,5>(self);
+        }
+        #[cfg(all(not(feature="exp-hash-small-role"),feature="exp-hash-two-lanes"))]
         {
             #[inline(always)]
             fn pair<const R:usize>(b:&Board)->u64{
@@ -1624,7 +1646,7 @@ impl Board {
             }
             h=pair::<0>(self)^pair::<1>(self)^pair::<2>(self)^pair::<3>(self)^pair::<4>(self)^pair::<5>(self);
         }
-        #[cfg(all(not(feature="exp-hash-two-lanes"),feature="exp-hash-role-scan",feature="exp-compact-board"))]
+        #[cfg(all(not(feature="exp-hash-small-role"),not(feature="exp-hash-two-lanes"),feature="exp-hash-role-scan",feature="exp-compact-board"))]
         {
             #[inline(always)]
             fn fold<const R:usize>(b:&Board)->u64{
@@ -1639,7 +1661,7 @@ impl Board {
             }
             h=fold::<0>(self)^fold::<1>(self)^fold::<2>(self)^fold::<3>(self)^fold::<4>(self)^fold::<5>(self);
         }
-        #[cfg(all(not(feature="exp-hash-two-lanes"),feature="exp-hash-unroll",not(all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
+        #[cfg(all(not(feature="exp-hash-small-role"),not(feature="exp-hash-two-lanes"),feature="exp-hash-unroll",not(all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         {
             #[inline(always)]
             fn fold<const C:usize,const R:usize>(b:&Board)->u64{
@@ -1651,7 +1673,7 @@ impl Board {
             h=fold::<0,0>(self)^fold::<0,1>(self)^fold::<0,2>(self)^fold::<0,3>(self)^fold::<0,4>(self)^fold::<0,5>(self)^
               fold::<1,0>(self)^fold::<1,1>(self)^fold::<1,2>(self)^fold::<1,3>(self)^fold::<1,4>(self)^fold::<1,5>(self);
         }
-        #[cfg(all(not(feature="exp-hash-two-lanes"),feature="exp-hash-role-order",not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board")))))]
+        #[cfg(all(not(feature="exp-hash-small-role"),not(feature="exp-hash-two-lanes"),feature="exp-hash-role-order",not(any(feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board")))))]
         for r in 0..6{
             let mut black=self.bb(0,r);let mut white=self.bb(1,r);
             let mut h0=0;let mut h1=0;
@@ -1659,7 +1681,7 @@ impl Board {
             while white!=0{h1^=zobrist::piece_key_indices(1,r,pop_lsb(&mut white));}
             h^=h0^h1;
         }
-        #[cfg(not(any(feature="exp-hash-two-lanes",feature="exp-hash-role-order",feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
+        #[cfg(not(any(feature="exp-hash-small-role",feature="exp-hash-two-lanes",feature="exp-hash-role-order",feature="exp-hash-unroll",all(feature="exp-hash-role-scan",feature="exp-compact-board"))))]
         for ci in 0..2 {
             #[cfg(feature="exp-hash-pawn-bytes")]
             {h^=zobrist::pawn_byte_hash(ci,self.bb(ci,0));}
@@ -1818,6 +1840,18 @@ impl Board {
             || (cfg!(feature = "exp-king-targets")
             && self.rights_raw() & (3 << ((1-ui)*2)) == 0
             && possible_king.count_ones() <= 3);
+        #[cfg(feature="exp-targeted-danger")]
+        if !self.is_chess960(){
+            let rights=(self.rights_raw()>>((1-ui)*2))&3;
+            needed=possible_king;
+            if rights!=0&&ksq&7==4{
+                let rank=ksq&56;
+                if rights&1!=0&&occ&(0x60u64<<rank)==0{needed|=0x60u64<<rank;}
+                if rights&2!=0&&occ&(0x0eu64<<rank)==0{needed|=0x0cu64<<rank;}
+            }
+        }
+        #[cfg(feature="exp-targeted-danger")]
+        let targeted=targeted||(!self.is_chess960()&&needed.count_ones()<=2);
         // If no king destination is available and no standard-geometry
         // castle can use the danger map, there is no consumer of that map.
         // Nonstandard castles use their own exact path/occupancy probes.
