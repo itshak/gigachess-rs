@@ -89,6 +89,32 @@ pub(crate) fn pawn_byte_hash(color:usize,mut pawns:u64)->u64{
     h
 }
 
+#[cfg(feature="exp-hash-pointer")]
+#[inline(always)]
+pub(crate) fn piece_bits_hash(color:usize,role:usize,mut bits:u64)->u64{
+    let base=64*(2*role+color);
+    let keys=&POLYGLOT_RANDOM_ARRAY[base..base+64];
+    let mut h0=0u64;
+    #[cfg(feature="exp-hash-pair")]
+    {
+        let mut h1=0u64;
+        while bits!=0{
+            let a=bits.trailing_zeros() as usize;bits&=bits-1;
+            h0^=keys[a];
+            if bits==0{break;}
+            let b=bits.trailing_zeros() as usize;bits&=bits-1;
+            h1^=keys[b];
+        }
+        h0^=h1;
+    }
+    #[cfg(not(feature="exp-hash-pair"))]
+    while bits!=0{
+        let a=bits.trailing_zeros() as usize;bits&=bits-1;
+        h0^=keys[a];
+    }
+    h0
+}
+
 /// Raw Polyglot castling key (bit 0..3 = WK, WQ, BK, BQ), i.e. entries
 /// `768..772` of the Polyglot table. Kept for reference/migration tooling;
 /// live hashing uses [`castle_file_key`], keyed by rook file (ADR-003).

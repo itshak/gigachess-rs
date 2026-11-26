@@ -105,6 +105,19 @@ pub struct Undo {
     castled: bool,
 }
 
+// The hot mutation only produces these fields. The public wrapper saves
+// the old metadata, so inlined callers that discard Undo can elide it.
+#[cfg(feature="exp-undo-outside")]
+#[derive(Clone,Copy)]
+struct TransitionUndo{
+    captured:u8,
+    castled:bool,
+    #[cfg(feature="exp-undo-role")]
+    moved:u8,
+}
+#[cfg(not(feature="exp-undo-outside"))]
+type TransitionUndo=Undo;
+
 /// Position-specific trusted replay token. Does not replace the 16-bit
 /// moves2 wire format. Keep only alongside the position/game it came from.
 #[cfg(feature="exp-prepared-move")]
@@ -1086,6 +1099,10 @@ impl Board {
             #[cfg(feature="exp-hash-pawn-bytes")]
             {h^=zobrist::pawn_byte_hash(ci,self.bb(ci,0));}
             for r in (if cfg!(feature="exp-hash-pawn-bytes"){1}else{0})..6 {
+                #[cfg(feature="exp-hash-pointer")]
+                {h^=zobrist::piece_bits_hash(ci,r,self.bb(ci,r));}
+                #[cfg(not(feature="exp-hash-pointer"))]
+                {
                 let mut b = self.bb(ci, r);
                 while b != 0 {
                     let sq = pop_lsb(&mut b);
@@ -1094,6 +1111,7 @@ impl Board {
                         Self::role_from_index(r),
                         Square(sq),
                     );
+                }
                 }
             }
         }
@@ -1959,15 +1977,36 @@ impl Board {
         self.make_move_impl::<HASH,CHECKERS,HINT,2,false>(mv,code,EMPTY)
     }
 
-    #[cfg_attr(feature="exp-inline-make",inline(always))]
+    #[inline(always)]
     fn make_move_impl<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8,const PREPARED:bool>(
         &mut self,mv:Move,hint:u8,capture_hint:u8
     )->Undo{
+        #[cfg(feature="exp-undo-outside")]
+        {
+            let mut full=Undo{hash:self.hash,checkers:self.checkers,castling:self.castling,ep:self.ep,halfmove:self.halfmove,
+                captured:EMPTY,castled:false,#[cfg(feature="exp-undo-role")] moved:EMPTY};
+            let small=self.make_move_transition::<HASH,CHECKERS,HINT,SIDE,PREPARED>(mv,hint,capture_hint);
+            full.captured=small.captured;full.castled=small.castled;
+            #[cfg(feature="exp-undo-role")]
+            {full.moved=small.moved;}
+            full
+        }
+        #[cfg(not(feature="exp-undo-outside"))]
+        {self.make_move_transition::<HASH,CHECKERS,HINT,SIDE,PREPARED>(mv,hint,capture_hint)}
+    }
+
+    #[cfg_attr(feature="exp-inline-make",inline(always))]
+    fn make_move_transition<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8,const PREPARED:bool>(
+        &mut self,mv:Move,hint:u8,capture_hint:u8
+    )->TransitionUndo{
         // A pass is not a move with squares. Every entry that could reach here
         // dispatches `Move::NULL` onto the null transition first, so finding one
         // means a new entry point bypassed that dispatch — fail loudly in debug
         // rather than corrupting the board in release.
         debug_assert!(!mv.is_null(), "null move reached the generic make body");
+        #[cfg(feature="exp-undo-outside")]
+        let mut undo=TransitionUndo{captured:EMPTY,castled:false,#[cfg(feature="exp-undo-role")] moved:EMPTY};
+        #[cfg(not(feature="exp-undo-outside"))]
         let mut undo = Undo {
             hash: self.hash,
             checkers: self.checkers,
