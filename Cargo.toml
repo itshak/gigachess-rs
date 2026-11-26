@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-checker-predict = []
+exp-geometry-union = []
+exp-zone-knights = []
 exp-hash-two-lanes = []
 exp-checker-near = []
 exp-castle-standard-clear = []

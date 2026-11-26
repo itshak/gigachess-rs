@@ -527,6 +527,24 @@ mod tests {
 #[cfg(any(feature="exp-pin-rays",feature="exp-fused-geometry"))]
 #[inline(always)]
 pub(crate) fn geometry(ksq:u8,occ:u64,bq:u64,rq:u64,own:u64)->(u64,u64,u64){
+    #[cfg(feature="exp-geometry-union")]
+    {
+        let diagonal=crate::bitboard::EMPTY_BISHOP_RAYS[ksq as usize]&bq;
+        let orthogonal=crate::bitboard::EMPTY_ROOK_RAYS[ksq as usize]&rq;
+        let mut candidates=diagonal|orthogonal;
+        let mut check=0;let mut pins=0;let mut hv=0;
+        while candidates!=0{
+            let sniper=pop_lsb(&mut candidates);let b=bit(sniper);
+            let between=crate::bitboard::BETWEEN[ksq as usize][sniper as usize]&occ;
+            if between==0{check|=b;}
+            else if between&own!=0&&between&(between-1)==0{
+                pins|=between;
+                if orthogonal&b!=0{hv|=between;}
+            }
+        }
+        return (check,hv,pins&!hv);
+    }
+    #[allow(unreachable_code)]
     let mut check=0;let mut hv=0;let mut diag=0;
     let mut a=crate::bitboard::EMPTY_BISHOP_RAYS[ksq as usize]&bq;
     while a!=0{

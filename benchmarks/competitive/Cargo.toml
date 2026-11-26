@@ -14,6 +14,9 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-checker-predict = ["gigachess/exp-checker-predict"]
+exp-geometry-union = ["gigachess/exp-geometry-union"]
+exp-zone-knights = ["gigachess/exp-zone-knights"]
 exp-hash-two-lanes = ["gigachess/exp-hash-two-lanes"]
 exp-checker-near = ["gigachess/exp-checker-near"]
 exp-castle-standard-clear = ["gigachess/exp-castle-standard-clear"]
