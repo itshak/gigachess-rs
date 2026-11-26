@@ -514,3 +514,22 @@ complement with CTZ sentinel mapped to zero. hash-king-single
 avoids second sentinel load for king, retains extra pieces fallback.
 Both compact layouts pass targeted regression incl exact sizes,
 960 and full leaf/undo state. O remains paired baseline.
+
+## Round 17: cached 88-byte compromise and pawn count batching
+Round16 all five CI, full local release, six deep perft and local
+ABBA screens passed. Compact80-sliders 449/522, slider XOR 430,
+combined slider/leaf 427. Compact80+king-pair 478; full perft
+0.865x O, snapshots 32/36. Reject these as overall candidates.
+Hash-small-role+king-single 483/522, 478 >=1.03, cold 6/6,
+recompute 1.085x O, checked 12/12. Local recompute 0.954x O;
+needs further replication. Best observed record remains 492, repeat 484.
+New cached-packed-king keeps both king coordinates with packed
+metadata and five direct role planes, exact 88-byte board. An 80-byte
+layout preserving this extra state would require additional compression;
+do not sacrifice clock/rook-square semantics. Pawn-double-reuse
+reuses the unrestricted single push mask for intermediate squares,
+never the check-filtered mask. Pawn-batch-count preserves default
+callback ordering and specializes MoveCounter to sum ordinary
+targets plus three extra moves per promotion. Combined 11 exact
+regressions passed including all 960 starts, real-game legal/SAN/undo,
+exact leaf differential and the 88-byte assertion.

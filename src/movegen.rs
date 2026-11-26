@@ -31,6 +31,19 @@ pub trait MoveSink {
     fn push_pawn_promotions_offset(&mut self, targets: u64, offset: i8);
     /// Push a single fully-formed move (king, castling, en-passant, pinned pawn).
     fn push_one(&mut self, mv: Move);
+    #[cfg(feature="exp-pawn-batch-count")]
+    #[inline(always)]
+    fn push_pawn_batch(&mut self,single:u64,double:u64,left:u64,right:u64,promo:u64,step:i8,left_off:i8,right_off:i8){
+        let normal=single&!promo;let promoted=single&promo;
+        if normal!=0{self.push_pawn_targets_offset(normal,step);}
+        if promoted!=0{self.push_pawn_promotions_offset(promoted,step);}
+        if double!=0{self.push_pawn_targets_offset(double,step*2);}
+        for (targets,offset) in [(left,left_off),(right,right_off)]{
+            let normal=targets&!promo;let promoted=targets&promo;
+            if normal!=0{self.push_pawn_targets_offset(normal,offset);}
+            if promoted!=0{self.push_pawn_promotions_offset(promoted,offset);}
+        }
+    }
 }
 
 /// Stack buffer for materialised movegen: `MaybeUninit<Move,256>` avoids the
@@ -234,6 +247,13 @@ impl MoveCounter {
 }
 
 impl MoveSink for MoveCounter {
+    #[cfg(feature="exp-pawn-batch-count")]
+    #[inline(always)]
+    fn push_pawn_batch(&mut self,single:u64,double:u64,left:u64,right:u64,promo:u64,_step:i8,_left_off:i8,_right_off:i8){
+        self.count+=popcount(single)+popcount(double)+popcount(left)+popcount(right)
+            +3*(popcount(single&promo)+popcount(left&promo)+popcount(right&promo));
+    }
+
     #[inline]
     fn push_targets(&mut self, _from: u8, targets: u64) {
         self.count += popcount(targets);
