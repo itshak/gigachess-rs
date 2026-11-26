@@ -47,6 +47,14 @@ fn real_games_exact_san_legal_and_undo() {
                 // Test exact reversible state for every legal move, including
                 // promotions, en passant, captures, and canonical castling.
                 let mut full=g;let undo=full.make_move_unchecked(m);
+                #[cfg(feature="exp-prepared-move")]
+                {
+                    let mut prepared=g;
+                    let token=g.prepare_move_unchecked(m);
+                    let pu=prepared.make_prepared_unchecked(token);
+                    assert_eq!(prepared,full);
+                    prepared.unmake_move(m,pu);assert_eq!(prepared,g);
+                }
                 assert_eq!(full.zobrist(),full.zobrist_full());
                 let mut slim=g;let pu=slim.make_move_perft(m);
                 same_perft_state(&full,&slim);

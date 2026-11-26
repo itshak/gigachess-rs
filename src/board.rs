@@ -105,6 +105,18 @@ pub struct Undo {
     castled: bool,
 }
 
+/// Position-specific trusted replay token. Does not replace the 16-bit
+/// moves2 wire format. Keep only alongside the position/game it came from.
+#[cfg(feature="exp-prepared-move")]
+#[derive(Copy,Clone,Debug,PartialEq,Eq)]
+pub struct PreparedMove {mv:Move,meta:u16}
+
+#[cfg(feature="exp-prepared-move")]
+impl PreparedMove{
+    #[inline(always)]
+    pub fn wire_move(self)->Move{self.mv}
+}
+
 /// Error returned when a move cannot be played.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct IllegalMove;
@@ -743,6 +755,31 @@ impl Board {
 
     /// Squares occupied by pieces of `by` that attack `sq` under occupancy `occ`.
     pub fn attackers_to(&self, sq: u8, by: Color, occ: u64) -> u64 {
+        #[cfg(all(feature="exp-compact-attacks",feature="exp-compact-board"))]
+        {
+            let allowed=self.occ[by.index()];
+            let k=sq as usize;
+            let mut result=(PAWN_ATT[by.other().index()][k]&self.roles[0])|
+                (KNIGHT_ATT[k]&self.roles[1])|(KING_ATT[k]&self.bb(by.index(),5));
+            let bishops=(self.roles[2]|self.roles[4])&crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed;
+            let rooks=(self.roles[3]|self.roles[4])&crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed;
+            result&=allowed;
+            #[cfg(feature="exp-checker-rays")]
+            {
+                let mut candidates=bishops|rooks;
+                while candidates!=0{
+                    let a=pop_lsb(&mut candidates);
+                    if crate::bitboard::BETWEEN[k][a as usize]&occ==0{result|=bit(a);}
+                }
+            }
+            #[cfg(not(feature="exp-checker-rays"))]
+            {
+                if bishops!=0{result|=attacks::bishop_attacks(sq,occ)&bishops;}
+                if rooks!=0{result|=attacks::rook_attacks(sq,occ)&rooks;}
+            }
+            return result;
+        }
+        #[allow(unreachable_code)]
         let bi = by.index();
         let mut a = 0u64;
         // Pawns of `by` attacking sq stand where a pawn of the other color
@@ -770,6 +807,27 @@ impl Board {
             a |= attacks::rook_attacks(sq, occ) & rq;
         }
         a
+    }
+
+    #[cfg(feature="exp-bool-attacks")]
+    #[inline(always)]
+    fn attacked_except(&self,sq:u8,by:Color,occ:u64,removed:u64)->bool{
+        let ci=by.index();let k=sq as usize;let allowed=!removed;
+        if ((PAWN_ATT[by.other().index()][k]&self.bb(ci,0))|
+            (KNIGHT_ATT[k]&self.bb(ci,1))|(KING_ATT[k]&self.bb(ci,5)))&allowed!=0{return true;}
+        let b=(self.bb(ci,2)|self.bb(ci,4))&crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed;
+        let r=(self.bb(ci,3)|self.bb(ci,4))&crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed;
+        #[cfg(feature="exp-checker-rays")]
+        {
+            let mut candidates=b|r;
+            while candidates!=0{
+                let a=pop_lsb(&mut candidates);
+                if crate::bitboard::BETWEEN[k][a as usize]&occ==0{return true;}
+            }
+            false
+        }
+        #[cfg(not(feature="exp-checker-rays"))]
+        { (b!=0&&attacks::bishop_attacks(sq,occ)&b!=0)||(r!=0&&attacks::rook_attacks(sq,occ)&r!=0) }
     }
 
     /// True when the king of `color` is attacked (full scan; used by
@@ -1652,15 +1710,15 @@ impl Board {
     fn make_move_hinted<const HASH:bool,const CHECKERS:bool,const HINT:bool>(&mut self,mv:Move,code:u8)->Undo{
         #[cfg(feature="exp-color-make")]
         {
-            if self.turn==Color::White{return self.make_move_impl::<HASH,CHECKERS,HINT,1>(mv,code);}
-            return self.make_move_impl::<HASH,CHECKERS,HINT,0>(mv,code);
+            if self.turn==Color::White{return self.make_move_impl::<HASH,CHECKERS,HINT,1,false>(mv,code,EMPTY);}
+            return self.make_move_impl::<HASH,CHECKERS,HINT,0,false>(mv,code,EMPTY);
         }
         #[cfg(not(feature="exp-color-make"))]
-        self.make_move_impl::<HASH,CHECKERS,HINT,2>(mv,code)
+        self.make_move_impl::<HASH,CHECKERS,HINT,2,false>(mv,code,EMPTY)
     }
 
-    fn make_move_impl<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8>(
-        &mut self,mv:Move,hint:u8
+    fn make_move_impl<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8,const PREPARED:bool>(
+        &mut self,mv:Move,hint:u8,capture_hint:u8
     )->Undo{
         // A pass is not a move with squares. Every entry that could reach here
         // dispatches `Move::NULL` onto the null transition first, so finding one
@@ -1705,12 +1763,12 @@ impl Board {
         // Independent normal-move kernel: avoid decoding color/role a second
         // time, keep a single XOR for the moved role and color occupancy.
         #[cfg(feature = "exp-normal-kernel")]
-        if mv.promotion().is_none() && self.occ[us.index()] & bit(to) == 0
-            && !(is_pawn && diag && self.occ[them.index()] & bit(to) == 0)
+        if PREPARED || (mv.promotion().is_none() && self.occ[us.index()] & bit(to) == 0
+            && !(is_pawn && diag && self.occ[them.index()] & bit(to) == 0))
         {
             let ui=us.index(); let ti=them.index(); let target=bit(to);
-            if self.occ[ti]&target!=0 {
-                let cap=self.piece_code_at_color(to,them);
+            if if PREPARED {capture_hint!=EMPTY}else{self.occ[ti]&target!=0} {
+                let cap=if PREPARED {capture_hint}else{self.piece_code_at_color(to,them)};
                 undo.captured=cap;
                 self.bb_remove(ti,(cap%6) as usize,target);
                 self.occ[ti]&=!target;
@@ -1868,6 +1926,39 @@ impl Board {
             );
         }
         undo
+    }
+
+    /// Prepare a move already known legal for this exact board. Normal moves
+    /// carry moving and captured piece codes; rare specials use the wire path.
+    #[cfg(feature="exp-prepared-move")]
+    pub fn prepare_move_unchecked(&self,mv:Move)->PreparedMove{
+        if mv.is_null(){return PreparedMove{mv,meta:0};}
+        let f=mv.from().0;let t=mv.to().0;
+        let moved=self.piece_code_at_color(f,self.turn);
+        let captured=self.piece_code_at_color(t,self.turn.other());
+        let normal=moved!=EMPTY && mv.promotion().is_none() &&
+            self.occ[self.turn.index()]&bit(t)==0 &&
+            !(moved%6==Role::Pawn as u8&&f&7!=t&7&&captured==EMPTY);
+        PreparedMove{mv,meta:(moved as u16&15)|((captured as u16&15)<<4)|((normal as u16)<<8)}
+    }
+
+    /// Apply position-specific prepared metadata with full hash and checker
+    /// maintenance. Caller must use the board the token was prepared for.
+    #[cfg(feature="exp-prepared-move")]
+    #[inline(always)]
+    pub fn make_prepared_unchecked(&mut self,m:PreparedMove)->Undo{
+        if m.meta&256==0{return self.make_move_unchecked(m.mv);}
+        let moved=(m.meta&15) as u8;
+        let cap=((m.meta>>4)&15) as u8;let cap=if cap==15{EMPTY}else{cap};
+        debug_assert_eq!(moved,self.piece_code_at_color(m.mv.from().0,self.turn));
+        debug_assert_eq!(cap,self.piece_code_at_color(m.mv.to().0,self.turn.other()));
+        #[cfg(feature="exp-color-make")]
+        {
+            if self.turn==Color::White{return self.make_move_impl::<true,true,true,1,true>(m.mv,moved,cap);}
+            return self.make_move_impl::<true,true,true,0,true>(m.mv,moved,cap);
+        }
+        #[cfg(not(feature="exp-color-make"))]
+        self.make_move_impl::<true,true,true,2,true>(m.mv,moved,cap)
     }
 
     /// Applies `mv` without legality validation, maintaining the incremental
@@ -2112,8 +2203,10 @@ impl Board {
                 self.occ[ti]&=!bit(to);
             }
             let delta=bit(from)^bit(to);
-            self.bb_remove(ui,role as usize,bit(from));
-            self.bb_add(ui,role as usize,bit(to));
+            #[cfg(all(feature="exp-perft-xor",feature="exp-mutation"))]
+            self.bb_toggle(ui,role as usize,delta);
+            #[cfg(not(all(feature="exp-perft-xor",feature="exp-mutation")))]
+            {self.bb_remove(ui,role as usize,bit(from));self.bb_add(ui,role as usize,bit(to));}
             self.occ[ui]^=delta;
             if role==Role::King as u8 {self.king_sq[ui]=to;}
             if self.castling!=0 {self.castling&=self.castle_rights_after(role,us,from,to);}
@@ -2957,6 +3050,9 @@ impl Board {
         let occ=(self.occupied()&!(bit(f)|captured))|bit(t);
         let k=if role==Role::King as u8 {t}else{self.king_sq[us.index()]};
         // Mask the removed enemy piece at its old square, including en passant.
+        #[cfg(feature="exp-bool-attacks")]
+        return Some(!self.attacked_except(k,them,occ,captured));
+        #[cfg(not(feature="exp-bool-attacks"))]
         Some(self.attackers_to(k,them,occ)&!captured==0)
     }
 
@@ -3355,6 +3451,16 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
     fn push_targets(&mut self,from:u8,mut targets:u64){
         if targets==0{return;}
         let moved=self.parent.piece_code_at_color(from,self.parent.turn);
+        #[cfg(feature="exp-leaf-reuse")]
+        {
+            let mut child=*self.parent;
+            while targets!=0 {
+                let to=pop_lsb(&mut targets);let mv=Move::quiet(Square(from),Square(to));
+                let undo=child.make_move_perft_known::<true>(mv,moved);
+                (self.visitor)(&child);self.nodes+=1;child.unmake_move_perft(mv,undo);
+            }
+        }
+        #[cfg(not(feature="exp-leaf-reuse"))]
         while targets!=0 {
             let to=pop_lsb(&mut targets);
             let mut child=*self.parent;
@@ -3366,6 +3472,16 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
     #[inline(always)]
     fn push_pawn_targets_offset(&mut self,mut targets:u64,offset:i8){
         let moved=self.parent.turn as u8*6;
+        #[cfg(feature="exp-leaf-reuse")]
+        {
+            let mut child=*self.parent;
+            while targets!=0{
+                let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;
+                let mv=Move::quiet(Square(from),Square(to));let undo=child.make_move_perft_known::<true>(mv,moved);
+                (self.visitor)(&child);self.nodes+=1;child.unmake_move_perft(mv,undo);
+            }
+        }
+        #[cfg(not(feature="exp-leaf-reuse"))]
         while targets!=0{
             let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;
             let mut child=*self.parent;
@@ -3376,6 +3492,23 @@ impl<F:FnMut(&Board)> MoveSink for FullLeafSink<'_,F>{
     }
     #[inline(always)]
     fn push_pawn_promotions_offset(&mut self,mut targets:u64,offset:i8){
+        #[cfg(feature="exp-promotion-batch")]
+        {
+            let us=self.parent.turn;let ui=us.index();let ti=us.other().index();
+            while targets!=0{
+                let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;
+                let mut child=*self.parent;
+                let mv=Move::new(Square(from),Square(to),Some(Role::Knight));
+                child.make_move_perft_known::<true>(mv,us as u8*6);
+                (self.visitor)(&child);self.nodes+=1;
+                for role in 2..=4{
+                    child.bb_remove(ui,role-1,bit(to));child.bb_add(ui,role,bit(to));
+                    child.checkers=child.attackers_to(child.king_sq[ti],us,child.occupied());
+                    (self.visitor)(&child);self.nodes+=1;
+                }
+            }
+        }
+        #[cfg(not(feature="exp-promotion-batch"))]
         while targets!=0 {let to=pop_lsb(&mut targets);let from=(to as i16-offset as i16) as u8;for r in 1..=4{self.push_one(Move(from as u16|((to as u16)<<6)|(r<<12)));}}
     }
 }

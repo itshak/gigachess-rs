@@ -50,3 +50,19 @@ Benchmark-only default features select C; root production defaults unchanged.
   21,002 benchmark positions and dedicated promotion/Chess960 fixtures.
 - fen-rank: write occupied rank squares and gaps from bit scans, retain
   exact native FEN semantics; direct final byte copy.
+
+## Prepared replay and residual ARM full-perft cases
+- prepared-move: optional 4-byte position-specific token carries moved
+  and captured codes for normal moves. Original 16-bit moves2 stays intact.
+  Special moves dispatch to existing exact path; full cached state remains.
+  Separate --prepared-replay benchmark includes preparation cost and
+  matched per-ply Polyglot/checker observations, never replacing native
+  16-bit replay. Shakmaty 0.30.0 native moves carry role/capture metadata
+  and its native mutation does not maintain these cached values; no GPL
+  source copied. This is an independently designed compact token.
+- compact-attacks: combine raw role planes then mask color once.
+- bool-attacks: early-return boolean king-safety scan; exclude captures.
+- perft-xor: one role-mask update for ordinary slim moves.
+- promotion-batch: construct first promotion child once and vary role,
+  refresh exact checker cache for each observed leaf.
+- leaf-reuse: test make/unmake versus copy-per-child in grouped visitor.

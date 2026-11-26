@@ -211,8 +211,47 @@ fn bench<T>(name: &str, case: &str, lib: &str, units: u64, mut f: impl FnMut() -
     );
 }
 macro_rules! row {($op:expr,$case:expr,$units:expr,$($lib:literal=>$f:expr),+ $(,)?) => {$(bench($op,$case,$lib,$units,$f);)+};}
+// Distinct input/state contracts, never substituted for the original
+// replay_trusted_native rows. Native Shakmaty moves contain role metadata.
+#[cfg(feature="exp-prepared-move")]
+fn prepared_replay_benchmark(){
+    use gigachess::{Move,PreparedMove};
+    let mut games:Vec<(Vec<Move>,Vec<PreparedMove>,Vec<shakmaty::Move>)>=Vec::new();
+    for line in include_str!("../data/lichess-2013-01-first300.uci").lines(){
+        let mut g=Board::startpos();let mut p=g;let mut s=S::default();
+        let(mut words,mut prepared,mut expanded)=(Vec::new(),Vec::new(),Vec::new());
+        for token in line.split_ascii_whitespace(){
+            let m=g.legal_moves().into_iter().find(|&m|gu(&g,m)==token).unwrap();
+            let a=g.prepare_move_unchecked(m);
+            let sm=token.parse::<shakmaty::uci::UciMove>().unwrap().to_move(&s).unwrap();
+            g.make_move_unchecked(m);p.make_prepared_unchecked(a);s.play_unchecked(sm);
+            assert_eq!(g,p);
+            assert_eq!(g.zobrist(),s.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal).0);
+            words.push(m);prepared.push(a);expanded.push(sm);
+        }
+        games.push((words,prepared,expanded));
+    }
+    let plies=games.iter().map(|g|g.0.len() as u64).sum();
+    assert_eq!(plies,18954);
+    println!("operation\tcase\tlibrary\tunits\titers\tmedian_ns\tmin_ns\tmax_ns\tp25_ns\tp75_ns");
+    row!("replay_metadata","lichess300",plies,
+        "giga_wire"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_unchecked(m);}bb(b);}},
+        "giga_prepared"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.1{b.make_prepared_unchecked(m);}bb(b);}},
+        "giga_prepare_included"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{let p=b.prepare_move_unchecked(m);b.make_prepared_unchecked(p);}bb(b);}},
+        "shakmaty_native"=>||{for x in &games{let mut b=S::default();for &m in &x.2{b.play_unchecked(m);}bb(b);}});
+    row!("replay_polyglot_each_ply","lichess300",plies,
+        "giga_hashed"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_hashed(m);bb(b.zobrist());}bb(b);}},
+        "shakmaty_hash"=>||{for x in &games{let mut b=S::default();for &m in &x.2{b.play_unchecked(m);bb(b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal));}bb(b);}});
+    row!("replay_polyglot_and_checkers_each_ply","lichess300",plies,
+        "giga_full"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_unchecked(m);bb((b.zobrist(),b.checkers_bb()));}bb(b);}},
+        "shakmaty_full"=>||{for x in &games{let mut b=S::default();for &m in &x.2{b.play_unchecked(m);bb((b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal),b.checkers()));}bb(b);}});
+}
+
 fn main() {
     if let Some(arg) = std::env::args().nth(1) {
+        #[cfg(feature="exp-prepared-move")]
+        if arg=="--prepared-replay"{prepared_replay_benchmark();return;}
+
         if let Some(lib) = arg.strip_prefix("--cold-") {
             let t = Instant::now();
             let n=match lib {
