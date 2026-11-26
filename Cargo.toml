@@ -12,6 +12,10 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-compact80-sliders = ["exp-packed-meta", "exp-slider-planes", "exp-unalign"]
+exp-king-pair = []
+exp-compact-slider-xor = []
+exp-hash-king-single = []
 exp-hash-small-role = []
 exp-targeted-danger = []
 exp-compact80 = ["exp-packed-meta", "exp-kingless-board", "exp-unalign"]

@@ -1,0 +1,5 @@
+compact80-sliders exp-compact80-sliders
+compact80-slider-xor exp-compact80-sliders,exp-compact-slider-xor
+compact80-king-pair exp-compact80,exp-king-pair
+hash-king-single exp-hash-small-role,exp-hash-king-single
+compact80-leaf exp-compact80-sliders,exp-compact-slider-xor,exp-leaf-check-delta,exp-zone-knights

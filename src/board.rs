@@ -449,6 +449,17 @@ impl Board {
     }
     #[inline(always)]
     fn king_index(&self,i:usize)->u8{
+        #[cfg(all(feature="exp-packed-meta",feature="exp-king-pair",feature="exp-kingless-board",not(feature="exp-slider-planes"),not(feature="exp-implicit-pawn"),not(feature="exp-implicit-queen")))]
+        {
+            let p=&self.roles;
+            // Split the complement into two masks. A zero king plane
+            // yields CTZ=64; masking to six bits preserves the zero
+            // square sentinel for empty/malformed construction.
+            let own=self.occ[i];
+            let mut bits=own&!(p[0]|p[1]|p[2]);
+            bits&=!(p[3]|p[4]);
+            return (bits.trailing_zeros() as u8)&63;
+        }
         #[cfg(feature="exp-packed-meta")]
         {let bits=self.bb(i,5);if bits==0{0}else{bits.trailing_zeros() as u8}}
         #[cfg(not(feature="exp-packed-meta"))]
@@ -729,6 +740,14 @@ impl Board {
     #[cfg(feature = "exp-mutation")]
     #[inline(always)]
     fn bb_toggle(&mut self,color:usize,role:usize,mask:u64){
+        #[cfg(all(feature="exp-compact-slider-xor",feature="exp-slider-planes",not(feature="exp-sparse-role3"),not(feature="exp-slider-planes-kingless"),not(feature="exp-nibble-role"),not(feature="exp-role-planes"),not(feature="exp-mailbox")))]
+        {
+            const FIRST:[usize;6]=[0,1,2,3,2,4];
+            self.sliders[FIRST[role]]^=mask;
+            if role==4{self.sliders[3]^=mask;}
+            return;
+        }
+
         #[cfg(feature="exp-nibble-role")]
         if mask!=0{
             let from=(self.occ[color]&mask).trailing_zeros() as u8;
@@ -1617,6 +1636,14 @@ impl Board {
                 // sentinel lookups avoid per-piece branches; promoted pieces
                 // beyond those two still use the exact ordinary loop.
                 let mut value=0;
+                #[cfg(feature="exp-hash-king-single")]
+                if R==5{
+                    let first=bits.trailing_zeros() as usize;
+                    bits&=bits.wrapping_sub(1);
+                    value=zobrist::piece_key_optional(C,R,first);
+                    while bits!=0{value^=zobrist::piece_key_indices(C,R,pop_lsb(&mut bits));}
+                    return value;
+                }
                 if R!=0{
                     let first=bits.trailing_zeros() as usize;
                     bits&=bits.wrapping_sub(1);

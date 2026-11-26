@@ -1,0 +1,65 @@
+=== 45889565447 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-geometry-union,exp-zone-knights,exp-leaf-check-delta,exp-targeted-danger
+| ALL | 474 | 461 | 70 | 522 |
+| apply_children_full | 0.996x | 1.264x | 34/36 | 0.922x |
+| corpus_count | 0.902x | 1.079x | 6/12 | 0.779x |
+| count | 0.981x | 1.429x | 35/36 | 0.990x |
+| materialize | 0.986x | 1.315x | 34/36 | 0.983x |
+| perft_full_d3 | 1.212x | 1.587x | 36/36 | 1.224x |
+| polyglot_recompute | 0.997x | 0.990x | 6/12 | 0.855x |
+| replay_checked_native | 0.982x | 1.161x | 12/12 | 1.057x |
+| replay_trusted_native | 0.971x | 0.773x | 4/12 | 0.472x |
+| snapshot | 1.006x | 1.094x | 21/36 | 0.781x |
+Cold wins: 6/6 (separate from native cases).
+=== 45889562179 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-targeted-danger
+| ALL | 477 | 459 | 67 | 522 |
+| apply_children_full | 0.986x | 1.265x | 35/36 | 0.993x |
+| corpus_count | 0.884x | 1.070x | 7/12 | 0.825x |
+| count | 0.966x | 1.436x | 35/36 | 0.990x |
+| materialize | 0.999x | 1.368x | 33/36 | 0.912x |
+| perft_full_d3 | 0.985x | 1.326x | 36/36 | 1.142x |
+| polyglot_recompute | 0.997x | 1.008x | 7/12 | 0.896x |
+| replay_checked_native | 1.006x | 1.168x | 12/12 | 1.085x |
+| replay_trusted_native | 0.995x | 0.788x | 4/12 | 0.526x |
+| snapshot | 0.998x | 1.084x | 20/36 | 0.850x |
+Cold wins: 6/6 (separate from native cases).
+=== 45889558947 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-hash-small-role
+| ALL | 482 | 462 | 72 | 522 |
+| apply_children_full | 1.005x | 1.263x | 33/36 | 0.866x |
+| corpus_count | 0.984x | 1.225x | 10/12 | 0.854x |
+| count | 1.008x | 1.495x | 36/36 | 1.013x |
+| materialize | 1.001x | 1.303x | 36/36 | 1.000x |
+| perft_full_d3 | 0.998x | 1.318x | 36/36 | 1.096x |
+| polyglot_recompute | 1.013x | 1.046x | 8/12 | 0.895x |
+| replay_checked_native | 1.005x | 1.169x | 12/12 | 1.050x |
+| replay_trusted_native | 0.984x | 0.810x | 4/12 | 0.503x |
+| snapshot | 0.989x | 1.020x | 17/36 | 0.716x |
+Cold wins: 6/6 (separate from native cases).
+=== 45889555294 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-compact80
+| ALL | 474 | 454 | 65 | 522 |
+| apply_children_full | 0.885x | 1.147x | 28/36 | 0.834x |
+| corpus_count | 0.959x | 1.063x | 7/12 | 0.798x |
+| count | 0.921x | 1.350x | 35/36 | 0.976x |
+| materialize | 0.953x | 1.337x | 33/36 | 0.876x |
+| perft_full_d3 | 0.850x | 1.128x | 30/36 | 0.852x |
+| polyglot_recompute | 1.003x | 1.020x | 9/12 | 0.874x |
+| replay_checked_native | 0.965x | 1.078x | 10/12 | 0.988x |
+| replay_trusted_native | 1.011x | 0.768x | 4/12 | 0.492x |
+| snapshot | 0.951x | 1.171x | 36/36 | 1.051x |
+Cold wins: 6/6 (separate from native cases).
+=== 45889569191 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-zone-knights,exp-leaf-check-delta,exp-hash-small-role
+| ALL | 484 | 472 | 73 | 522 |
+| apply_children_full | 1.003x | 1.251x | 34/36 | 0.942x |
+| corpus_count | 0.962x | 1.125x | 10/12 | 0.903x |
+| count | 1.024x | 1.526x | 36/36 | 1.031x |
+| materialize | 1.008x | 1.453x | 35/36 | 0.800x |
+| perft_full_d3 | 1.201x | 1.627x | 36/36 | 1.292x |
+| polyglot_recompute | 1.095x | 1.158x | 8/12 | 0.921x |
+| replay_checked_native | 0.996x | 1.189x | 12/12 | 1.096x |
+| replay_trusted_native | 0.963x | 0.777x | 4/12 | 0.473x |
+| snapshot | 0.990x | 1.059x | 20/36 | 0.623x |
+Cold wins: 6/6 (separate from native cases).

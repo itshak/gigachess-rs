@@ -14,6 +14,10 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-compact80-sliders = ["gigachess/exp-compact80-sliders"]
+exp-king-pair = ["gigachess/exp-king-pair"]
+exp-compact-slider-xor = ["gigachess/exp-compact-slider-xor"]
+exp-hash-king-single = ["gigachess/exp-hash-king-single"]
 exp-hash-small-role = ["gigachess/exp-hash-small-role"]
 exp-targeted-danger = ["gigachess/exp-targeted-danger"]
 exp-compact80 = ["gigachess/exp-compact80"]
