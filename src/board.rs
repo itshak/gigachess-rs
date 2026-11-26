@@ -133,7 +133,12 @@ pub struct Board {
     /// Cached checkers: enemy attackers to `king_sq[turn]`. `in_check()` is
     /// `checkers != 0` without scan (ultrachess D3, 0.32ns both states).
     checkers: u64,
+    #[cfg(not(feature = "exp-compact-board"))]
     bbs: [[u64; 6]; 2],  // [color_index][role_index]
+    #[cfg(feature = "exp-compact-board")]
+    roles: [u64; 6], // role bitboards intersected with color occupancy
+    #[cfg(feature = "exp-mailbox")]
+    mailbox: [u8; 64],
     occ: [u64; 2],       // occupancy per color
     king_sq: [u8; 2],
     /// Rook square backing each castling right (bit 0..3 = WK, WQ, BK, BQ).
@@ -162,7 +167,12 @@ impl Board {
     /// Empty board with White to move.
     pub fn empty() -> Board {
         Board {
+            #[cfg(not(feature = "exp-compact-board"))]
             bbs: [[0; 6]; 2],
+            #[cfg(feature = "exp-compact-board")]
+            roles: [0;6],
+            #[cfg(feature = "exp-mailbox")]
+            mailbox: [EMPTY;64],
             occ: [0; 2],
             turn: Color::White,
             castling: 0,
@@ -186,14 +196,26 @@ impl Board {
     /// parsing, attack-table initialization or mutable shared state.
     #[inline]
     pub const fn startpos() -> Board {
+        #[cfg(not(feature = "exp-compact-board"))]
         const BACK_RANK: [u64; 6] = [0xff00, 0x42, 0x24, 0x81, 0x08, 0x10];
         Board {
             hash: 0x463b_9618_1691_fc9c, // canonical Polyglot startpos vector
             checkers: 0,
+            #[cfg(not(feature = "exp-compact-board"))]
             bbs: [
                 [0xff << 48, 0x42 << 56, 0x24 << 56, 0x81 << 56, 0x08 << 56, 0x10 << 56],
                 BACK_RANK,
             ],
+            #[cfg(feature = "exp-compact-board")]
+            roles: [0xff00 | (0xff << 48), 0x42 | (0x42 << 56), 0x24 | (0x24 << 56), 0x81 | (0x81 << 56), 0x08 | (0x08 << 56), 0x10 | (0x10 << 56)],
+            #[cfg(feature = "exp-mailbox")]
+            mailbox: {
+                let mut a = [EMPTY;64];
+                let back = [3,1,2,4,5,2,1,3];
+                let mut i=0;
+                while i<8 {a[i]=back[i]+6;a[8+i]=6;a[48+i]=0;a[56+i]=back[i];i+=1;}
+                a
+            },
             occ: [0xffff << 48, 0xffff],
             king_sq: [60, 4],
             castle_rook_sq: [7, 0, 63, 56],
@@ -230,7 +252,45 @@ impl Board {
     /// Bitboard of all pieces of `role` belonging to `color`.
     #[inline(always)]
     pub fn piece_bb(&self, color: Color, role: Role) -> u64 {
-        self.bbs[color.index()][role.index()]
+        self.bb(color.index(), role.index())
+    }
+
+    #[inline(always)]
+    fn bb(&self,color:usize,role:usize)->u64 {
+        #[cfg(feature = "exp-compact-board")]
+        { self.roles[role] & self.occ[color] }
+        #[cfg(not(feature = "exp-compact-board"))]
+        { self.bbs[color][role] }
+    }
+    #[inline(always)]
+    fn bb_mut(&mut self,color:usize,role:usize)->&mut u64 {
+        #[cfg(feature = "exp-compact-board")]
+        { let _=color; &mut self.roles[role] }
+        #[cfg(not(feature = "exp-compact-board"))]
+        { &mut self.bbs[color][role] }
+    }
+    #[inline(always)]
+    fn bb_add(&mut self,color:usize,role:usize,mask:u64){
+        #[cfg(feature = "exp-mailbox")]
+        { self.mailbox[mask.trailing_zeros() as usize]=(color*6+role) as u8; }
+        *self.bb_mut(color,role)|=mask;
+    }
+    #[inline(always)]
+    fn bb_remove(&mut self,color:usize,role:usize,mask:u64){
+        #[cfg(feature = "exp-mailbox")]
+        { self.mailbox[mask.trailing_zeros() as usize]=EMPTY; }
+        *self.bb_mut(color,role)&=!mask;
+    }
+    #[cfg(feature = "exp-mutation")]
+    #[inline(always)]
+    fn bb_toggle(&mut self,color:usize,role:usize,mask:u64){
+        #[cfg(feature = "exp-mailbox")]
+        {
+            let from=(self.occ[color]&mask).trailing_zeros() as usize;
+            let to=(!self.occ[color]&mask).trailing_zeros() as usize;
+            if mask!=0 { self.mailbox[from]=EMPTY;self.mailbox[to]=(color*6+role) as u8; }
+        }
+        *self.bb_mut(color,role)^=mask;
     }
 
     /// Piece standing on `sq`, if any.
@@ -244,6 +304,9 @@ impl Board {
     /// removed). Empty = 2 tests, occupied = 2 + ≤6 tests (vs 12 previously).
     #[inline(always)]
     pub(crate) fn piece_code_at(&self, sq: u8) -> u8 {
+        #[cfg(feature = "exp-mailbox")]
+        { return self.mailbox[sq as usize]; }
+        #[allow(unreachable_code)]
         let b = bit(sq);
         let occ0 = self.occ[0] & b;
         let occ1 = self.occ[1] & b;
@@ -252,7 +315,10 @@ impl Board {
         }
         if occ0 != 0 {
             // Black piece — scan Black's 6 bitboards (unrolled).
+            #[cfg(not(feature = "exp-compact-board"))]
             let col = &self.bbs[0];
+            #[cfg(feature = "exp-compact-board")]
+            let col = &self.roles;
             if col[0] & b != 0 {
                 return 0;
             }
@@ -272,7 +338,10 @@ impl Board {
             5
         } else {
             // White piece — scan White's 6 bitboards.
+            #[cfg(not(feature = "exp-compact-board"))]
             let col = &self.bbs[1];
+            #[cfg(feature = "exp-compact-board")]
+            let col = &self.roles;
             if col[0] & b != 0 {
                 return 6;
             }
@@ -298,11 +367,20 @@ impl Board {
     /// for the `from` square and castling rook squares (hot make/unmake path).
     #[inline(always)]
     pub(crate) fn piece_code_at_color(&self, sq: u8, color: Color) -> u8 {
+        #[cfg(feature = "exp-mailbox")]
+        {
+            let code=self.mailbox[sq as usize];
+            return if code<12 && code/6==color as u8 { code } else { EMPTY };
+        }
+        #[allow(unreachable_code)]
         let b = bit(sq);
         if self.occ[color.index()] & b == 0 {
             return EMPTY;
         }
-        let col = &self.bbs[color.index()];
+        #[cfg(not(feature = "exp-compact-board"))]
+            let col = &self.bbs[color.index()];
+            #[cfg(feature = "exp-compact-board")]
+            let col = &self.roles;
         // Unrolled 6 checks — branch predictor friendly, no loop overhead.
         #[cfg(feature = "exp-role-lookup")]
         {
@@ -336,7 +414,7 @@ impl Board {
     #[inline(always)]
     pub(crate) fn pawn_code_at(&self, sq: u8, color: Color) -> u8 {
         let b = bit(sq);
-        if self.bbs[color.index()][Role::Pawn.index()] & b != 0 {
+        if self.bb(color.index(), Role::Pawn.index()) & b != 0 {
             (color as u8) * 6
         } else {
             EMPTY
@@ -495,7 +573,7 @@ impl Board {
         let color = (code / 6) as usize;
         let role = (code % 6) as usize;
         let b = bit(sq);
-        self.bbs[color][role] |= b;
+        self.bb_add(color, role, b);
         self.occ[color] |= b;
         if role == Role::King.index() {
             self.king_sq[color] = sq;
@@ -507,7 +585,7 @@ impl Board {
         let color = (code / 6) as usize;
         let role = (code % 6) as usize;
         let b = bit(sq);
-        self.bbs[color][role] |= b;
+        self.bb_add(color, role, b);
         self.occ[color] |= b;
         self.hash ^= zobrist::piece_key(
             Self::color_from_index(color),
@@ -524,7 +602,7 @@ impl Board {
         let color = (code / 6) as usize;
         let role = (code % 6) as usize;
         let b = bit(sq);
-        self.bbs[color][role] &= !b;
+        self.bb_remove(color, role, b);
         self.occ[color] &= !b;
         self.hash ^= zobrist::piece_key(
             Self::color_from_index(color),
@@ -540,7 +618,7 @@ impl Board {
             let color = (code / 6) as usize;
             let role = (code % 6) as usize;
             let delta = bit(from) ^ bit(to);
-            self.bbs[color][role] ^= delta;
+            self.bb_toggle(color, role, delta);
             self.occ[color] ^= delta;
             self.hash ^= zobrist::piece_key(Self::color_from_index(color), Self::role_from_index(role), Square(from))
                 ^ zobrist::piece_key(Self::color_from_index(color), Self::role_from_index(role), Square(to));
@@ -561,7 +639,7 @@ impl Board {
             return false;
         }
         PAWN_ATT[side.other().index()][ep as usize]
-            & self.bbs[side.index()][Role::Pawn.index()]
+            & self.bb(side.index(), Role::Pawn.index())
             != 0
     }
 
@@ -571,11 +649,11 @@ impl Board {
         let mut a = 0u64;
         // Pawns of `by` attacking sq stand where a pawn of the other color
         // placed on sq would attack.
-        a |= PAWN_ATT[by.other().index()][sq as usize] & self.bbs[bi][Role::Pawn.index()];
-        a |= KNIGHT_ATT[sq as usize] & self.bbs[bi][Role::Knight.index()];
-        a |= KING_ATT[sq as usize] & self.bbs[bi][Role::King.index()];
-        let bq = self.bbs[bi][Role::Bishop.index()] | self.bbs[bi][Role::Queen.index()];
-        let rq = self.bbs[bi][Role::Rook.index()] | self.bbs[bi][Role::Queen.index()];
+        a |= PAWN_ATT[by.other().index()][sq as usize] & self.bb(bi, Role::Pawn.index());
+        a |= KNIGHT_ATT[sq as usize] & self.bb(bi, Role::Knight.index());
+        a |= KING_ATT[sq as usize] & self.bb(bi, Role::King.index());
+        let bq = self.bb(bi, Role::Bishop.index()) | self.bb(bi, Role::Queen.index());
+        let rq = self.bb(bi, Role::Rook.index()) | self.bb(bi, Role::Queen.index());
         if !cfg!(feature = "exp-ray-prefilter") || bq & crate::bitboard::EMPTY_BISHOP_RAYS[sq as usize] != 0 {
             a |= attacks::bishop_attacks(sq, occ) & bq;
         }
@@ -614,7 +692,7 @@ impl Board {
         let mut h = 0u64;
         for ci in 0..2 {
             for r in 0..6 {
-                let mut b = self.bbs[ci][r];
+                let mut b = self.bb(ci, r);
                 while b != 0 {
                     let sq = pop_lsb(&mut b);
                     h ^= zobrist::piece_key(
@@ -628,7 +706,7 @@ impl Board {
         h ^= self.castle_rights_hash(self.castling);
         h ^= zobrist::ep_contribution(
             self.ep,
-            self.bbs[self.turn.index()][Role::Pawn.index()],
+            self.bb(self.turn.index(), Role::Pawn.index()),
             PAWN_ATT[self.turn.other().index()][self.ep as usize & 63],
         );
         if self.turn == Color::White {
@@ -701,8 +779,8 @@ impl Board {
         let ti = them.index();
         let ksq = self.king_sq[ui];
         let occ = self.occupied();
-        let their_bq = self.bbs[ti][Role::Bishop.index()] | self.bbs[ti][Role::Queen.index()];
-        let their_rq = self.bbs[ti][Role::Rook.index()] | self.bbs[ti][Role::Queen.index()];
+        let their_bq = self.bb(ti, Role::Bishop.index()) | self.bb(ti, Role::Queen.index());
+        let their_rq = self.bb(ti, Role::Rook.index()) | self.bb(ti, Role::Queen.index());
 
         // Enemy attack map with our king removed (x-ray safe king moves).
         let occ_no_king = occ ^ bit(ksq);
@@ -720,7 +798,7 @@ impl Board {
         } else {
         // Pawns — bulk shifts templated on WHITE (no runtime `them` branch, const-folded).
         {
-            let pawns = self.bbs[ti][Role::Pawn.index()];
+            let pawns = self.bb(ti, Role::Pawn.index());
             if WHITE {
                 // `WHITE` true => us=White, them=Black -> Black pawns attack south.
                 danger |= (pawns & !crate::types::FILE_BB[0]) >> 9;
@@ -731,7 +809,7 @@ impl Board {
                 danger |= (pawns & !crate::types::FILE_BB[7]) << 9;
             }
         }
-        let mut p = self.bbs[ti][Role::Knight.index()];
+        let mut p = self.bb(ti, Role::Knight.index());
         while p != 0 {
             let sq = pop_lsb(&mut p);
             danger |= KNIGHT_ATT[sq as usize];
@@ -776,7 +854,7 @@ impl Board {
         // ANDs and second loops for pinned sliders.
         if pinned_any == 0 {
             {
-                let mut p = self.bbs[ui][Role::Knight.index()];
+                let mut p = self.bb(ui, Role::Knight.index());
                 while p != 0 {
                     let from = pop_lsb(&mut p);
                     let t = KNIGHT_ATT[from as usize] & !self.occ[ui] & allowed;
@@ -784,7 +862,7 @@ impl Board {
                 }
             }
             {
-                let mut p = self.bbs[ui][Role::Bishop.index()] | self.bbs[ui][Role::Queen.index()];
+                let mut p = self.bb(ui, Role::Bishop.index()) | self.bb(ui, Role::Queen.index());
                 while p != 0 {
                     let from = pop_lsb(&mut p);
                     let t = attacks::bishop_attacks(from, occ) & !self.occ[ui] & allowed;
@@ -792,7 +870,7 @@ impl Board {
                 }
             }
             {
-                let mut p = self.bbs[ui][Role::Rook.index()] | self.bbs[ui][Role::Queen.index()];
+                let mut p = self.bb(ui, Role::Rook.index()) | self.bb(ui, Role::Queen.index());
                 while p != 0 {
                     let from = pop_lsb(&mut p);
                     let t = attacks::rook_attacks(from, occ) & !self.occ[ui] & allowed;
@@ -802,7 +880,7 @@ impl Board {
         } else {
             // Knights (a pinned knight can never move) — split avoids LINE load.
             {
-                let knights = self.bbs[ui][Role::Knight.index()] & !pinned_any;
+                let knights = self.bb(ui, Role::Knight.index()) & !pinned_any;
                 let mut p = knights;
                 while p != 0 {
                     let from = pop_lsb(&mut p);
@@ -813,7 +891,7 @@ impl Board {
 
             // Bishops and queens (diagonal moves) — unpinned bulk, pinned_diag via LINE.
             {
-                let bq = self.bbs[ui][Role::Bishop.index()] | self.bbs[ui][Role::Queen.index()];
+                let bq = self.bb(ui, Role::Bishop.index()) | self.bb(ui, Role::Queen.index());
                 // Unpinned (and hv-pinned bishops are stuck — skip).
                 let bq_unpinned = bq & !pinned_hv & !pinned_diag;
                 let mut p = bq_unpinned;
@@ -833,7 +911,7 @@ impl Board {
 
             // Rooks and queens (straight moves) — unpinned bulk, pinned_hv via LINE.
             {
-                let rq = self.bbs[ui][Role::Rook.index()] | self.bbs[ui][Role::Queen.index()];
+                let rq = self.bb(ui, Role::Rook.index()) | self.bb(ui, Role::Queen.index());
                 let rq_unpinned = rq & !pinned_hv & !pinned_diag;
                 let mut p = rq_unpinned;
                 while p != 0 {
@@ -874,7 +952,7 @@ impl Board {
         let occ = self.occupied();
         let them_occ = self.occ[us.other().index()];
         let empty = !occ;
-        let pawns = self.bbs[ui][Role::Pawn.index()];
+        let pawns = self.bb(ui, Role::Pawn.index());
         let pinned_any = pinned_hv | pinned_diag;
 
         // Bulk for unpinned pawns — `north(pawns)&!occ&check_mask` split promo/non-promo.
@@ -993,7 +1071,7 @@ impl Board {
             let ep = self.ep;
             let cap_sq = if WHITE { ep - 8 } else { ep + 8 };
             // Iterate candidate pawns that geometrically can capture EP.
-            let mut p = pawns;
+            let mut p = if cfg!(feature = "exp-ep-candidates") {pawns & PAWN_ATT[us.other().index()][ep as usize]} else {pawns};
             while p != 0 {
                 let from = pop_lsb(&mut p);
                 let att = PAWN_ATT[ui][from as usize];
@@ -1022,16 +1100,16 @@ impl Board {
                 }
                 let occ_after = (occ ^ bit(from) ^ bit(cap_sq)) | bit(ep);
                 let ti = us.other().index();
-                let their_pawns = self.bbs[ti][Role::Pawn.index()] & !bit(cap_sq);
+                let their_pawns = self.bb(ti, Role::Pawn.index()) & !bit(cap_sq);
                 let ksq_after = self.king_sq[ui];
                 // Use the occupancy after EP for sliding attacks.
                 let mut attackers = attacks::bishop_attacks(ksq_after, occ_after)
-                    & (self.bbs[ti][Role::Bishop.index()] | self.bbs[ti][Role::Queen.index()]);
+                    & (self.bb(ti, Role::Bishop.index()) | self.bb(ti, Role::Queen.index()));
                 attackers |= attacks::rook_attacks(ksq_after, occ_after)
-                    & (self.bbs[ti][Role::Rook.index()] | self.bbs[ti][Role::Queen.index()]);
-                attackers |= KNIGHT_ATT[ksq_after as usize] & self.bbs[ti][Role::Knight.index()];
+                    & (self.bb(ti, Role::Rook.index()) | self.bb(ti, Role::Queen.index()));
+                attackers |= KNIGHT_ATT[ksq_after as usize] & self.bb(ti, Role::Knight.index());
                 attackers |= PAWN_ATT[ui][ksq_after as usize] & their_pawns;
-                attackers |= KING_ATT[ksq_after as usize] & self.bbs[ti][Role::King.index()];
+                attackers |= KING_ATT[ksq_after as usize] & self.bb(ti, Role::King.index());
                 if attackers == 0 {
                     sink.push_one(Move::new(Square(from), Square(ep), None));
                 }
@@ -1044,6 +1122,15 @@ impl Board {
         let us = self.turn;
         let ui = us.index();
         let ksq = self.king_sq[ui];
+        #[cfg(feature = "exp-standard-movegen")]
+        if !self.is_chess960 && ksq==if us==Color::White {4}else{60} {
+            let shift=if us==Color::White {0}else{56};
+            let rights=(self.castling>>if us==Color::White {0}else{2})&3;
+            let occ=self.occupied()>>shift;let safe=danger>>shift;
+            if rights&1!=0 && occ&0x60==0 && safe&0x60==0 {sink.push_one(Move::quiet(Square(ksq),Square(shift+7)));}
+            if rights&2!=0 && occ&0x0e==0 && safe&0x0c==0 {sink.push_one(Move::quiet(Square(ksq),Square(shift)));}
+            return;
+        }
         for rb in [
             crate::types::castle_right_bit(us, true) as usize,
             crate::types::castle_right_bit(us, false) as usize,
@@ -1092,7 +1179,7 @@ impl Board {
         let start_rank: u8 = if white { 1 } else { 6 };
         let promo_rank: u8 = if white { 7 } else { 0 };
 
-        let mut p = self.bbs[ui][Role::Pawn.index()];
+        let mut p = self.bb(ui, Role::Pawn.index());
         while p != 0 {
             let from = pop_lsb(&mut p);
             let allowed_here = if pinned & bit(from) != 0 {
@@ -1147,16 +1234,16 @@ impl Board {
                 let cap_sq = if white { ep - 8 } else { ep + 8 };
                 let occ_after = (occ ^ bit(from) ^ bit(cap_sq)) | bit(ep);
                 let ti = them.index();
-                let their_pawns = self.bbs[ti][Role::Pawn.index()] & !bit(cap_sq);
+                let their_pawns = self.bb(ti, Role::Pawn.index()) & !bit(cap_sq);
                 let ksq = self.king_sq[ui];
                 let mut attackers =
                     attacks::bishop_attacks(ksq, occ_after)
-                        & (self.bbs[ti][Role::Bishop.index()] | self.bbs[ti][Role::Queen.index()]);
+                        & (self.bb(ti, Role::Bishop.index()) | self.bb(ti, Role::Queen.index()));
                 attackers |= attacks::rook_attacks(ksq, occ_after)
-                    & (self.bbs[ti][Role::Rook.index()] | self.bbs[ti][Role::Queen.index()]);
-                attackers |= KNIGHT_ATT[ksq as usize] & self.bbs[ti][Role::Knight.index()];
+                    & (self.bb(ti, Role::Rook.index()) | self.bb(ti, Role::Queen.index()));
+                attackers |= KNIGHT_ATT[ksq as usize] & self.bb(ti, Role::Knight.index());
                 attackers |= PAWN_ATT[ui][ksq as usize] & their_pawns;
-                attackers |= KING_ATT[ksq as usize] & self.bbs[ti][Role::King.index()];
+                attackers |= KING_ATT[ksq as usize] & self.bb(ti, Role::King.index());
                 if attackers == 0 {
                     moves.push(Move::new(Square(from), Square(ep), None));
                 }
@@ -1281,7 +1368,7 @@ impl Board {
         let mut moves = ArrayVec::new();
 
         // Knights.
-        let mut p = self.bbs[ui][Role::Knight.index()];
+        let mut p = self.bb(ui, Role::Knight.index());
         while p != 0 {
             let from = pop_lsb(&mut p);
             let mut t = KNIGHT_ATT[from as usize] & !self.occ[ui];
@@ -1292,7 +1379,7 @@ impl Board {
         }
 
         // Bishops and queens (diagonals).
-        let mut p = self.bbs[ui][Role::Bishop.index()] | self.bbs[ui][Role::Queen.index()];
+        let mut p = self.bb(ui, Role::Bishop.index()) | self.bb(ui, Role::Queen.index());
         while p != 0 {
             let from = pop_lsb(&mut p);
             let mut t = attacks::bishop_attacks(from, occ) & !self.occ[ui];
@@ -1303,7 +1390,7 @@ impl Board {
         }
 
         // Rooks and queens (straights).
-        let mut p = self.bbs[ui][Role::Rook.index()] | self.bbs[ui][Role::Queen.index()];
+        let mut p = self.bb(ui, Role::Rook.index()) | self.bb(ui, Role::Queen.index());
         while p != 0 {
             let from = pop_lsb(&mut p);
             let mut t = attacks::rook_attacks(from, occ) & !self.occ[ui];
@@ -1746,7 +1833,7 @@ impl Board {
                     let color = (cap / 6) as usize;
                     let role_idx = (cap % 6) as usize;
                     let b = bit(captured_sq);
-                    self.bbs[color][role_idx] &= !b;
+                    self.bb_remove(color, role_idx, b);
                     self.occ[color] &= !b;
                 }
             } else if dest != EMPTY {
@@ -1754,7 +1841,7 @@ impl Board {
                 let color = (dest / 6) as usize;
                 let role_idx = (dest % 6) as usize;
                 let b = bit(to);
-                self.bbs[color][role_idx] &= !b;
+                self.bb_remove(color, role_idx, b);
                 self.occ[color] &= !b;
             }
         }
@@ -1767,7 +1854,7 @@ impl Board {
                     let color = (moved / 6) as usize;
                     let role_idx = (moved % 6) as usize;
                     let b = bit(from);
-                    self.bbs[color][role_idx] &= !b;
+                    self.bb_remove(color, role_idx, b);
                     self.occ[color] &= !b;
                     if role_idx == Role::King.index() {
                         // king_sq updated via put below
@@ -1777,7 +1864,7 @@ impl Board {
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(to);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = to;
@@ -1797,7 +1884,7 @@ impl Board {
                         let color = (code / 6) as usize;
                         let role_idx = (code % 6) as usize;
                         let b = bit(sq);
-                        self.bbs[color][role_idx] &= !b;
+                        self.bb_remove(color, role_idx, b);
                         self.occ[color] &= !b;
                     }
                     // Place both without hash.
@@ -1806,7 +1893,7 @@ impl Board {
                         let color = (code / 6) as usize;
                         let role_idx = (code % 6) as usize;
                         let b = bit(sq);
-                        self.bbs[color][role_idx] |= b;
+                        self.bb_add(color, role_idx, b);
                         self.occ[color] |= b;
                         if role_idx == Role::King.index() {
                             self.king_sq[color] = sq;
@@ -1821,13 +1908,13 @@ impl Board {
                     #[cfg(feature = "exp-mutation")]
                     {
                         let delta = b_from ^ b_to;
-                        self.bbs[color][role_idx] ^= delta;
+                        self.bb_toggle(color, role_idx, delta);
                         self.occ[color] ^= delta;
                     }
                     #[cfg(not(feature = "exp-mutation"))]
                     {
-                        self.bbs[color][role_idx] &= !b_from;
-                        self.bbs[color][role_idx] |= b_to;
+                        self.bb_remove(color, role_idx, b_from);
+                        self.bb_add(color, role_idx, b_to);
                         self.occ[color] &= !b_from;
                         self.occ[color] |= b_to;
                     }
@@ -1887,7 +1974,7 @@ impl Board {
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(sq);
-                self.bbs[color][role_idx] &= !b;
+                self.bb_remove(color, role_idx, b);
                 self.occ[color] &= !b;
             }
             for sq_code in [(from, king_code), (to, rook_code)] {
@@ -1895,7 +1982,7 @@ impl Board {
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(sq);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = sq;
@@ -1916,7 +2003,7 @@ impl Board {
             let color = (moved / 6) as usize;
             let role_idx = (moved % 6) as usize;
             let b = bit(to);
-            self.bbs[color][role_idx] &= !b;
+            self.bb_remove(color, role_idx, b);
             self.occ[color] &= !b;
         }
         match mv.promotion() {
@@ -1925,14 +2012,14 @@ impl Board {
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(from);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
             }
             None => {
                 let color = (moved / 6) as usize;
                 let role_idx = (moved % 6) as usize;
                 let b = bit(from);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = from;
@@ -1954,8 +2041,8 @@ impl Board {
                         let role_idx = (rook % 6) as usize;
                         let b_from = bit(rfrom);
                         let b_to = bit(rto);
-                        self.bbs[color][role_idx] &= !b_from;
-                        self.bbs[color][role_idx] |= b_to;
+                        self.bb_remove(color, role_idx, b_from);
+                        self.bb_add(color, role_idx, b_to);
                         self.occ[color] &= !b_from;
                         self.occ[color] |= b_to;
                     }
@@ -1974,7 +2061,7 @@ impl Board {
             let color = (code / 6) as usize;
             let role_idx = (code % 6) as usize;
             let b = bit(cap_sq);
-            self.bbs[color][role_idx] |= b;
+            self.bb_add(color, role_idx, b);
             self.occ[color] |= b;
         }
         self.castling = undo.castling;
@@ -2156,7 +2243,7 @@ impl Board {
                     let color = (cap / 6) as usize;
                     let role_idx = (cap % 6) as usize;
                     let b = bit(captured_sq);
-                    self.bbs[color][role_idx] &= !b;
+                    self.bb_remove(color, role_idx, b);
                     self.occ[color] &= !b;
                 }
             } else if dest != EMPTY {
@@ -2164,7 +2251,7 @@ impl Board {
                 let color = (dest / 6) as usize;
                 let role_idx = (dest % 6) as usize;
                 let b = bit(to);
-                self.bbs[color][role_idx] &= !b;
+                self.bb_remove(color, role_idx, b);
                 self.occ[color] &= !b;
             }
         }
@@ -2175,14 +2262,14 @@ impl Board {
                 let color = (moved / 6) as usize;
                 let role_idx = (moved % 6) as usize;
                 let b = bit(from);
-                self.bbs[color][role_idx] &= !b;
+                self.bb_remove(color, role_idx, b);
                 self.occ[color] &= !b;
 
                 let code = Piece::new(us, r).code();
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(to);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = to;
@@ -2201,7 +2288,7 @@ impl Board {
                         let color = (code / 6) as usize;
                         let role_idx = (code % 6) as usize;
                         let b = bit(sq);
-                        self.bbs[color][role_idx] &= !b;
+                        self.bb_remove(color, role_idx, b);
                         self.occ[color] &= !b;
                     }
                     for sq_code in [(kf, moved), (rf, rook_code)] {
@@ -2209,7 +2296,7 @@ impl Board {
                         let color = (code / 6) as usize;
                         let role_idx = (code % 6) as usize;
                         let b = bit(sq);
-                        self.bbs[color][role_idx] |= b;
+                        self.bb_add(color, role_idx, b);
                         self.occ[color] |= b;
                         if role_idx == Role::King.index() {
                             self.king_sq[color] = sq;
@@ -2223,13 +2310,13 @@ impl Board {
                     #[cfg(feature = "exp-mutation")]
                     {
                         let delta = b_from ^ b_to;
-                        self.bbs[color][role_idx] ^= delta;
+                        self.bb_toggle(color, role_idx, delta);
                         self.occ[color] ^= delta;
                     }
                     #[cfg(not(feature = "exp-mutation"))]
                     {
-                        self.bbs[color][role_idx] &= !b_from;
-                        self.bbs[color][role_idx] |= b_to;
+                        self.bb_remove(color, role_idx, b_from);
+                        self.bb_add(color, role_idx, b_to);
                         self.occ[color] &= !b_from;
                         self.occ[color] |= b_to;
                     }
@@ -2292,7 +2379,7 @@ impl Board {
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(sq);
-                self.bbs[color][role_idx] &= !b;
+                self.bb_remove(color, role_idx, b);
                 self.occ[color] &= !b;
             }
             for sq_code in [(from, king_code), (to, rook_code)] {
@@ -2300,7 +2387,7 @@ impl Board {
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(sq);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = sq;
@@ -2321,7 +2408,7 @@ impl Board {
             let color = (moved / 6) as usize;
             let role_idx = (moved % 6) as usize;
             let b = bit(to);
-            self.bbs[color][role_idx] &= !b;
+            self.bb_remove(color, role_idx, b);
             self.occ[color] &= !b;
         }
         match mv.promotion() {
@@ -2330,14 +2417,14 @@ impl Board {
                 let color = (code / 6) as usize;
                 let role_idx = (code % 6) as usize;
                 let b = bit(from);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
             }
             None => {
                 let color = (moved / 6) as usize;
                 let role_idx = (moved % 6) as usize;
                 let b = bit(from);
-                self.bbs[color][role_idx] |= b;
+                self.bb_add(color, role_idx, b);
                 self.occ[color] |= b;
                 if role_idx == Role::King.index() {
                     self.king_sq[color] = from;
@@ -2355,8 +2442,8 @@ impl Board {
                         let role_idx = (rook % 6) as usize;
                         let b_from = bit(rfrom);
                         let b_to = bit(rto);
-                        self.bbs[color][role_idx] &= !b_from;
-                        self.bbs[color][role_idx] |= b_to;
+                        self.bb_remove(color, role_idx, b_from);
+                        self.bb_add(color, role_idx, b_to);
                         self.occ[color] &= !b_from;
                         self.occ[color] |= b_to;
                     }
@@ -2375,7 +2462,7 @@ impl Board {
             let color = (code / 6) as usize;
             let role_idx = (code % 6) as usize;
             let b = bit(cap_sq);
-            self.bbs[color][role_idx] |= b;
+            self.bb_add(color, role_idx, b);
             self.occ[color] |= b;
         }
         self.castling = undo.castling;
@@ -2478,6 +2565,8 @@ impl Board {
         if !self.is_pseudo_legal(mv) {
             return false;
         }
+        #[cfg(feature = "exp-direct-legal")]
+        if let Some(safe)=self.king_safe_hypothetical(mv) {return safe;}
         let mut tmp = *self;
         if cfg!(feature = "exp-san") {
             tmp.make_move_fast(mv);
@@ -2489,6 +2578,48 @@ impl Board {
         let safe = tmp.attackers_to(tmp.king_sq[mover.index()], tmp.turn, tmp.occupied()) == 0;
         tmp.unmake_move(mv, undo);
         safe
+    }
+
+    #[cfg(feature = "exp-direct-legal")]
+    #[inline(always)]
+    fn king_safe_hypothetical(&self,mv:Move)->Option<bool>{
+        let us=self.turn;let them=us.other();
+        let f=mv.from().0;let t=mv.to().0;
+        let role=self.piece_code_at_color(f,us)%6;
+        if self.occ[us.index()]&bit(t)!=0 || (mv.promotion().is_some()&&role!=Role::Pawn as u8){return None;}
+        let mut captured=bit(t)&self.occ[them.index()];
+        if role==Role::Pawn as u8 && f&7!=t&7 && captured==0 {
+            let cap=if us==Color::White {t.checked_sub(8)?} else {t.checked_add(8)?};
+            if cap>=64{return None;}
+            captured=bit(cap)&self.piece_bb(them,Role::Pawn);
+        }
+        let occ=(self.occupied()&!(bit(f)|captured))|bit(t);
+        let k=if role==Role::King as u8 {t}else{self.king_sq[us.index()]};
+        // Mask the removed enemy piece at its old square, including en passant.
+        Some(self.attackers_to(k,them,occ)&!captured==0)
+    }
+
+    #[cfg(feature = "exp-early-san")]
+    pub(crate) fn definitely_no_check(&self,mv:Move)->bool{
+        let us=self.turn;let them=us.other();let f=mv.from().0;let t=mv.to().0;
+        let Some(piece)=self.piece_at(Square(f)) else{return false};
+        if self.occ[us.index()]&bit(t)!=0 || mv.promotion().is_some()
+            || (piece.role==Role::Pawn && f&7!=t&7 && self.occupied()&bit(t)==0) {return false;}
+        let k=self.king_sq[them.index()];
+        let source=bit(f);let target=bit(t);
+        let (b,r)=(crate::bitboard::EMPTY_BISHOP_RAYS[k as usize],crate::bitboard::EMPTY_ROOK_RAYS[k as usize]);
+        if source&(b|r)!=0{return false;}
+        let direct=match piece.role {
+            Role::Pawn=>PAWN_ATT[them.index()][k as usize],
+            Role::Knight=>KNIGHT_ATT[k as usize],
+            Role::Bishop=>b,
+            Role::Rook=>r,
+            Role::Queen=>b|r,
+            Role::King=>KING_ATT[k as usize],
+        };
+        if direct&target!=0{return false;}
+        // Legal games never start with the opponent already in check, but permissive FEN can.
+        self.attackers_to(k,us,self.occupied())==0
     }
 
     /// True when `sq` is attacked by any piece of `by`.

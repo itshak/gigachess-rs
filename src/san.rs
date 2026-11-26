@@ -226,6 +226,8 @@ pub fn check_mate_suffix(after: &Board) -> Option<char> {
 /// tradeoff — reads the suffix, unmakes.
 #[inline(always)]
 fn check_mate_suffix_after_make(board: &Board, mv: Move) -> Option<char> {
+    #[cfg(feature = "exp-early-san")]
+    if board.definitely_no_check(mv) {return None;}
     let mut tmp = *board;
     if cfg!(feature = "exp-san") { tmp.make_move_perft(mv); return check_mate_suffix(&tmp); }
     let undo = tmp.make_move_unchecked(mv);
