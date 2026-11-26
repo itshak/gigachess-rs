@@ -12,6 +12,8 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-blocked-sliders = []
+exp-no-danger-needed = []
 exp-undo-outside = []
 exp-hash-pointer = []
 exp-hash-pair = ["exp-hash-pointer"]

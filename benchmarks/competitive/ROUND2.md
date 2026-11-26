@@ -175,3 +175,13 @@ benchmark-only default for the follow-up branch. Root defaults unchanged.
 - fen-code-lut: direct byte-to-piece-code table, preserving error validation.
 Passed the expanded debug regression suite with optional prepared moves,
 ordinary/pawn fast paths, copy-make and explicit Undo role enabled.
+
+### Cold start and blocked positions
+The original 522 strict cases exclude cold first-use. E lost the first-use
+median on all six platforms (ratio 0.649–0.929 vs fastest peer). Static tables
+already eliminated runtime initialization; remaining cost includes code and
+data demand paging. Two general optimizations, not startpos special cases:
+blocked-sliders returns the adjacent attack mask when every adjacent ray
+square is occupied; no-danger-needed skips enemy attack-map construction
+when no king target or standard castle can consume it. Nonstandard castle
+checks remain independent. Expanded debug regression passed.

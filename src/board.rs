@@ -1253,7 +1253,27 @@ impl Board {
             || (cfg!(feature = "exp-king-targets")
             && self.castling & (3 << ((1-ui)*2)) == 0
             && possible_king.count_ones() <= 3);
-        if targeted {
+        // If no king destination is available and no standard-geometry
+        // castle can use the danger map, there is no consumer of that map.
+        // Nonstandard castles use their own exact path/occupancy probes.
+        #[cfg(feature="exp-no-danger-needed")]
+        let skip_danger=if possible_king!=0{false}else if !SPECIAL||self.castling==0||ksq&7!=4{true}else{
+            let mut need=false;
+            let rank_shift=ksq&56;
+            for kingside in [true,false]{
+                let rb=crate::types::castle_right_bit(us,kingside) as usize;
+                if self.castling&(1<<rb)==0{continue;}
+                if self.castle_rook_sq[rb]&7!=if kingside{7}else{0}{continue;}
+                let between=if kingside{0x60u64}else{0x0e};
+                if occ&(between<<rank_shift)==0{need=true;}
+            }
+            !need
+        };
+        #[cfg(not(feature="exp-no-danger-needed"))]
+        let skip_danger=false;
+        if skip_danger {
+            // No king or castle step depends on danger.
+        } else if targeted {
             let mut targets = needed;
             while targets != 0 {
                 let to = pop_lsb(&mut targets);
