@@ -196,3 +196,28 @@ deep perft tests; no timing claim until ABBA completes.
 Strict gate now has --require-complete, --cold, --require-wins. It refuses
 to treat partial 3/4-platform artifacts as a completed universal result;
 cold medians are tracked separately. The release gate is not satisfied.
+
+## Round 5: replay, board copy, and state update refinement
+Completed F 446/522; E+align16 465/522; E+align32 460/522.
+F and aligned models were independent, so test F+align16 and F+align32
+without claiming combined results in advance. Board copying still loses
+on ARM and macOS; trusted native replay loses all 12 cases to Shakmaty.
+Its decoded moves avoid source role lookup and its native transition
+does not update both caches. Cozy/Jordan use XOR updates and sparse
+checker rays; Ultra uses specialized moves and mailbox lookup. No GPL
+source copied, no wire changes or weaker native output.
+
+New independent flags:
+- sparse-role3: exact 72-byte board, pawn has role code zero (occupancy
+  distinguishes empty), knight/bishop/rook have a single bit-plane, queen
+  and king two. Direct diagonal/orthogonal masks. This is a new encoding,
+  not redundant role storage. Compare branchy and branchless mutations.
+- direct-role-xor: one role plane XOR in the existing quiet path.
+- castle-compact: known standard rights hash lookup, skip irrelevant
+  rights processing off back ranks. Chess960 detection moved before
+  initial hash computation; all-960 regression caught the initial error.
+- checker-pair: two branchless ray candidates before arbitrary fallback.
+- compact-attack-desc: colocated attack table active in E/F compact path
+  (previous attack-descriptor was masked by the earlier return).
+All-960, real games, exhaustive sliders, FEN, SAN and rollback gates
+passed for sparse and branchless configurations. Keep raw native rows.
