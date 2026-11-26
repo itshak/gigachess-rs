@@ -203,13 +203,26 @@ fn bench<T>(name: &str, case: &str, lib: &str, units: u64, mut f: impl FnMut() -
 }
 macro_rules! row {($op:expr,$case:expr,$units:expr,$($lib:literal=>$f:expr),+ $(,)?) => {$(bench($op,$case,$lib,$units,$f);)+};}
 fn main() {
-    if std::env::args().nth(1).as_deref() == Some("--cold-giga") {
-        let t = Instant::now();
-        let board = bb(Board::startpos());
-        let n = bb(board.legal_moves()).len();
-        assert_eq!(n,20);
-        println!("{}", t.elapsed().as_nanos());
-        return;
+    if let Some(arg) = std::env::args().nth(1) {
+        if let Some(lib) = arg.strip_prefix("--cold-") {
+            let t = Instant::now();
+            let n=match lib {
+                "giga"=>bb(bb(Board::startpos()).legal_moves()).len(),
+                "shakmaty"=>bb(bb(S::default()).legal_moves()).len(),
+                "cozy"=>bb(cozy_list(&bb(C::default()))).len(),
+                "chess"=>bb(jordan_list(&bb(J::default()))).len(),
+                "ultra"=>bb(ultra_list(&bb(U::startpos()))).len(),
+                "ferrum"=>bb(bb(F::startpos()).generate_moves()).len(),
+                _=>panic!("unknown cold library"),
+            };
+            assert_eq!(n,20);
+            println!("{}",t.elapsed().as_nanos());
+            return;
+        }
+        if arg == "--sizes" {
+            println!("giga={} shakmaty={} cozy={} chess={} ultra={} ferrum={}",std::mem::size_of::<Board>(),std::mem::size_of::<S>(),std::mem::size_of::<C>(),std::mem::size_of::<J>(),std::mem::size_of::<U>(),std::mem::size_of::<F>());
+            return;
+        }
     }
     // Corpus runs after fixed cases, with its own parity gate.
     println!("operation\tcase\tlibrary\tunits_per_call\titerations\tmedian_ns\tmin_ns\tmax_ns\tp25_ns\tp75_ns");

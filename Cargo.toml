@@ -12,6 +12,12 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-compact-board = []
+exp-mailbox = []
+exp-direct-legal = []
+exp-early-san = []
+exp-standard-movegen = []
+exp-ep-candidates = []
 exp-static-sliders = []
 exp-mutation = []
 exp-undo-role = []
