@@ -572,6 +572,9 @@ impl Board {
         if occ0 == 0 && occ1 == 0 {
             return EMPTY;
         }
+        #[cfg(all(feature="exp-compact-board",not(feature="exp-slider-planes"),any(feature="exp-role-tree",feature="exp-role-simd")))]
+        {return self.compact_role_lookup(b)+(occ1!=0) as u8*6;}
+
         #[cfg(feature="exp-nibble-role")]
         {return self.get_role_nibble(sq)+(occ1!=0) as u8*6;}
         #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
@@ -632,11 +635,54 @@ impl Board {
     }
 
 
+    #[cfg(all(feature="exp-compact-board",not(feature="exp-slider-planes"),any(feature="exp-role-tree",feature="exp-role-simd")))]
+    #[inline(always)]
+    fn compact_role_lookup(&self,b:u64)->u8{
+        let r=&self.roles;
+        #[cfg(feature="exp-role-simd")]
+        {
+            if r[0]&b!=0{return 0;}
+            #[cfg(all(target_arch="x86_64",target_feature="avx2"))]
+            {
+                use core::arch::x86_64::*;
+                // Four role bitboards are contiguous; unaligned load stays
+                // within roles[1..5]. The empty mask represents king.
+                unsafe{
+                    let lanes=_mm256_loadu_si256(r.as_ptr().add(1).cast());
+                    let hit=_mm256_and_si256(lanes,_mm256_set1_epi64x(b as i64));
+                    let zero=_mm256_cmpeq_epi64(hit,_mm256_setzero_si256());
+                    let mask=(!_mm256_movemask_pd(_mm256_castsi256_pd(zero)) as u32)&15;
+                    return (mask|16).trailing_zeros() as u8+1;
+                }
+            }
+            #[cfg(target_arch="aarch64")]
+            {
+                use core::arch::aarch64::*;
+                unsafe{
+                    let target=vdupq_n_u64(b);
+                    let a=vtstq_u64(vld1q_u64(r.as_ptr().add(1)),target);
+                    let c=vtstq_u64(vld1q_u64(r.as_ptr().add(3)),target);
+                    let mask=(vgetq_lane_u64::<0>(a)&1)|((vgetq_lane_u64::<1>(a)&1)<<1)|
+                        ((vgetq_lane_u64::<0>(c)&1)<<2)|((vgetq_lane_u64::<1>(c)&1)<<3);
+                    return (mask|16).trailing_zeros() as u8+1;
+                }
+            }
+        }
+        // MIT attribution: Jordan Bray chess 3.2.0 board.rs piece_on
+        // groups early roles, then distinguishes the two subsets.
+        if (r[0]|r[1]|r[2])&b!=0{
+            if r[0]&b!=0{0}else if r[1]&b!=0{1}else{2}
+        }else if r[3]&b!=0{3}else if r[4]&b!=0{4}else{5}
+    }
+
     #[cfg(feature="exp-known-role")]
     #[inline(always)]
     fn role_at_occupied(&self,sq:u8,color:Color)->u8{
         let b=bit(sq);
         debug_assert_ne!(self.occ[color.index()]&b,0);
+        #[cfg(all(feature="exp-compact-board",not(feature="exp-slider-planes"),any(feature="exp-role-tree",feature="exp-role-simd")))]
+        {return self.compact_role_lookup(b);}
+
         #[cfg(feature="exp-nibble-role")]
         {return self.get_role_nibble(sq);}
         #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
@@ -679,6 +725,9 @@ impl Board {
         if self.occ[color.index()] & b == 0 {
             return EMPTY;
         }
+        #[cfg(all(feature="exp-compact-board",not(feature="exp-slider-planes"),any(feature="exp-role-tree",feature="exp-role-simd")))]
+        {return self.compact_role_lookup(b)+color as u8*6;}
+
         #[cfg(feature="exp-nibble-role")]
         {return self.get_role_nibble(sq)+color as u8*6;}
         #[cfg(all(feature="exp-role-planes",not(feature="exp-nibble-role")))]
@@ -2285,7 +2334,8 @@ impl Board {
         }
 
         #[cfg(all(feature = "exp-quiet-fast", not(feature = "exp-normal-kernel")))]
-        if mv.promotion().is_none() && self.occupied()&bit(to)==0 && !(is_pawn&&diag) {
+        if (if cfg!(feature="exp-quiet-common"){mv.0>>12==0}else{mv.promotion().is_none()})
+            && self.occupied()&bit(to)==0 && !(is_pawn&&diag) {
             let ui=us.index();let ti=them.index();
             #[cfg(all(feature="exp-direct-role-xor",feature="exp-mutation"))]
             self.bb_toggle(ui,role as usize,bit(from)^bit(to));
@@ -2307,6 +2357,28 @@ impl Board {
             if us==Color::Black{self.fullmove+=1;}
             self.turn=them;
             if HASH{self.hash^=zobrist::turn_key();}
+            if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
+            return undo;
+        }
+
+        #[cfg(all(feature="exp-capture-direct",feature="exp-known-role",feature="exp-mutation"))]
+        if mv.promotion().is_none() && self.occ[them.index()]&bit(to)!=0{
+            let ui=us.index();let ti=them.index();let f=bit(from);let t=bit(to);
+            let cap=self.role_at_occupied(to,them) as usize;
+            undo.captured=(ti*6+cap) as u8;
+            self.bb_remove(ti,cap,t);self.occ[ti]^=t;
+            self.bb_toggle(ui,role as usize,f^t);self.occ[ui]^=f^t;
+            self.hash^=zobrist::piece_key_indices(ti,cap,to)^zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
+            if role==5{self.king_sq[ui]=to;}
+            let old=self.castling;
+            if old!=0{
+                self.castling=old&self.castle_rights_after(role,us,from,to);
+                if HASH&&old!=self.castling{self.hash^=self.castle_rights_hash(old^self.castling);}
+            }
+            self.ep=if is_pawn&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
+            if HASH&&self.ep_relevant(self.ep,them){self.hash^=zobrist::ep_key(Square(self.ep));}
+            self.halfmove=0;self.fullmove+=(us==Color::Black) as u16;
+            self.turn=them;
             if CHECKERS{self.checkers=self.attackers_to(self.king_sq[ti],us,self.occupied());}
             return undo;
         }
@@ -3139,6 +3211,21 @@ impl Board {
         {
             let code=self.piece_code_at_color(mv.from().0,self.turn);
             if !self.is_pseudo_legal_with_code(mv,code){return Err(IllegalMove);}
+            #[cfg(feature="exp-checked-cached")]
+            {
+                let f=mv.from().0;let t=mv.to().0;let us=self.turn;
+                let king=self.king_sq[us.index()] as usize;
+                let role=code%6;
+                // Cache may be stale after a documented hash-only make.
+                // Confirm existing king safety exactly before using the
+                // no-discovery shortcut. Leapers/slider attacks cannot be
+                // created by a normal off-ray move.
+                if role!=5 && !(role==0&&f&7!=t&7&&self.occupied()&bit(t)==0)
+                    && (crate::bitboard::EMPTY_BISHOP_RAYS[king]|crate::bitboard::EMPTY_ROOK_RAYS[king])&bit(f)==0
+                    && self.attackers_to(king as u8,us.other(),self.occupied())==0{
+                    return Ok(self.make_move_hinted::<true,true,true>(mv,code));
+                }
+            }
             if let Some(safe)=self.king_safe_hypothetical_role(mv,code%6){
                 return if safe{Ok(self.make_move_hinted::<true,true,true>(mv,code))}else{Err(IllegalMove)};
             }

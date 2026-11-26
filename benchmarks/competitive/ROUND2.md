@@ -221,3 +221,18 @@ New independent flags:
   (previous attack-descriptor was masked by the earlier return).
 All-960, real games, exhaustive sliders, FEN, SAN and rollback gates
 passed for sparse and branchless configurations. Keep raw native rows.
+
+### Round 5 role lookup and replay alternatives
+- role-tree: grouped role lookup, adapted from Jordan Bray chess 3.2.0
+  (MIT, board.rs piece_on). Use in source lookup, captures and FEN.
+- role-simd: pawn fast branch, four remaining non-king planes tested
+  together via AVX2 or NEON; scalar tree on portable x64. AVX2 compile
+  checked locally; architecture-specific execution requires CI.
+- capture-direct: exact ordinary capture with known role/color and two
+  XOR mutations, no redundant piece decoding. Special cases unchanged.
+- checked-cached: conservative off-ray nonking shortcut, explicitly
+  confirm old king safety because cached checkers may be stale after
+  documented hash-only operations; fallback for EP, king and ray moves.
+- quiet-common: simple raw-word test for normal nonpromotion moves;
+  fallback preserves invalid/reserved promotion-word behavior.
+Combined expanded debug regression passed. Five F-paired CI experiments.

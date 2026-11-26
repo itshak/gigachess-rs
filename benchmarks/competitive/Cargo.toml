@@ -14,6 +14,11 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-role-tree = ["gigachess/exp-role-tree"]
+exp-role-simd = ["gigachess/exp-role-simd"]
+exp-capture-direct = ["gigachess/exp-capture-direct"]
+exp-checked-cached = ["gigachess/exp-checked-cached"]
+exp-quiet-common = ["gigachess/exp-quiet-common"]
 exp-sparse-role3 = ["gigachess/exp-sparse-role3", "exp-slider-planes"]
 exp-sparse-role3-branchless = ["gigachess/exp-sparse-role3-branchless", "exp-sparse-role3"]
 exp-direct-role-xor = ["gigachess/exp-direct-role-xor"]
