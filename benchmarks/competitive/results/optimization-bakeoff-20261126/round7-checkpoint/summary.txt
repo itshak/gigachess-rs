@@ -1,0 +1,144 @@
+=== 45808378631 ===
+exp-fen-rank,exp-undo-outside,exp-align32,exp-blocked-sliders
+| ALL | 468 | 443 | 62 | 522 |
+| apply_children_full | 1.114x | 1.220x | 32/36 | 0.867x |
+| count | 1.002x | 1.299x | 34/36 | 0.854x |
+| materialize | 1.029x | 1.220x | 33/36 | 0.833x |
+| perft_full_d3 | 1.030x | 1.215x | 33/36 | 0.883x |
+| polyglot_recompute | 0.999x | 1.039x | 9/12 | 0.895x |
+| replay_checked_native | 1.014x | 0.993x | 5/12 | 0.879x |
+| replay_trusted_native | 0.992x | 0.664x | 1/12 | 0.477x |
+| snapshot | 1.308x | 1.112x | 24/36 | 0.607x |
+Cold wins: 6/6 (separate from native cases).
+=== 45808383551 ===
+exp-fen-rank,exp-undo-outside,exp-align16,exp-blocked-sliders
+| ALL | 465 | 442 | 63 | 522 |
+| apply_children_full | 1.023x | 1.218x | 34/36 | 0.946x |
+| count | 1.002x | 1.311x | 34/36 | 0.891x |
+| materialize | 0.998x | 1.311x | 32/36 | 0.784x |
+| perft_full_d3 | 1.014x | 1.354x | 35/36 | 0.917x |
+| polyglot_recompute | 1.010x | 1.004x | 9/12 | 0.769x |
+| replay_checked_native | 0.964x | 1.048x | 8/12 | 0.778x |
+| replay_trusted_native | 1.023x | 0.716x | 2/12 | 0.501x |
+| snapshot | 0.907x | 1.002x | 20/36 | 0.751x |
+Cold wins: 6/6 (separate from native cases).
+=== 45808387941 ===
+exp-fen-rank,exp-undo-outside,exp-align32,exp-blocked-sliders,exp-capture-direct,exp-castle-compact,exp-compact-attack-desc
+| ALL | 466 | 446 | 72 | 522 |
+| apply_children_full | 1.140x | 1.177x | 34/36 | 0.921x |
+| count | 0.998x | 1.298x | 35/36 | 0.967x |
+| materialize | 1.021x | 1.162x | 31/36 | 0.814x |
+| perft_full_d3 | 0.976x | 1.169x | 31/36 | 0.919x |
+| polyglot_recompute | 1.055x | 1.077x | 12/12 | 1.005x |
+| replay_checked_native | 1.032x | 1.006x | 6/12 | 0.916x |
+| replay_trusted_native | 1.045x | 0.679x | 1/12 | 0.464x |
+| snapshot | 1.119x | 1.049x | 19/36 | 0.622x |
+Cold wins: 6/6 (separate from native cases).
+=== 45808393177 ===
+exp-fen-rank,exp-undo-outside,exp-align32,exp-blocked-sliders,exp-inline-make,exp-capture-direct
+| ALL | 462 | 443 | 66 | 522 |
+| apply_children_full | 1.129x | 1.270x | 36/36 | 1.042x |
+| count | 1.021x | 1.314x | 33/36 | 0.932x |
+| materialize | 1.066x | 1.314x | 33/36 | 0.914x |
+| perft_full_d3 | 0.998x | 1.239x | 31/36 | 0.874x |
+| polyglot_recompute | 1.008x | 1.012x | 7/12 | 0.885x |
+| replay_checked_native | 0.998x | 1.008x | 6/12 | 0.921x |
+| replay_trusted_native | 1.127x | 0.787x | 2/12 | 0.543x |
+| snapshot | 1.181x | 1.058x | 23/36 | 0.684x |
+Cold wins: 6/6 (separate from native cases).
+=== 45808397966 ===
+exp-fen-rank,exp-undo-outside,exp-align32,exp-blocked-sliders,exp-no-danger-needed,exp-bulk-write
+| ALL | 473 | 452 | 71 | 522 |
+| apply_children_full | 1.038x | 1.163x | 31/36 | 0.926x |
+| count | 1.035x | 1.387x | 36/36 | 1.027x |
+| materialize | 1.024x | 1.244x | 32/36 | 0.890x |
+| perft_full_d3 | 1.023x | 1.284x | 33/36 | 0.908x |
+| polyglot_recompute | 0.992x | 1.011x | 8/12 | 0.893x |
+| replay_checked_native | 0.993x | 1.039x | 9/12 | 0.864x |
+| replay_trusted_native | 0.989x | 0.702x | 3/12 | 0.469x |
+| snapshot | 1.114x | 1.064x | 26/36 | 0.731x |
+Cold wins: 6/6 (separate from native cases).
+=== 45808402378 ===
+exp-fen-rank,exp-undo-outside,exp-align32,exp-blocked-sliders,exp-no-promotion-batch
+| ALL | 461 | 439 | 74 | 522 |
+| apply_children_full | 1.045x | 1.167x | 32/36 | 0.844x |
+| count | 0.985x | 1.336x | 34/36 | 0.953x |
+| materialize | 1.003x | 1.266x | 33/36 | 0.699x |
+| perft_full_d3 | 1.005x | 1.232x | 30/36 | 0.845x |
+| polyglot_recompute | 0.991x | 1.020x | 7/12 | 0.877x |
+| replay_checked_native | 0.998x | 1.027x | 7/12 | 0.938x |
+| replay_trusted_native | 1.013x | 0.684x | 2/12 | 0.467x |
+| snapshot | 1.207x | 1.011x | 22/36 | 0.477x |
+Cold wins: 6/6 (separate from native cases).
+=== 45808407425 ===
+exp-fen-rank,exp-undo-outside,exp-pawnless4
+| ALL | 457 | 442 | 63 | 522 |
+| apply_children_full | 0.907x | 1.063x | 27/36 | 0.841x |
+| count | 0.983x | 1.372x | 35/36 | 0.970x |
+| materialize | 0.964x | 1.299x | 33/36 | 0.789x |
+| perft_full_d3 | 0.937x | 1.220x | 28/36 | 0.797x |
+| polyglot_recompute | 0.984x | 1.005x | 7/12 | 0.882x |
+| replay_checked_native | 0.900x | 0.958x | 4/12 | 0.756x |
+| replay_trusted_native | 0.858x | 0.635x | 0/12 | 0.439x |
+| snapshot | 1.004x | 1.186x | 33/36 | 0.824x |
+Cold wins: 0/6 (separate from native cases).
+=== 45808412554 ===
+exp-fen-rank,exp-undo-outside,exp-zone-sliders
+| ALL | 472 | 457 | 74 | 522 |
+| apply_children_full | 0.990x | 1.180x | 31/36 | 0.806x |
+| count | 1.123x | 1.482x | 36/36 | 1.080x |
+| materialize | 1.047x | 1.290x | 36/36 | 1.023x |
+| perft_full_d3 | 1.025x | 1.254x | 30/36 | 0.873x |
+| polyglot_recompute | 1.002x | 1.015x | 9/12 | 0.883x |
+| replay_checked_native | 1.000x | 1.009x | 8/12 | 0.840x |
+| replay_trusted_native | 0.997x | 0.730x | 3/12 | 0.476x |
+| snapshot | 0.894x | 1.001x | 15/36 | 0.875x |
+Cold wins: 0/6 (separate from native cases).
+=== 45808417250 ===
+exp-fen-rank,exp-undo-outside,exp-ep-mask
+| ALL | 457 | 445 | 76 | 522 |
+| apply_children_full | 0.967x | 1.098x | 27/36 | 0.794x |
+| count | 1.012x | 1.343x | 34/36 | 0.977x |
+| materialize | 1.029x | 1.271x | 33/36 | 0.878x |
+| perft_full_d3 | 1.001x | 1.225x | 29/36 | 0.867x |
+| polyglot_recompute | 0.977x | 0.989x | 6/12 | 0.842x |
+| replay_checked_native | 0.977x | 0.984x | 4/12 | 0.876x |
+| replay_trusted_native | 0.939x | 0.668x | 2/12 | 0.468x |
+| snapshot | 0.937x | 1.058x | 20/36 | 0.806x |
+Cold wins: 1/6 (separate from native cases).
+=== 45808421835 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold
+| ALL | 470 | 451 | 77 | 522 |
+| apply_children_full | 1.004x | 1.206x | 33/36 | 0.868x |
+| count | 1.000x | 1.331x | 35/36 | 0.947x |
+| materialize | 1.014x | 1.205x | 32/36 | 0.932x |
+| perft_full_d3 | 1.000x | 1.180x | 27/36 | 0.855x |
+| polyglot_recompute | 1.050x | 1.017x | 8/12 | 0.860x |
+| replay_checked_native | 1.117x | 1.018x | 8/12 | 0.871x |
+| replay_trusted_native | 1.077x | 0.757x | 3/12 | 0.518x |
+| snapshot | 0.853x | 1.013x | 19/36 | 0.906x |
+Cold wins: 0/6 (separate from native cases).
+=== 45784357479 ===
+exp-fen-rank,exp-hash-pair
+| ALL | 454 | 431 | 66 | 522 |
+| apply_children_full | 1.002x | 1.048x | 28/36 | 0.763x |
+| count | 1.017x | 1.350x | 34/36 | 0.978x |
+| materialize | 1.013x | 1.322x | 32/36 | 0.878x |
+| perft_full_d3 | 1.013x | 1.316x | 32/36 | 0.931x |
+| polyglot_recompute | 0.910x | 0.922x | 1/12 | 0.794x |
+| replay_checked_native | 0.982x | 1.040x | 9/12 | 0.878x |
+| replay_trusted_native | 0.957x | 0.653x | 0/12 | 0.484x |
+| snapshot | 0.999x | 0.991x | 17/36 | 0.713x |
+Cold wins: 0/6 (separate from native cases).
+=== 45783958620 ===
+exp-fen-rank,exp-checker-first
+| ALL | 444 | 423 | 70 | 522 |
+| apply_children_full | 0.956x | 0.982x | 17/36 | 0.832x |
+| count | 1.012x | 1.337x | 35/36 | 0.966x |
+| materialize | 0.987x | 1.261x | 32/36 | 0.847x |
+| perft_full_d3 | 0.961x | 1.256x | 29/36 | 0.845x |
+| polyglot_recompute | 1.000x | 1.035x | 8/12 | 0.884x |
+| replay_checked_native | 0.967x | 1.006x | 7/12 | 0.816x |
+| replay_trusted_native | 0.922x | 0.564x | 0/12 | 0.424x |
+| snapshot | 0.822x | 0.978x | 17/36 | 0.520x |
+Cold wins: 0/6 (separate from native cases).

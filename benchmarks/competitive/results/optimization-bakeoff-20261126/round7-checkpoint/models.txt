@@ -1,0 +1,4 @@
+J exp-special-cold,exp-align32,exp-blocked-sliders
+J-inline exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make
+J-danger exp-special-cold,exp-align32,exp-blocked-sliders,exp-no-danger-needed,exp-bulk-write
+J-hash exp-special-cold,exp-align32,exp-blocked-sliders,exp-castle-compact,exp-compact-attack-desc
