@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-batch-replay = []
+exp-checker-magic = []
+exp-raw-promotion-gate = []
 exp-active-castle-touch = []
 exp-capture-outlined = ["exp-known-role"]
 exp-checker-lowbit = []
