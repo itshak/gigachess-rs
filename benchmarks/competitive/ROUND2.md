@@ -662,3 +662,26 @@ hash-paired-pop uses two independent XOR accumulators, unrolling
 two piece squares at a time while keeping odd-tail handling.
 Ten combined exact targeted tests passed. Compare S repeat,
 S+paired hash, S+direct-key/checker-color, and S+fixed batch.
+
+## Round 24: fixed-rank pawn hash and standard rights delta
+Round23 all five CI, full release, six deep perft and twelve
+corrected local batch measurements passed. S repeat 487/522,
+full perft 1.195x O, corpus count 1.069x O, child 36/36, cold 6/6.
+S+small-role+king-single 491/522, recompute 1.069x O (8/12),
+full perft 1.233x O, cold 6/6; trusted 1.007x O. S+fixed batch
+490, S+color/key 486, S+paired hash 476 (recompute 0.834x,
+0/12 wins; reject paired hash).
+Corrected local median batch timings (ns per 18954 plies):
+original 333222, direct 308586, pair 323077, fixed pair 320862.
+Direct median per-run peer ratio 1.050, other variants below 1.
+Fixed-pair CI beats Shakmaty on native and PEXT only; separate
+supplemental lane, no native score substitution.
+New pawn-fixed table uses six fixed rank lookups, plus exact edge
+ranks if present. Pawn-home specializes the three most common ranks
+per color, falling back to the full exact calculation. New
+castle-delta-std computes cleared rights directly in the standard
+case, retaining Chess960 fallback and permissive king/rook touch
+semantics. Ten combined regressions and exhaustive single-rank
+patterns plus 20000 random bitboards per color passed.
+Compare S+fixed pawn, S+home pawn, S+standard delta, combined,
+and S+home pawn+direct batch. O remains paired reference.

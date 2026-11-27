@@ -1683,6 +1683,8 @@ impl Board {
             #[inline(always)]
             fn fold<const C:usize,const R:usize>(b:&Board)->u64{
                 let mut bits=b.bb(C,R);
+                #[cfg(feature="exp-hash-pawn-fixed")]
+                if R==0{return zobrist::pawn_fixed_hash::<C>(bits);}
                 // Most nonpawn planes contain at most two pieces. Two
                 // sentinel lookups avoid per-piece branches; promoted pieces
                 // beyond those two still use the exact ordinary loop.
@@ -2900,6 +2902,15 @@ impl Board {
                 #[cfg(feature="exp-castle-delta")]
                 if self.rights_raw()!=0{
                     let old=self.rights_raw();
+                    #[cfg(feature="exp-castle-delta-std")]
+                    let cleared=if self.is_chess960(){old&!self.castle_rights_after(role,us,from,to)}else{
+                        const CLEAR:[u8;64]={
+                            let mut t=[0;64];t[0]=2;t[4]=3;t[7]=1;t[56]=8;t[60]=12;t[63]=4;t
+                        };
+                        let king_mask=(3u8<<((1-ui)*2))&0u8.wrapping_sub((role==5) as u8);
+                        old&(CLEAR[from as usize]|CLEAR[to as usize]|king_mask)
+                    };
+                    #[cfg(not(feature="exp-castle-delta-std"))]
                     let cleared=old&!self.castle_rights_after(role,us,from,to);
                     if cleared!=0{
                         self.set_castling(old^cleared);

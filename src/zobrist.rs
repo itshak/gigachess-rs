@@ -150,6 +150,54 @@ pub(crate) fn piece_move_delta<const TURN:bool>(color:usize,role:usize,from:u8,t
     }
 }
 
+// Per-rank pawn hash contributions, including zero and permissive
+// edge-rank pawns. Fixed shifts let the compiler schedule independent
+// loads instead of repeatedly finding and clearing the next pawn.
+#[cfg(feature="exp-hash-pawn-fixed")]
+#[inline(always)]
+pub(crate) fn pawn_fixed_hash<const C:usize>(p:u64)->u64{
+    static KEYS:[[[u64;256];8];2]={
+        let mut a=[[[0;256];8];2];let mut c=0;
+        while c<2{let mut r=0;while r<8{let mut v=1usize;while v<256{
+            let f=v.trailing_zeros() as usize;
+            a[c][r][v]=a[c][r][v&(v-1)]^POLYGLOT_RANDOM_ARRAY[c*64+r*8+f];
+            v+=1;}r+=1;}c+=1;}a
+    };
+    let t=&KEYS[C];
+    let bytes=p.to_le_bytes();
+    #[cfg(feature="exp-hash-pawn-home")]
+    {
+        // Most ordinary middlegames retain pawns on their three home
+        // ranks. A single gate skips the other rank loads; all other
+        // bit patterns fall through to the full exact rank formula.
+        if C==1 && p&!0x00000000ffffff00==0 {
+            return t[1][bytes[1] as usize]^t[2][bytes[2] as usize]^t[3][bytes[3] as usize];
+        }
+        if C==0 && p&!0x00ffffff00000000==0 {
+            return t[4][bytes[4] as usize]^t[5][bytes[5] as usize]^t[6][bytes[6] as usize];
+        }
+    }
+    let mut h=t[1][bytes[1] as usize]^t[2][bytes[2] as usize]^t[3][bytes[3] as usize]
+        ^t[4][bytes[4] as usize]^t[5][bytes[5] as usize]^t[6][bytes[6] as usize];
+    if p&0xff000000000000ff!=0{h^=t[0][bytes[0] as usize]^t[7][bytes[7] as usize];}
+    h
+}
+
+#[cfg(all(test,feature="exp-hash-pawn-fixed"))]
+#[test]
+fn fixed_pawn_hash_matches_reference(){
+    fn check<const C:usize>(mut p:u64){
+        let actual=pawn_fixed_hash::<C>(p);let mut expected=0;
+        while p!=0{let s=p.trailing_zeros() as u8;p&=p-1;expected^=piece_key_indices(C,0,s);}
+        assert_eq!(actual,expected);
+    }
+    for rank in 0..8{for byte in 0..256u64{
+        let p=byte<<(rank*8);check::<0>(p);check::<1>(p);
+    }}
+    let mut rng=0x123456789abcdefu64;
+    for _ in 0..20000{rng^=rng<<13;rng^=rng>>7;rng^=rng<<17;check::<0>(rng);check::<1>(rng);}
+}
+
 #[cfg(feature="exp-hash-pawn-bytes")]
 #[inline(always)]
 pub(crate) fn pawn_byte_hash(color:usize,mut pawns:u64)->u64{
