@@ -1,0 +1,65 @@
+=== 46004246269 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-batch-replay,exp-batch-pair
+| ALL | 478 | 465 | 85 | 522 |
+| apply_children_full | 1.000x | 1.272x | 35/36 | 0.864x |
+| corpus_count | 1.073x | 1.415x | 11/12 | 0.862x |
+| count | 1.013x | 1.490x | 36/36 | 1.072x |
+| materialize | 1.019x | 1.328x | 35/36 | 0.851x |
+| perft_full_d3 | 1.191x | 1.550x | 36/36 | 1.193x |
+| polyglot_recompute | 0.969x | 1.039x | 9/12 | 0.895x |
+| replay_checked_native | 1.005x | 1.164x | 12/12 | 1.063x |
+| replay_trusted_native | 1.020x | 0.839x | 5/12 | 0.547x |
+| snapshot | 0.966x | 0.910x | 7/36 | 0.660x |
+Cold wins: 6/6 (separate from native cases).
+=== 46004241586 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-batch-replay,exp-batch-direct
+| ALL | 486 | 469 | 75 | 522 |
+| apply_children_full | 0.995x | 1.292x | 35/36 | 0.949x |
+| corpus_count | 1.149x | 1.364x | 12/12 | 1.108x |
+| count | 1.043x | 1.542x | 36/36 | 1.072x |
+| materialize | 1.010x | 1.429x | 34/36 | 0.991x |
+| perft_full_d3 | 1.143x | 1.528x | 36/36 | 1.064x |
+| polyglot_recompute | 0.961x | 0.984x | 6/12 | 0.846x |
+| replay_checked_native | 1.004x | 1.152x | 12/12 | 1.073x |
+| replay_trusted_native | 0.995x | 0.784x | 4/12 | 0.510x |
+| snapshot | 0.953x | 0.980x | 20/36 | 0.380x |
+Cold wins: 6/6 (separate from native cases).
+=== 46004236152 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-castle-delta
+| ALL | 492 | 481 | 78 | 522 |
+| apply_children_full | 1.010x | 1.287x | 35/36 | 0.980x |
+| corpus_count | 1.169x | 1.364x | 12/12 | 1.043x |
+| count | 1.029x | 1.549x | 36/36 | 1.072x |
+| materialize | 1.013x | 1.400x | 35/36 | 0.971x |
+| perft_full_d3 | 1.202x | 1.630x | 36/36 | 1.084x |
+| polyglot_recompute | 0.999x | 1.007x | 7/12 | 0.883x |
+| replay_checked_native | 0.997x | 1.150x | 12/12 | 1.076x |
+| replay_trusted_native | 1.050x | 0.860x | 5/12 | 0.566x |
+| snapshot | 0.990x | 1.056x | 24/36 | 0.852x |
+Cold wins: 6/6 (separate from native cases).
+=== 46004231227 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-castle-delta
+| ALL | 487 | 478 | 81 | 522 |
+| apply_children_full | 1.007x | 1.258x | 34/36 | 0.790x |
+| corpus_count | 1.021x | 1.254x | 9/12 | 0.975x |
+| count | 0.999x | 1.484x | 36/36 | 1.136x |
+| materialize | 0.994x | 1.289x | 36/36 | 1.003x |
+| perft_full_d3 | 1.017x | 1.299x | 36/36 | 1.096x |
+| polyglot_recompute | 1.042x | 1.006x | 7/12 | 0.862x |
+| replay_checked_native | 1.048x | 1.166x | 12/12 | 1.051x |
+| replay_trusted_native | 1.049x | 0.892x | 7/12 | 0.536x |
+| snapshot | 0.982x | 1.069x | 19/36 | 0.536x |
+Cold wins: 5/6 (separate from native cases).
+=== 46004226895 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate
+| ALL | 483 | 466 | 74 | 522 |
+| apply_children_full | 1.012x | 1.262x | 34/36 | 0.933x |
+| corpus_count | 1.178x | 1.355x | 12/12 | 1.033x |
+| count | 1.047x | 1.543x | 36/36 | 1.050x |
+| materialize | 1.025x | 1.406x | 35/36 | 0.849x |
+| perft_full_d3 | 1.248x | 1.618x | 36/36 | 1.297x |
+| polyglot_recompute | 1.024x | 1.001x | 5/12 | 0.907x |
+| replay_checked_native | 1.008x | 1.154x | 12/12 | 1.076x |
+| replay_trusted_native | 1.073x | 0.823x | 4/12 | 0.553x |
+| snapshot | 1.009x | 1.033x | 19/36 | 0.728x |
+Cold wins: 6/6 (separate from native cases).
