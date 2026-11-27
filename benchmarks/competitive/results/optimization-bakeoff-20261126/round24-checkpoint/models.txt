@@ -1,0 +1,5 @@
+S-fixed-pawn exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-castle-delta,exp-hash-pawn-fixed,exp-hash-king-single
+S-home-pawn exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-castle-delta,exp-hash-pawn-home,exp-hash-king-single
+S-standard-delta exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-castle-delta,exp-castle-delta-std
+S-combined exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-castle-delta,exp-hash-pawn-home,exp-hash-king-single,exp-castle-delta-std
+S-direct-batch exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta,exp-raw-promotion-gate,exp-castle-delta,exp-hash-pawn-home,exp-hash-king-single,exp-batch-replay,exp-batch-direct
