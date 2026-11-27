@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-transition-known-occ = []
+exp-checker-row = []
+exp-move-row-key = []
 exp-pawn-count-union = ["exp-pawn-batch-count"]
 exp-pawn-count-promo-gate = ["exp-pawn-batch-count"]
 exp-between-compact = []

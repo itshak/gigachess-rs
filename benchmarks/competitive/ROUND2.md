@@ -552,3 +552,23 @@ regression tests plus exhaustive table equality passed.
 Submit isolated count changes, compact table, combined leaf/count,
 and O-versus-O identical-code ABBA control to quantify runner noise.
 No production changes; 492/522 remains an observed maximum only.
+
+## Round 19: reuse transition occupancy and hash rows
+Round18 all six CI, full release and six deep perft/local ABBA passed.
+Identical O/O control 45909213539 scored 465/522 native, cold 6/6;
+129/522 paired Giga rows outside reciprocal 3% bounds and 62/522
+outside reciprocal 10% bounds. Mac 79/87 outside 3% (0.602–1.811x);
+Windows 28, PEXT 10, portable 8, native 3, ARM 1. Do not interpret
+a single win count or 3% margin as statistical significance.
+O+pawn-count-promo-gate 487/522, corpus count 1.118x O, 12/12.
+Union+gate 486/522, corpus 1.117x O, count 1.043x, 36/36.
+Combined pawn/zone/leaf 481, corpus count 1.100x O, full perft
+1.186x, both all wins. Compact between 474, no meaningful paired
+improvement. Local promo-gate speedups in unrelated operations
+are confounded by machine load/code layout; not causal evidence.
+New transition-known-occ computes exact future own/union occupancy
+once and supplies it to an inline checker calculation after mutation.
+Checker-row tests a per-color descriptor for this exact kernel.
+Move-row-key reuses one bounds-checked Polyglot role/color row for
+both square keys; no unchecked indexing or changed move encoding.
+Nine combined targeted regression tests passed.
