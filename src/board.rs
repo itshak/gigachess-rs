@@ -1745,6 +1745,19 @@ impl Board {
             fn fold<const C:usize,const R:usize>(b:&Board)->u64{
                 let mut bits=b.bb(C,R);
                 let mut value=0;
+                #[cfg(feature="exp-hash-paired-pop")]
+                {
+                    // Independent accumulators shorten the XOR dependency
+                    // chain; handle an odd last square without a sentinel.
+                    let mut second=0;
+                    while bits!=0{
+                        value^=zobrist::piece_key_indices(C,R,pop_lsb(&mut bits));
+                        if bits==0{break;}
+                        second^=zobrist::piece_key_indices(C,R,pop_lsb(&mut bits));
+                    }
+                    value^=second;
+                }
+                #[cfg(not(feature="exp-hash-paired-pop"))]
                 while bits!=0 {value^=zobrist::piece_key_indices(C,R,pop_lsb(&mut bits));}
                 value
             }
@@ -3375,7 +3388,20 @@ impl Board {
     pub fn replayed_unchecked(&self,moves:&[Move])->Board{
         let mut b=*self;
         if moves.is_empty(){return b;}
-        #[cfg(feature="exp-batch-pair")]
+        #[cfg(feature="exp-batch-pair-fixed")]
+        {
+            // Two moves preserve the initial side even for null passes.
+            // Dispatch once per sequence, not once per pair.
+            let mut pairs=moves.chunks_exact(2);
+            if b.turn()==Color::White{
+                for pair in &mut pairs{b.batch_step::<1>(pair[0]);b.batch_step::<0>(pair[1]);}
+                for &m in pairs.remainder(){b.batch_step::<1>(m);}
+            }else{
+                for pair in &mut pairs{b.batch_step::<0>(pair[0]);b.batch_step::<1>(pair[1]);}
+                for &m in pairs.remainder(){b.batch_step::<0>(m);}
+            }
+        }
+        #[cfg(all(feature="exp-batch-pair",not(feature="exp-batch-pair-fixed")))]
         {
             let mut pairs=moves.chunks_exact(2);
             for pair in &mut pairs{
