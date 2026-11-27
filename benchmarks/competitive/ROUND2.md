@@ -615,3 +615,28 @@ against repeated full makes. Combined ten targeted tests passed.
 Separate --batch-replay benchmark observes final board, Polyglot and
 checkers for all competitors; never substitutes for strict native
 single-move replay. Add conditional CI evidence lane.
+
+## Round 22: 493-win record and direct batch mutation
+Round21 all five CI, full local release, six deep perft and local
+ABBA passed. Q+raw-promotion-gate (R) 493/522, 478 >=1.03,
+79 >=2x, cold 5/6, materialize/count/full perft 36/36 each,
+corpus count/checked replay 12/12 each. Full perft 1.199x O,
+corpus count 1.109x, trusted 1.006x. Record is observational;
+repeat R. Q+batch-replay 484/522, full perft 1.206x O,
+corpus count 1.132x. Checker magic 480, combined replay 485,
+raw promotion alone 481. No strict native replay breakthrough.
+Separate final-output batch lane 45997638603: recompute vs own
+full loop Mac 1.13x, ARM 1.34x, native 1.37x, PEXT 1.36x,
+portable 1.29x, Win 1.59x. Shakmaty still faster on five lanes;
+Windows noisy, local batch 1.295x own, 0.987x Shakmaty.
+New batch-direct bypasses all piece key loads and undo snapshots
+on ordinary moves, preserving full clocks/rights/EP/king squares.
+Specials reuse canonical transitions. Batch-pair specializes
+alternating colors in pairs (null also flips side). Final hash
+and exact checkers rebuilt, empty sequence returns original.
+Castle-delta clears only changed rights and hashes the removed
+mask; no change to castling rules. Ten combined targeted regressions
+passed including every real-game prefix and special cases.
+Repeat R, isolate castle delta, combine R+delta, and separately
+measure direct and paired batch kernels using identical final-output
+lane. Keep original strict 522 native comparison unchanged.
