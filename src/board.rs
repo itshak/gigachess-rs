@@ -2884,6 +2884,16 @@ impl Board {
                 let touch=role==5||self.is_chess960()||(f|t)&0x9100000000000091!=0;
                 #[cfg(not(any(feature="exp-castle-standard-clear",feature="exp-active-castle-touch")))]
                 let touch=true;
+                #[cfg(feature="exp-castle-delta")]
+                if self.rights_raw()!=0{
+                    let old=self.rights_raw();
+                    let cleared=old&!self.castle_rights_after(role,us,from,to);
+                    if cleared!=0{
+                        self.set_castling(old^cleared);
+                        if HASH{hash^=self.castle_rights_hash(cleared);}
+                    }
+                }
+                #[cfg(not(feature="exp-castle-delta"))]
                 if touch&&self.rights_raw()!=0{
                     let old=self.rights_raw();self.set_castling(old&self.castle_rights_after(role,us,from,to));
                     if HASH&&old!=self.rights_raw(){hash^=self.castle_rights_hash(old^self.rights_raw());}
@@ -3320,6 +3330,41 @@ impl Board {
         child
     }
 
+    // No intermediate caches or undo snapshot escape this private batch
+    // kernel. Ordinary moves never load a piece hash key. The uncommon
+    // transitions retain the canonical make implementation.
+    #[cfg(feature="exp-batch-direct")]
+    #[inline(always)]
+    fn batch_step<const SIDE:usize>(&mut self,mv:Move){
+        let us=if SIDE==1{Color::White}else{Color::Black};
+        debug_assert_eq!(self.turn(),us);
+        if mv.is_null(){
+            debug_assert!(self.pass_is_legal(),"null pass while in check");
+            self.null_transition::<false,false>();return;
+        }
+        let from=mv.from().0;let to=mv.to().0;
+        let f=bit(from);let t=bit(to);
+        let role=self.role_at_occupied(from,us);
+        let enemy=self.occ[SIDE^1]&t;
+        if mv.promotion().is_some()||self.occ[SIDE]&t!=0||
+            (role==0&&from&7!=to&7&&enemy==0){
+            self.make_move_unchecked_with::<false,false>(mv);return;
+        }
+        if enemy!=0{
+            let cap=self.role_at_occupied(to,us.other()) as usize;
+            self.bb_remove(SIDE^1,cap,t);self.occ[SIDE^1]^=t;
+        }
+        let delta=f^t;
+        self.bb_toggle(SIDE,role as usize,delta);self.occ[SIDE]^=delta;
+        if role==5{self.set_king_index(SIDE,to);}
+        let old=self.rights_raw();
+        if old!=0{self.set_castling(old&self.castle_rights_after(role,us,from,to));}
+        self.ep=if role==0&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
+        self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
+        self.fullmove+=(SIDE==0) as u16;
+        self.set_turn(us.other());
+    }
+
     /// Replay a trusted sequence and return its exact final board.
     /// Unlike individual makes, intermediate cache values and undo
     /// snapshots are not observable. The input board is left untouched.
@@ -3330,6 +3375,27 @@ impl Board {
     pub fn replayed_unchecked(&self,moves:&[Move])->Board{
         let mut b=*self;
         if moves.is_empty(){return b;}
+        #[cfg(feature="exp-batch-pair")]
+        {
+            let mut pairs=moves.chunks_exact(2);
+            for pair in &mut pairs{
+                if b.turn()==Color::White{
+                    b.batch_step::<1>(pair[0]);
+                    // Both ordinary and null moves flip the side.
+                    b.batch_step::<0>(pair[1]);
+                }else{
+                    b.batch_step::<0>(pair[0]);b.batch_step::<1>(pair[1]);
+                }
+            }
+            for &m in pairs.remainder(){
+                if b.turn()==Color::White{b.batch_step::<1>(m);}else{b.batch_step::<0>(m);}
+            }
+        }
+        #[cfg(all(feature="exp-batch-direct",not(feature="exp-batch-pair")))]
+        for &mv in moves{
+            if b.turn()==Color::White{b.batch_step::<1>(mv);}else{b.batch_step::<0>(mv);}
+        }
+        #[cfg(not(feature="exp-batch-direct"))]
         for &mv in moves{
             if mv.is_null(){
                 debug_assert!(b.pass_is_legal(),"null pass while in check");
