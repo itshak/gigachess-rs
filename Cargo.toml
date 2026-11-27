@@ -12,6 +12,8 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-batch-pair-fixed = ["exp-batch-pair"]
+exp-hash-paired-pop = ["exp-hash-unroll"]
 exp-batch-direct = ["exp-batch-replay", "exp-known-role", "exp-mutation"]
 exp-batch-pair = ["exp-batch-direct"]
 exp-castle-delta = []

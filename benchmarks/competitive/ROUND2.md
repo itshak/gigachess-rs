@@ -640,3 +640,25 @@ passed including every real-game prefix and special cases.
 Repeat R, isolate castle delta, combine R+delta, and separately
 measure direct and paired batch kernels using identical final-output
 lane. Keep original strict 522 native comparison unchanged.
+
+## Round 23: castling delta candidate and repaired batch benchmark
+Round22 all five CI, full release and six deep perft passed.
+R repeat 483/522, full perft 1.248x O, corpus count 1.178x,
+cold 6/6. R+castle-delta (S) 492/522, 481 >=1.03, 78 >=2x,
+cold 6/6, full perft 1.202x O, corpus count 1.169x O,
+trusted 1.050x O. Castle delta alone 487, trusted 7/12 and
+1.049x O. Retain S as candidate; repeat against O.
+R+batch-direct 486; R+batch-pair 478. Direct final-board
+replay loses to Shakmaty on all six CI platforms; paired wins
+two (native and Windows), but single-run noise prevents promotion.
+Local batch screen had an invalid benchmark feature dependency:
+direct/pair enabled only dependency-library replay feature, not the
+benchmark binary's exp-batch-replay, so --batch-replay silently
+executed normal matrix instead. Mark those outputs invalid for
+batch comparison; CI explicitly enabled exp-batch-replay and is valid.
+Fix forwarding dependencies and fail loudly on disabled batch CLI.
+New batch-pair-fixed dispatches side once before the sequence;
+hash-paired-pop uses two independent XOR accumulators, unrolling
+two piece squares at a time while keeping odd-tail handling.
+Ten combined exact targeted tests passed. Compare S repeat,
+S+paired hash, S+direct-key/checker-color, and S+fixed batch.

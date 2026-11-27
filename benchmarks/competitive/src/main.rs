@@ -277,6 +277,9 @@ fn main() {
     if let Some(arg) = std::env::args().nth(1) {
         #[cfg(feature="exp-batch-replay")]
         if arg=="--batch-replay"{batch_replay_benchmark();return;}
+        #[cfg(not(feature="exp-batch-replay"))]
+        if arg=="--batch-replay"{panic!("--batch-replay requires exp-batch-replay");}
+
 
         #[cfg(feature="exp-prepared-move")]
         if arg=="--prepared-replay"{prepared_replay_benchmark();return;}
