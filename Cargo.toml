@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-active-castle-touch = []
+exp-capture-outlined = ["exp-known-role"]
+exp-checker-lowbit = []
 exp-transition-known-occ = []
 exp-checker-row = []
 exp-move-row-key = []
