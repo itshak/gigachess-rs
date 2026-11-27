@@ -1492,8 +1492,19 @@ impl Board {
                     }
                 }
                 while candidates!=0{
-                    let a=pop_lsb(&mut candidates);
-                    if crate::bitboard::between_for_geometry(k,a as usize)&occ==0{result|=bit(a);}
+                    #[cfg(feature="exp-checker-lowbit")]
+                    {
+                        let low=candidates&candidates.wrapping_neg();
+                        let a=candidates.trailing_zeros() as usize;
+                        candidates^=low;
+                        let clear=crate::bitboard::between_for_geometry(k,a)&occ==0;
+                        result|=low&0u64.wrapping_sub(clear as u64);
+                    }
+                    #[cfg(not(feature="exp-checker-lowbit"))]
+                    {
+                        let a=pop_lsb(&mut candidates);
+                        if crate::bitboard::between_for_geometry(k,a as usize)&occ==0{result|=bit(a);}
+                    }
                 }
             }
             #[cfg(not(feature="exp-checker-rays"))]
@@ -2725,6 +2736,19 @@ impl Board {
         {self.make_move_transition::<HASH,CHECKERS,HINT,SIDE,PREPARED>(mv,hint,capture_hint)}
     }
 
+    // Outline ordinary captures only. The normal quiet transition
+    // stays inline, and the capture helper preserves the same role,
+    // occupancy and incremental Polyglot update as the inline path.
+    #[cfg(feature="exp-capture-outlined")]
+    #[inline(never)]
+    fn ordinary_capture(&mut self,them:Color,to:u8,target:u64)->(u8,u64){
+        let ti=them.index();
+        let cap=self.role_at_occupied(to,them) as usize;
+        self.bb_remove(ti,cap,target);
+        self.occ[ti]^=target;
+        ((ti*6+cap) as u8,zobrist::piece_key_indices(ti,cap,to))
+    }
+
     #[cfg_attr(feature="exp-inline-make",inline(always))]
     fn make_move_transition<const HASH:bool,const CHECKERS:bool,const HINT:bool,const SIDE:u8,const PREPARED:bool>(
         &mut self,mv:Move,hint:u8,capture_hint:u8
@@ -2804,6 +2828,13 @@ impl Board {
                 #[cfg(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox")))]
                 let mut delta=f^t;
                 if enemy!=0{
+                    #[cfg(all(feature="exp-capture-outlined",not(feature="exp-equal-capture")))]
+                    {
+                        let (cap,key)=self.ordinary_capture(us.other(),to,t);
+                        captured=cap;hash^=key;
+                    }
+                    #[cfg(any(not(feature="exp-capture-outlined"),feature="exp-equal-capture"))]
+                    {
                     let cap=self.role_at_occupied(to,us.other()) as usize;
                     captured=(ti*6+cap) as u8;
                     #[cfg(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox")))]
@@ -2812,6 +2843,7 @@ impl Board {
                     self.bb_remove(ti,cap,t);
                     self.occ[ti]^=t;
                     hash^=zobrist::piece_key_indices(ti,cap,to);
+                    }
                 }
                 #[cfg(all(feature="exp-equal-capture",feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-role-planes"),not(feature="exp-nibble-role"),not(feature="exp-mailbox")))]
                 self.bb_toggle(ui,role as usize,delta);
@@ -2820,9 +2852,27 @@ impl Board {
                 self.occ[ui]^=f^t;
                 hash^=zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
                 if role==5{self.set_king_index(ui,to);}
-                #[cfg(feature="exp-castle-standard-clear")]
+                #[cfg(feature="exp-active-castle-touch")]
+                let touch={
+                    // Match the existing standard clearing semantics,
+                    // including an unrelated piece touching e1/e8 on
+                    // a permissive position. Chess960 uses the full path.
+                    const MASKS:[u64;16]={
+                        let mut t=[0;16];let mut i=1;
+                        while i<16{
+                            if i&1!=0{t[i]|=0x90;}
+                            if i&2!=0{t[i]|=0x11;}
+                            if i&4!=0{t[i]|=0x9000000000000000;}
+                            if i&8!=0{t[i]|=0x1100000000000000;}
+                            i+=1;
+                        }t
+                    };
+                    let rights=self.rights_raw();
+                    rights!=0&&(self.is_chess960()||(role==5&&rights&(3<<((1-ui)*2))!=0)||(f|t)&MASKS[rights as usize]!=0)
+                };
+                #[cfg(all(feature="exp-castle-standard-clear",not(feature="exp-active-castle-touch")))]
                 let touch=role==5||self.is_chess960()||(f|t)&0x9100000000000091!=0;
-                #[cfg(not(feature="exp-castle-standard-clear"))]
+                #[cfg(not(any(feature="exp-castle-standard-clear",feature="exp-active-castle-touch")))]
                 let touch=true;
                 if touch&&self.rights_raw()!=0{
                     let old=self.rights_raw();self.set_castling(old&self.castle_rights_after(role,us,from,to));

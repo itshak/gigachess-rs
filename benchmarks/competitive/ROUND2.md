@@ -572,3 +572,22 @@ Checker-row tests a per-color descriptor for this exact kernel.
 Move-row-key reuses one bounds-checked Polyglot role/color row for
 both square keys; no unchecked indexing or changed move encoding.
 Nine combined targeted regression tests passed.
+
+## Round 20: active rights, outlined capture, low-bit checker loop
+Round19 all five CI, full local release, six deep perft and local
+ABBA passed. Known occupancy 485/522, child creation 36/36;
+checker row 480, trusted 1.031x O; shared move hash row 484,
+trusted 1.028x O; paired occupancy/hash 483, trusted 1.004x O.
+Combined pawn/leaf/replay 486, full perft 1.208x O (36/36),
+corpus count 1.103x O. No convincing trusted replay breakthrough.
+Local combined replay 1.269x O but unrelated hash/corpus changes
+were similarly large: do not attribute these to replay code.
+New active-castle-touch tests only squares affecting existing rights,
+retaining permissive-position clearing semantics and Chess960 fallback.
+Capture-outlined moves the ordinary capture mutation/key into an
+out-of-line helper, preserving the inline quiet path. Checker-lowbit
+uses the already isolated candidate bit and a branchless clear mask.
+Nine combined exact regression tests passed.
+Compare all three isolates, combined replay, combined replay/pawn/leaf,
+and repeat the pawn/leaf configuration without new replay features.
+O remains paired baseline, production unchanged.
