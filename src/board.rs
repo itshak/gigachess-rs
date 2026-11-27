@@ -1350,6 +1350,40 @@ impl Board {
         #[cfg(not(all(feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"))))]
         self.attackers_to(king,us,self.occupied())
     }
+    // The transition already knows the new mover occupancy and union.
+    // Reuse these values instead of reloading both color planes and
+    // applying color masks separately to each slider role.
+    #[cfg(feature="exp-transition-known-occ")]
+    #[inline(always)]
+    fn refresh_known_occ(&self,king:u8,us:Color,own:u64,occ:u64)->u64{
+        #[cfg(all(feature="exp-compact-board",not(feature="exp-kingless-board"),not(feature="exp-slider-planes")))]
+        {
+            let k=king as usize;let p=&self.roles;
+            #[cfg(feature="exp-checker-row")]
+            let (pawn,knight,king,bishop,rook)={
+                static ROWS:[[[u64;5];64];2]={
+                    let mut a=[[[0;5];64];2];let mut c=0;
+                    while c<2{let mut k=0;while k<64{
+                        a[c][k]=[PAWN_ATT[c^1][k],KNIGHT_ATT[k],KING_ATT[k],
+                            crate::bitboard::EMPTY_BISHOP_RAYS[k],crate::bitboard::EMPTY_ROOK_RAYS[k]];
+                        k+=1;}c+=1;}a
+                };
+                let [a,b,c,d,e]=ROWS[us.index()][k];(a,b,c,d,e)
+            };
+            #[cfg(not(feature="exp-checker-row"))]
+            let (pawn,knight,king,bishop,rook)=(PAWN_ATT[us.other().index()][k],KNIGHT_ATT[k],KING_ATT[k],
+                crate::bitboard::EMPTY_BISHOP_RAYS[k],crate::bitboard::EMPTY_ROOK_RAYS[k]);
+            let mut result=((pawn&p[0])|(knight&p[1])|(king&p[5]))&own;
+            let mut candidates=(((p[2]|p[4])&bishop)|((p[3]|p[4])&rook))&own;
+            while candidates!=0{
+                let a=pop_lsb(&mut candidates);
+                if crate::bitboard::between_for_geometry(k,a as usize)&occ==0{result|=bit(a);}
+            }
+            return result;
+        }
+        #[cfg(not(all(feature="exp-compact-board",not(feature="exp-kingless-board"),not(feature="exp-slider-planes"))))]
+        {let _=own;self.attackers_to(king,us,occ)}
+    }
     // Compute the exact post-move attack mask from the old role planes.
     // Ordinary captures keep destination occupied, so only source
     // removal and destination insertion can change slider visibility.
@@ -2758,6 +2792,10 @@ impl Board {
                 }
                     return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};
                 }
+                #[cfg(feature="exp-transition-known-occ")]
+                let next_own=self.occ[ui]^(f^t);
+                #[cfg(feature="exp-transition-known-occ")]
+                let next_occ=next_own|(self.occ[ti]^enemy);
                 #[cfg(feature="exp-checker-predict")]
                 let predicted=if CHECKERS{self.ordinary_checkers_before(us,role,from,to)}else{0};
                 let mut hash=self.hash;
@@ -2808,11 +2846,13 @@ impl Board {
                 self.fullmove+=(us==Color::Black) as u16;
                 self.hash=hash;self.set_turn(us.other());
                 if CHECKERS{
+                    #[cfg(all(feature="exp-transition-known-occ",not(feature="exp-checker-predict")))]
+                    {self.checkers=self.refresh_known_occ(self.king_index(ti),us,next_own,next_occ);}
                     #[cfg(feature="exp-checker-predict")]
                     {self.checkers=predicted;}
-                    #[cfg(all(feature="exp-checker-color",not(feature="exp-checker-predict")))]
+                    #[cfg(all(feature="exp-checker-color",not(feature="exp-checker-predict"),not(feature="exp-transition-known-occ")))]
                     {self.checkers=self.refresh_color::<SIDE>(self.king_index(ti),us);}
-                    #[cfg(not(any(feature="exp-checker-color",feature="exp-checker-predict")))]
+                    #[cfg(not(any(feature="exp-checker-color",feature="exp-checker-predict",feature="exp-transition-known-occ")))]
                     {self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
                 }
                 return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:role+us as u8*6};

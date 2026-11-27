@@ -79,6 +79,17 @@ pub(crate) fn piece_key_optional(color:usize,role:usize,sq:usize)->u64{
 /// for one larger lookup, keeping the exact Polyglot contract.
 #[inline(always)]
 pub(crate) fn piece_move_delta<const TURN:bool>(color:usize,role:usize,from:u8,to:u8)->u64 {
+    #[cfg(feature="exp-move-row-key")]
+    {
+        // One bounds-checked piece row, then both square keys.
+        // Square decoding guarantees 0..64, and the role/color
+        // indexing remains the standard Polyglot order.
+        let base=64*(2*role+color);
+        let row=&POLYGLOT_RANDOM_ARRAY[base..base+64];
+        let value=row[from as usize]^row[to as usize];
+        return if TURN{value^turn_key()}else{value};
+    }
+
     #[cfg(feature="exp-pawn-key-delta")]
     if role==0&&color<2{
         // Four pawn displacements per source/color, 4 KiB total.
