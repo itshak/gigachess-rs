@@ -1,0 +1,65 @@
+=== 45914539211 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-transition-known-occ,exp-move-row-key,exp-pawn-count-union,exp-pawn-count-promo-gate,exp-leaf-check-delta,exp-zone-knights
+| ALL | 486 | 479 | 74 | 522 |
+| apply_children_full | 1.024x | 1.259x | 35/36 | 0.922x |
+| corpus_count | 1.103x | 1.378x | 11/12 | 0.988x |
+| count | 1.039x | 1.519x | 35/36 | 0.847x |
+| materialize | 0.994x | 1.285x | 34/36 | 0.897x |
+| perft_full_d3 | 1.208x | 1.572x | 36/36 | 1.286x |
+| polyglot_recompute | 0.996x | 1.031x | 8/12 | 0.914x |
+| replay_checked_native | 0.970x | 1.114x | 11/12 | 0.936x |
+| replay_trusted_native | 1.015x | 0.760x | 4/12 | 0.514x |
+| snapshot | 1.019x | 1.086x | 23/36 | 0.578x |
+Cold wins: 6/6 (separate from native cases).
+=== 45914536976 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-transition-known-occ,exp-move-row-key
+| ALL | 483 | 470 | 72 | 522 |
+| apply_children_full | 1.030x | 1.274x | 34/36 | 0.974x |
+| corpus_count | 0.984x | 1.174x | 8/12 | 0.931x |
+| count | 1.015x | 1.497x | 36/36 | 1.148x |
+| materialize | 1.033x | 1.313x | 33/36 | 0.816x |
+| perft_full_d3 | 1.017x | 1.331x | 36/36 | 1.154x |
+| polyglot_recompute | 1.005x | 1.023x | 7/12 | 0.945x |
+| replay_checked_native | 1.008x | 1.161x | 12/12 | 1.069x |
+| replay_trusted_native | 1.004x | 0.783x | 4/12 | 0.514x |
+| snapshot | 1.006x | 1.067x | 24/36 | 0.708x |
+Cold wins: 6/6 (separate from native cases).
+=== 45914534265 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-move-row-key
+| ALL | 484 | 472 | 74 | 522 |
+| apply_children_full | 1.022x | 1.321x | 34/36 | 0.905x |
+| corpus_count | 0.974x | 1.243x | 10/12 | 0.888x |
+| count | 1.010x | 1.466x | 36/36 | 1.033x |
+| materialize | 1.014x | 1.272x | 34/36 | 0.747x |
+| perft_full_d3 | 0.999x | 1.303x | 36/36 | 1.017x |
+| polyglot_recompute | 0.963x | 1.010x | 6/12 | 0.873x |
+| replay_checked_native | 0.933x | 1.145x | 12/12 | 1.060x |
+| replay_trusted_native | 1.028x | 0.804x | 5/12 | 0.522x |
+| snapshot | 1.115x | 1.047x | 20/36 | 0.783x |
+Cold wins: 6/6 (separate from native cases).
+=== 45914531356 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-transition-known-occ,exp-checker-row
+| ALL | 480 | 466 | 75 | 522 |
+| apply_children_full | 1.009x | 1.292x | 36/36 | 1.045x |
+| corpus_count | 1.011x | 1.238x | 11/12 | 0.878x |
+| count | 0.999x | 1.459x | 36/36 | 1.025x |
+| materialize | 0.988x | 1.331x | 32/36 | 0.698x |
+| perft_full_d3 | 1.011x | 1.336x | 36/36 | 1.052x |
+| polyglot_recompute | 1.001x | 1.027x | 8/12 | 0.970x |
+| replay_checked_native | 0.998x | 1.147x | 12/12 | 1.042x |
+| replay_trusted_native | 1.031x | 0.808x | 4/12 | 0.522x |
+| snapshot | 1.008x | 1.018x | 16/36 | 0.826x |
+Cold wins: 6/6 (separate from native cases).
+=== 45914528526 ===
+exp-fen-rank,exp-undo-outside,exp-special-cold,exp-align32,exp-blocked-sliders,exp-inline-make,exp-layout-roles,exp-no-danger-needed,exp-zone-sliders,exp-leaf-direct,exp-refresh-inline,exp-quiet-ep-gate,exp-transition-known-occ
+| ALL | 485 | 475 | 77 | 522 |
+| apply_children_full | 1.011x | 1.291x | 36/36 | 1.004x |
+| corpus_count | 1.031x | 1.237x | 11/12 | 0.994x |
+| count | 1.019x | 1.491x | 36/36 | 1.091x |
+| materialize | 1.017x | 1.333x | 34/36 | 0.710x |
+| perft_full_d3 | 1.025x | 1.328x | 36/36 | 1.120x |
+| polyglot_recompute | 1.013x | 1.012x | 7/12 | 0.886x |
+| replay_checked_native | 0.997x | 1.137x | 12/12 | 1.034x |
+| replay_trusted_native | 1.000x | 0.827x | 5/12 | 0.526x |
+| snapshot | 1.040x | 1.034x | 19/36 | 0.899x |
+Cold wins: 6/6 (separate from native cases).

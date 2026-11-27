@@ -1,0 +1,6 @@
+active-castle-touch exp-active-castle-touch
+capture-outlined exp-capture-outlined
+checker-lowbit exp-checker-lowbit
+replay-combined exp-active-castle-touch,exp-capture-outlined,exp-checker-lowbit
+pawn-leaf-replay exp-active-castle-touch,exp-capture-outlined,exp-checker-lowbit,exp-pawn-count-union,exp-pawn-count-promo-gate,exp-leaf-check-delta,exp-zone-knights
+pawn-leaf-repeat exp-pawn-count-union,exp-pawn-count-promo-gate,exp-pawn-double-reuse,exp-zone-knights,exp-leaf-check-delta
