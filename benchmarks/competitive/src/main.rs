@@ -247,8 +247,37 @@ fn prepared_replay_benchmark(){
         "shakmaty_full"=>||{for x in &games{let mut b=S::default();for &m in &x.2{b.play_unchecked(m);bb((b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal),b.checkers()));}bb(b);}});
 }
 
+#[cfg(feature="exp-batch-replay")]
+fn batch_replay_benchmark(){
+    let mut games=Vec::new();
+    for line in include_str!("../data/lichess-2013-01-first300.uci").lines(){
+        let mut b=Board::startpos();let mut s=S::default();
+        let mut words=Vec::new();let mut expanded=Vec::new();
+        for token in line.split_ascii_whitespace(){
+            let m=b.legal_moves().into_iter().find(|&m|gu(&b,m)==token).unwrap();
+            let sm=token.parse::<shakmaty::uci::UciMove>().unwrap().to_move(&s).unwrap();
+            b.make_move_unchecked(m);s.play_unchecked(sm);words.push(m);expanded.push(sm);
+        }
+        assert_eq!(Board::startpos().replayed_unchecked(&words),b);
+        assert_eq!(Board::startpos().replayed_hashed_unchecked(&words),b);
+        assert_eq!(b.zobrist(),s.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal).0);
+        games.push((words,expanded));
+    }
+    let plies=games.iter().map(|g|g.0.len() as u64).sum();
+    assert_eq!(plies,18954);
+    println!("operation\tcase\tlibrary\tunits\titers\tmedian_ns\tmin_ns\tmax_ns\tp25_ns\tp75_ns");
+    row!("replay_final_exact","lichess300",plies,
+        "giga_full_loop"=>||{for x in &games{let mut b=Board::startpos();for &m in &x.0{b.make_move_unchecked(m);}bb((b.zobrist(),b.checkers_bb()));bb(b);}},
+        "giga_batch_recompute"=>||{for x in &games{let b=Board::startpos().replayed_unchecked(&x.0);bb((b.zobrist(),b.checkers_bb()));bb(b);}},
+        "giga_batch_hashed"=>||{for x in &games{let b=Board::startpos().replayed_hashed_unchecked(&x.0);bb((b.zobrist(),b.checkers_bb()));bb(b);}},
+        "shakmaty_final_exact"=>||{for x in &games{let mut b=S::default();for &m in &x.1{b.play_unchecked(m);}bb((b.zobrist_hash::<Zobrist64>(EnPassantMode::PseudoLegal),b.checkers()));bb(b);}});
+}
+
 fn main() {
     if let Some(arg) = std::env::args().nth(1) {
+        #[cfg(feature="exp-batch-replay")]
+        if arg=="--batch-replay"{batch_replay_benchmark();return;}
+
         #[cfg(feature="exp-prepared-move")]
         if arg=="--prepared-replay"{prepared_replay_benchmark();return;}
 

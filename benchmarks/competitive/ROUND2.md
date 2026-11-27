@@ -591,3 +591,27 @@ Nine combined exact regression tests passed.
 Compare all three isolates, combined replay, combined replay/pawn/leaf,
 and repeat the pawn/leaf configuration without new replay features.
 O remains paired baseline, production unchanged.
+
+## Round 21: replicate pawn/leaf gains, exact final-board bulk replay
+Round20 all six CI, full release, six deep perft and local ABBA passed.
+Repeated O+pawn-count-union+promo-gate+double-reuse+zone-knights+
+leaf-check-delta (Q) 475/522, full perft 1.214x O (36/36),
+corpus count 1.112x (12/12), count 1.067x (36/36). Prior round18
+same flags 481, full 1.186x, corpus count 1.100x, count 1.056x.
+These operation-specific improvements replicated despite noisy total
+wins. Keep Q as leading targeted candidate, O as paired reference.
+Active rights 486, trusted 0.953x O. Capture outline 480,
+trusted 0.985x. Checker lowbit 484, trusted 1.027x. Combined
+replay 485, trusted 0.944x. Reject outline/rights for overall promotion.
+New checker-magic replaces the candidate BETWEEN loop with exact
+conditional bishop/rook attack lookups. Raw-promotion-gate tests
+the nibble with a range test, preserving all existing decode semantics.
+New experimental bulk APIs return a full final board with either
+incremental hash or final hash recomputation, defer checker refresh,
+and never expose intermediate boards. Input unchanged, exact clocks,
+null passes and special moves preserved. All 18954 real-game prefixes
+and additional promotion, en-passant, null and Chess960 cases checked
+against repeated full makes. Combined ten targeted tests passed.
+Separate --batch-replay benchmark observes final board, Polyglot and
+checkers for all competitors; never substitutes for strict native
+single-move replay. Add conditional CI evidence lane.

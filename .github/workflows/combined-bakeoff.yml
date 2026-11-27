@@ -85,6 +85,9 @@ jobs:
               for n in {1..7}; do "evidence/$side-bin$ext" "--cold-$lib"; done > "evidence/$side-$lib-cold-ns.txt"
             done
           done
+          if [[ ",$EXPERIMENTS," == *",exp-batch-replay,"* ]]; then
+            "evidence/candidate-bin$ext" --batch-replay > evidence/batch-replay.tsv 2> evidence/batch-replay-validation.txt
+          fi
           rm evidence/*-bin"$ext"
           python benchmarks/competitive/compare_ab.py evidence | tee evidence/ab-summary.md >> "$GITHUB_STEP_SUMMARY"
           python benchmarks/competitive/compare_all_peers.py evidence | tee evidence/peer-summary.md >> "$GITHUB_STEP_SUMMARY"

@@ -1457,6 +1457,12 @@ impl Board {
                 let mut candidates=((p[2]|p[4])&bishop_ray|(p[3]|p[4])&rook_ray)&allowed;
                 #[cfg(not(all(feature="exp-ray-combined",not(feature="exp-slider-planes"),not(feature="exp-implicit-queen"))))]
                 let mut candidates=bishops|rooks;
+                #[cfg(feature="exp-checker-magic")]
+                {
+                    if bishops!=0{result|=attacks::bishop_attacks(sq,occ)&bishops;}
+                    if rooks!=0{result|=attacks::rook_attacks(sq,occ)&rooks;}
+                    candidates=0;
+                }
                 #[cfg(feature="exp-checker-hybrid")]
                 if candidates.count_ones()>2{
                     if bishops!=0{result|=attacks::bishop_attacks(sq,occ)&bishops;}
@@ -2788,7 +2794,11 @@ impl Board {
                 return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:us as u8*6};
             }
             let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
-            if !PREPARED&&mv.promotion().is_none()&&self.occ[ui]&t==0&&!(role==0&&from&7!=to&7&&enemy==0){
+            #[cfg(feature="exp-raw-promotion-gate")]
+            let ordinary=(mv.word()>>12).wrapping_sub(1)>=4;
+            #[cfg(not(feature="exp-raw-promotion-gate"))]
+            let ordinary=mv.promotion().is_none();
+            if !PREPARED&&ordinary&&self.occ[ui]&t==0&&!(role==0&&from&7!=to&7&&enemy==0){
                 #[cfg(feature="exp-no-rights-kernel")]
                 if self.rights_raw()==0&&self.ep==NO_EP{
                     let mut hash=self.hash^zobrist::piece_move_delta::<HASH>(ui,role as usize,from,to);
@@ -3308,6 +3318,40 @@ impl Board {
         let mut child=*self;
         child.make_move_unchecked(mv);
         child
+    }
+
+    /// Replay a trusted sequence and return its exact final board.
+    /// Unlike individual makes, intermediate cache values and undo
+    /// snapshots are not observable. The input board is left untouched.
+    /// Requires legal moves (including legal null passes), as with
+    /// `make_move_unchecked`. Final clocks, variant, en passant, castling,
+    /// Polyglot key and checker mask match the ordinary full transition.
+    #[cfg(feature="exp-batch-replay")]
+    pub fn replayed_unchecked(&self,moves:&[Move])->Board{
+        let mut b=*self;
+        if moves.is_empty(){return b;}
+        for &mv in moves{
+            if mv.is_null(){
+                debug_assert!(b.pass_is_legal(),"null pass while in check");
+                b.null_transition::<false,false>();
+            }else{
+                b.make_move_unchecked_with::<false,false>(mv);
+            }
+        }
+        b.hash=b.zobrist_full();
+        b.checkers=b.attackers_to(b.king_index(b.turn().index()),b.turn().other(),b.occupied());
+        b
+    }
+
+    /// Alternative exact final-board replay: maintain the hash incrementally,
+    /// defer only checker refresh. Useful for short sequences.
+    #[cfg(feature="exp-batch-replay")]
+    pub fn replayed_hashed_unchecked(&self,moves:&[Move])->Board{
+        let mut b=*self;
+        if moves.is_empty(){return b;}
+        for &mv in moves{b.make_move_hashed(mv);}
+        b.checkers=b.attackers_to(b.king_index(b.turn().index()),b.turn().other(),b.occupied());
+        b
     }
 
     /// Applies `mv` without legality validation, maintaining the incremental

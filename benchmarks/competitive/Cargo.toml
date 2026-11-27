@@ -14,6 +14,9 @@ ultra = { package = "ultrachess-core", git = "https://github.com/yahorbarkouski/
 ferrum = { package = "ferrum-movegen", git = "https://github.com/TheChii/ferrum-movegen", rev = "cd46b935e606ad559e88d89642db2d425d4a5872" }
 
 [features]
+exp-batch-replay = ["gigachess/exp-batch-replay"]
+exp-checker-magic = ["gigachess/exp-checker-magic"]
+exp-raw-promotion-gate = ["gigachess/exp-raw-promotion-gate"]
 exp-active-castle-touch = ["gigachess/exp-active-castle-touch"]
 exp-capture-outlined = ["gigachess/exp-capture-outlined"]
 exp-checker-lowbit = ["gigachess/exp-checker-lowbit"]

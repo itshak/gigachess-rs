@@ -408,3 +408,37 @@ fn pawn_count_union_matches_materialization(){
         }
     }
 }
+
+#[cfg(feature="exp-batch-replay")]
+#[test]
+fn batch_replay_exact_final_state_and_prefixes(){
+    fn check(start:Board,moves:&[Move]){
+        let mut b=start;
+        assert_eq!(start.replayed_unchecked(&[]),start);
+        for (i,&m) in moves.iter().enumerate(){
+            b.make_move_unchecked(m);
+            assert_eq!(start.replayed_unchecked(&moves[..=i]),b,"prefix {}",i+1);
+            assert_eq!(start.replayed_hashed_unchecked(&moves[..=i]),b,"hashed prefix {}",i+1);
+        }
+    }
+    let mut total=0;
+    for line in include_str!("../benchmarks/competitive/data/lichess-2013-01-first300.uci").lines(){
+        let mut b=Board::startpos();let mut moves=Vec::new();
+        for token in line.split_ascii_whitespace(){
+            let m=b.legal_moves().into_iter().find(|&m|uci(&b,m)==token).unwrap();
+            b.make_move_unchecked(m);moves.push(m);
+        }
+        check(Board::startpos(),&moves);total+=moves.len();
+    }
+    assert_eq!(total,18954);
+    check(Board::startpos(),&[Move::NULL,Move::NULL]);
+    for fen in ["4k3/P7/8/3pP3/8/8/8/4K3 w - d6 0 1",
+        "4k3/8/8/8/8/8/8/1R1K3R w BH - 0 1",
+        "r2k3r/8/8/8/8/8/8/R2K3R w HAha - 0 1"]{
+        let b=parse_fen(fen).unwrap();
+        for m in b.legal_moves(){
+            let mut c=b;c.make_move_unchecked(m);
+            for n in c.legal_moves(){check(b,&[m,n]);}
+        }
+    }
+}
