@@ -685,3 +685,27 @@ semantics. Ten combined regressions and exhaustive single-rank
 patterns plus 20000 random bitboards per color passed.
 Compare S+fixed pawn, S+home pawn, S+standard delta, combined,
 and S+home pawn+direct batch. O remains paired reference.
+
+## Round 25: new record, replay-focused follow-up
+Round24 all five CI (including delayed listing 46015175682),
+full release, six deep perft and four local ABBA passed.
+S+fixed pawn+king-single (T-fixed) 495/522, 484 >=1.03,
+77 >=2x, cold 6/6; full perft 1.247x O (36/36),
+child 36/36, recompute 1.322x O, 1.360x peer, 12/12.
+S+home pawn+king-single (T-home) 494/522, 486 >=1.03,
+75 >=2x, cold 6/6; recompute 1.485x O, 1.540x peer,
+12/12 min1.259x; materialize 36/36. Combined standard delta
+492, direct batch 490; both recompute 12/12. Standard delta
+alone 488, trusted 0.958x O despite local 1.118x S; do not
+promote solely on local gains. Local fixed/home recompute
+1.228x/1.358x S, consistent with CI. Keep T-home and T-fixed
+as candidates; O stays paired baseline for comparability.
+New padded turn-key table uses power-of-two indices and folds
+turn into source key; no unsafe indexing. All 98,304 valid
+source/destination/role/color/turn combinations checked.
+Role pair probe groups minors and heavy pieces after pawn.
+Checker mask first filters geometric groups by color occupancy
+before probing role planes and uses exact BETWEEN checks.
+Ten combined targeted tests passed. Repeat both T candidates,
+test three isolated additions to T-home and combined replay.
+No changes to strict native replay semantics or production main.

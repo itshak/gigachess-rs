@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-key-turn-padded = []
+exp-role-pair-probe = []
+exp-checker-mask-first = []
 exp-hash-pawn-fixed = ["exp-hash-small-role"]
 exp-hash-pawn-home = ["exp-hash-pawn-fixed"]
 exp-castle-delta-std = ["exp-castle-delta"]

@@ -995,7 +995,17 @@ impl Board {
             return (col[1]&b!=0) as u8+2*(col[2]&b!=0) as u8+3*(col[3]&b!=0) as u8+
                 4*(col[4]&b!=0) as u8+5*(king&b!=0) as u8;
         }
-        #[cfg(not(any(feature="exp-role-select",feature="exp-role-weight",feature="exp-role-test-bit")))]
+        #[cfg(feature="exp-role-pair-probe")]
+        {
+            // Pawns first; then a single combined probe for either
+            // minor piece, then for either heavy piece. Works on
+            // disjoint role bitboards with a known occupied square.
+            if col[0]&b!=0{return 0;}
+            if (col[1]|col[2])&b!=0{return 1+(col[2]&b!=0) as u8;}
+            if (col[3]|col[4])&b!=0{return 3+(col[4]&b!=0) as u8;}
+            return 5;
+        }
+        #[cfg(not(any(feature="exp-role-select",feature="exp-role-weight",feature="exp-role-test-bit",feature="exp-role-pair-probe")))]
         if col[0]&b!=0{0}else if col[1]&b!=0{1}else if col[2]&b!=0{2}else if col[3]&b!=0{3}else if col[4]&b!=0{4}else{5}
         }
     }
@@ -1415,6 +1425,30 @@ impl Board {
         {
             let allowed=self.occ[by.index()];
             let k=sq as usize;
+            #[cfg(all(feature="exp-checker-mask-first",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-implicit-pawn"),not(feature="exp-implicit-queen")))]
+            {
+                // Intersect the geometric masks with color occupancy first.
+                // Empty relevant groups need no role-plane loads at all.
+                let pawn=PAWN_ATT[by.other().index()][k]&allowed;
+                let knight=KNIGHT_ATT[k]&allowed;
+                let king=KING_ATT[k]&allowed;
+                let diag=crate::bitboard::EMPTY_BISHOP_RAYS[k]&allowed;
+                let ortho=crate::bitboard::EMPTY_ROOK_RAYS[k]&allowed;
+                let p=&self.roles;
+                let mut result=0;
+                if pawn|knight|king!=0{result=(pawn&p[0])|(knight&p[1])|(king&p[5]);}
+                if diag|ortho!=0{
+                    let mut candidates=(diag&(p[2]|p[4]))|(ortho&(p[3]|p[4]));
+                    while candidates!=0{
+                        let low=candidates&candidates.wrapping_neg();
+                        let a=candidates.trailing_zeros() as usize;
+                        candidates^=low;
+                        result|=low&0u64.wrapping_sub((crate::bitboard::between_for_geometry(k,a)&occ==0) as u64);
+                    }
+                }
+                return result;
+            }
+
             #[cfg(feature="exp-slider-planes")]
             let p=&self.sliders;
             #[cfg(not(feature="exp-slider-planes"))]
