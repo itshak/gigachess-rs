@@ -12,6 +12,9 @@ categories = ["games", "algorithms", "data-structures"]
 readme = "README.md"
 
 [features]
+exp-transition-role-pair = []
+exp-ep-double-neighbor = []
+exp-transition-clock-mask = []
 exp-key-turn-padded = []
 exp-role-pair-probe = []
 exp-checker-mask-first = []

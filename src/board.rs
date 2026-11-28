@@ -2842,6 +2842,21 @@ impl Board {
                 if CHECKERS{self.checkers=self.attackers_to(self.king_index(ti),us,self.occupied());}
                 return TransitionUndo{captured,castled:false,#[cfg(feature="exp-undo-role")] moved:us as u8*6};
             }
+            #[cfg(feature="exp-transition-role-pair")]
+            let role=if HINT{hint%6}else{
+                // Keep capture lookup, generation and other consumers on
+                // their established path. Only the wire source probe changes.
+                #[cfg(all(feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-implicit-pawn"),not(feature="exp-implicit-queen")))]
+                {
+                    let p=&self.roles;
+                    if p[0]&f!=0{0}else if p[1]&f!=0{1}
+                    else if (p[2]|p[3])&f!=0{2+(p[3]&f!=0) as u8}
+                    else{4+(p[5]&f!=0) as u8}
+                }
+                #[cfg(not(all(feature="exp-compact-board",not(feature="exp-slider-planes"),not(feature="exp-kingless-board"),not(feature="exp-implicit-pawn"),not(feature="exp-implicit-queen"))))]
+                {self.role_at_occupied(from,us)}
+            };
+            #[cfg(not(feature="exp-transition-role-pair"))]
             let role=if HINT{hint%6}else{self.role_at_occupied(from,us)};
             #[cfg(feature="exp-raw-promotion-gate")]
             let ordinary=(mv.word()>>12).wrapping_sub(1)>=4;
@@ -2962,7 +2977,16 @@ impl Board {
                     if role==0&&from.abs_diff(to)==16{
                         let ep=(from+to)/2;
                         self.ep=ep;
-                        if HASH&&self.ep_relevant(ep,us.other()){hash^=zobrist::ep_key(Square(ep));}
+                        #[cfg(feature="exp-ep-double-neighbor")]
+                        let relevant=if (us==Color::White&&to>from)||(us==Color::Black&&to<from){
+                            // A legal double push's prospective capturers
+                            // are exactly the enemy pawns next to its target.
+                            let adjacent=((t<<1)&0xfefefefefefefefe)|((t>>1)&0x7f7f7f7f7f7f7f7f);
+                            adjacent&self.bb(ti,0)!=0
+                        }else{self.ep_relevant(ep,us.other())};
+                        #[cfg(not(feature="exp-ep-double-neighbor"))]
+                        let relevant=self.ep_relevant(ep,us.other());
+                        if HASH&&relevant{hash^=zobrist::ep_key(Square(ep));}
                     }
                 }
                 #[cfg(not(feature="exp-quiet-ep-gate"))]
@@ -2970,7 +2994,15 @@ impl Board {
                     self.ep=if role==0&&from.abs_diff(to)==16{(from+to)/2}else{NO_EP};
                     if HASH&&self.ep_relevant(self.ep,us.other()){hash^=zobrist::ep_key(Square(self.ep));}
                 }
-                self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};
+                #[cfg(feature="exp-transition-clock-mask")]
+                {
+                    // Mask before adding, preserving overflow behavior
+                    // under both checked and unchecked arithmetic profiles.
+                    let keep=(role!=0&&enemy==0) as u16;
+                    self.halfmove=(self.halfmove&0u16.wrapping_sub(keep))+keep;
+                }
+                #[cfg(not(feature="exp-transition-clock-mask"))]
+                {self.halfmove=if role==0||enemy!=0{0}else{self.halfmove+1};}
                 self.fullmove+=(us==Color::Black) as u16;
                 self.hash=hash;self.set_turn(us.other());
                 if CHECKERS{

@@ -709,3 +709,23 @@ before probing role planes and uses exact BETWEEN checks.
 Ten combined targeted tests passed. Repeat both T candidates,
 test three isolated additions to T-home and combined replay.
 No changes to strict native replay semantics or production main.
+
+## Round 26: replay-source role, adjacent EP hash and clock mask
+Round25 all six CI, full release, six deep perft and local ABBA passed.
+T-fixed repeat 493/522, T-home repeat 491, both recompute 12/12
+(1.388x/1.538x O). All six configurations won all 12 recompute rows.
+T-home+role-pair 489, trusted 1.063x O and 1.069x locally
+vs T-home, but child 0.968x O and 0.924x locally. Padded-key
+491, checker-mask 493, combined 483; combined local trusted 0.761x.
+Do not promote combined changes. Role-pair gain merits isolating
+the moving-piece probe (not capture or other lookup consumers).
+New source probe tests pawn/knight then bishop/rook pair, then
+queen/king; restrict direct plane optimization to disjoint six-role
+layout, otherwise existing lookup. Adjacent EP hash uses neighbor
+bits of double-push destination with correct file masks, fallback
+for reverse direction. Clock mask clears before addition to preserve
+overflow behavior in all arithmetic profiles. Initial cfg syntax
+error corrected before submission; ten exact regressions passed.
+Test three isolates, combined, and revisit cached-king/kingless
+88-byte board layouts on T-home with exact hash baseline.
+Original strict score remains unchanged. O remains paired reference.
