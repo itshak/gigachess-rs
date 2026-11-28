@@ -79,6 +79,26 @@ pub(crate) fn piece_key_optional(color:usize,role:usize,sq:usize)->u64{
 /// for one larger lookup, keeping the exact Polyglot contract.
 #[inline(always)]
 pub(crate) fn piece_move_delta<const TURN:bool>(color:usize,role:usize,from:u8,to:u8)->u64 {
+    #[cfg(feature="exp-key-turn-padded")]
+    {
+        // Power-of-two tables allow a masked index without a bounds branch.
+        // The existing internal contract supplies valid decoded squares,
+        // color and role. Debug assertions verify that internal contract.
+        static KEYS:[[u64;1024];2]={
+            let mut t=[[0;1024];2];let mut i=0;
+            while i<768{
+                t[0][i]=POLYGLOT_RANDOM_ARRAY[i];
+                t[1][i]=POLYGLOT_RANDOM_ARRAY[i]^POLYGLOT_RANDOM_ARRAY[TURN_KEY];
+                i+=1;
+            }t
+        };
+        debug_assert!(color<2&&role<6&&from<64&&to<64);
+        let base=(role*2+color)<<6;
+        let src=(base|from as usize)&1023;
+        let dst=(base|to as usize)&1023;
+        return KEYS[TURN as usize][src]^KEYS[0][dst];
+    }
+
     #[cfg(feature="exp-move-row-key")]
     {
         // One bounds-checked piece row, then both square keys.
@@ -451,4 +471,14 @@ mod tests {
         );
         let _ = Piece::new(Color::White, Role::Pawn);
     }
+}
+
+#[cfg(all(test,feature="exp-key-turn-padded"))]
+#[test]
+fn padded_move_delta_matches_all_polyglot_pairs(){
+    for color in 0..2{for role in 0..6{for from in 0..64u8{for to in 0..64u8{
+        let expected=piece_key_indices(color,role,from)^piece_key_indices(color,role,to);
+        assert_eq!(piece_move_delta::<false>(color,role,from,to),expected);
+        assert_eq!(piece_move_delta::<true>(color,role,from,to),expected^turn_key());
+    }}}}
 }
